@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?><history>
+  <entry>
+    <url>file:/home/kpiwko/devel/mobile/planning/mobile/jira-qe-workflow.graphml</url>
+    <mimeType>application-yfiles</mimeType>
+    <ioHint>GraphMLOutput</ioHint>
+  </entry>
+  <entry>
+    <url>file:/home/kpiwko/devel/mobile/planning/arquillian.graphml</url>
+    <mimeType>application-yfiles</mimeType>
+    <ioHint>GraphMLOutput</ioHint>
+  </entry>
+  <entry>
+    <url>file:/home/kpiwko/devel/mobile/planning/arquillian/arquillian-paas.graphml</url>
+    <mimeType>application-yfiles</mimeType>
+    <ioHint>GraphMLOutput</ioHint>
+  </entry>
+  <entry>
+    <url>file:/home/kpiwko/devel/mobile/planning/mobile/trello.graphml</url>
+    <mimeType>application-yfiles</mimeType>
+    <ioHint>GraphMLOutput</ioHint>
+  </entry>
+  <entry>
+    <url>file:/home/kpiwko/docs/redhat/patents/20141257US/universal-test-executor.graphml</url>
+    <mimeType>application-yfiles</mimeType>
+    <ioHint>GraphMLOutput</ioHint>
+  </entry>
+</history>

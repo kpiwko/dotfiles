@@ -1,0 +1,13 @@
+[user]
+	name = Karel Piwko
+	email = kpiwko@redhat.com
+[color]
+	ui = true
+[alias]
+    pullify = "!f() { git config --add remote.$1.fetch '+refs/pull/*/head:refs/remotes/'$1'/pr/*'; }; f"
+[diff]
+    tool = meld
+[difftool]
+	prompt = false
+[merge]
+	tool = meld
