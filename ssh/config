@@ -1,0 +1,5 @@
+Host gerrit
+    User kpiwko
+    IdentityFile ~/.ssh/id_rsa
+    Port 22
+    Hostname code.engineering.redhat.com
