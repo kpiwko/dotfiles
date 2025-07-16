@@ -1,0 +1,5 @@
+#!/bin/sh
+
+if [ -n "$AI_ASSIST" ]; then
+  echo "\nAssisted-by: Cursor / Gemini API" >> "$1"
+fi

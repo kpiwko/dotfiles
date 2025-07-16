@@ -1,0 +1,9 @@
+[user]
+	email = kpiwko@redhat.com
+	name = Karel Piwko
+[advice]
+	skippedCherryPicks = false
+[push]
+	autoSetupRemote = true
+[init]
+	templateDir = /Users/kpiwko/.git-templates

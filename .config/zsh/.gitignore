@@ -1,0 +1,2 @@
+# Ignore environment variable that might contain sensitive content
+10-env.zsh

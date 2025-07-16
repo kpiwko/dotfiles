@@ -1,0 +1,42 @@
+format = """
+$python\
+$git_branch\
+${custom.git_uncommitted}\
+${custom.ai_assist}\
+$directory\
+$character"""
+
+[directory]
+style = "bold blue"
+
+[character]
+success_symbol = "[❯](purple)"
+error_symbol = "[❌](red)"
+vimcmd_symbol = "[❮](green)"
+
+[git_branch]
+format = "[git:($branch)]($style)"
+style = "bold purple"
+
+[cmd_duration]
+format = "[$duration]($style) "
+style = "yellow"
+
+[python]
+pyenv_version_name = true  # Use the pyenv version name
+format = '[${symbol}${version}(${virtualenv})]($style) '
+style = "bold blue"
+
+[custom.git_uncommitted]
+command = 'git status --porcelain | wc -l'
+when = 'git rev-parse --is-inside-work-tree > /dev/null 2>&1'
+require_repo = true
+format = '[ ±$output ]($style) '
+style = 'bold red'
+
+[custom.ai_assist]
+command = "echo '💎'"
+when = '[[ -n "$AI_ASSIST" ]]'
+format = "[$output]($style) "
+require_repo = true
+style = "bold yellow"
