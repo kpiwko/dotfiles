@@ -8,8 +8,9 @@ syntax on
 set number
 set numberwidth=4
 
-" Tabulars
-" set tw=128
+" Tabulars and wrapping
+"set tw=108
+"set wrap
 set tabstop=4
 set shiftwidth=4
 set expandtab
@@ -38,14 +39,14 @@ set backspace=2
 
 " Status line
 set laststatus=2
-"set statusline=
+set statusline=
 "set statusline+=%-3.3n\                      " buffer number
-"set statusline+=%f\                          " filename
-"set statusline+=%h%m%r%w                     " status flags
-"set statusline+=\[%{strlen(&ft)?&ft:'none'}] " file type
-"set statusline+=%=                           " right align remainder
-"set statusline+=0x%-8B                       " character value
-"set statusline+=%-14(%l,%c%V%)               " line, character
+set statusline+=%f\                          " filename
+set statusline+=%h%m%r%w                     " status flags
+set statusline+=\[%{strlen(&ft)?&ft:'none'}] " file type
+set statusline+=%=                           " right align remainder
+set statusline+=0x%-8B                       " character value
+set statusline+=%-14(%l,%c%V%)               " line, character
 "set statusline+=%<%P   
 "set statusline=%<%f\ %h%m%r\ %y%=%{v:register}\ %-14.(%l,%c%V%)\ %P
 
