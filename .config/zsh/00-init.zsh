@@ -1,11 +1,17 @@
+# Additional instructions needed for uv
+autoload -U +X compinit && compinit
+autoload -U +X bashcompinit && bashcompinit 
+
+
 # Starship configuration
 eval "$(starship init zsh)"
 export STARSHIP_CONFIG=~/.config/starship.toml
 
-# NVM setup
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# UV Configuration
+eval "$(uv --generate-shell-completion zsh)"
+
+# FNM configuration
+eval "$(fnm env --use-on-cd --shell zsh)"
 
 # history setup
 setopt HIST_FCNTL_LOCK
