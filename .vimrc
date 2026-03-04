@@ -3,6 +3,9 @@ set nocompatible
 
 " Syntax highlighting
 syntax on
+filetype plugin on
+set termguicolors
+set background=light
 
 " Activate line numbers
 set number
