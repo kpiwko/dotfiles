@@ -1,13 +1,34 @@
 # Font and theme
-#font-family = "Inconsolata Nerd Font Mono"
+# font-family = "Inconsolata Nerd Font Mono"
+# Keeping your old font commented out for easy fallback.
 font-family = "Red Hat Mono"
 font-size = 18
-theme="Builtin Solarized Light"
+theme = "iTerm2 Solarized Light"
 
 # Split panes
 background-opacity = 1.0
 unfocused-split-opacity = 0.6
 
+# macOS keyboard behavior
+macos-option-as-alt = true
+# Added:
+# Makes Option behave like Alt/Meta for terminal apps.
+# Very helpful for Vim and shell keybindings on macOS.
+
+# Clipboard behavior
+copy-on-select = false
+
+# Clears active selection after copy actions.
+selection-clear-on-copy = true
+
+
+clipboard-paste-protection = true
+# Added:
+# Keeps paste safety checks enabled for risky multiline paste situations.
+
+# Shell integration
+shell-integration = detect
+shell-integration-features = cursor,title,ssh-env
 
 # Unbind these PHYSICAL mappings as these Dvorak keys don't align with the physical keys
 keybind = super++=unbind

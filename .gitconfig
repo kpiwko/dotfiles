@@ -7,3 +7,5 @@
 	autoSetupRemote = true
 [init]
 	templateDir = /Users/kpiwko/.git-templates
+[coderabbit]
+	machineId = cli/b87073ef19b14f13965942d127f43183
