@@ -1,6 +1,6 @@
 alias ll='ls -la -h --color'
 alias pass="gopass"
-alias config='/usr/bin/git --git-dir=/Users/kpiwko/.dotfiles/ --work-tree=/Users/kpiwko'
+alias config='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias maskenv='env | sort | sed -E "/(KEY|TOKEN|PASSWORD)/I s/^([^=]+)=([^=]{4,5}).*/\1=\2.../"'
 
 

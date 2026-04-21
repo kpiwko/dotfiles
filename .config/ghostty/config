@@ -20,9 +20,8 @@ copy-on-select = false
 
 # Clears active selection after copy actions.
 selection-clear-on-copy = true
-
-
 clipboard-paste-protection = true
+
 # Added:
 # Keeps paste safety checks enabled for risky multiline paste situations.
 
