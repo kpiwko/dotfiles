@@ -39,8 +39,8 @@ export STARSHIP_CONFIG=~/.config/starship.toml
 # UV Configuration
 eval "$(uv --generate-shell-completion zsh)"
 
-# FNM configuration
-eval "$(fnm env --use-on-cd --shell zsh)"
+# mise configuration
+eval "$(mise activate zsh)"
 
 # history setup
 # -------- History configuration --------

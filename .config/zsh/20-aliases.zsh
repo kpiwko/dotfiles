@@ -17,3 +17,8 @@ claude-ccr() {
     claude "$@"
   )
 }
+
+# LINCE aliases
+alias zd="zellij --layout dashboard"
+alias z="zellij"
+alias zn="zellij attach -c"
