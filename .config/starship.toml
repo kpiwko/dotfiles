@@ -2,44 +2,41 @@ scan_timeout = 500
 command_timeout = 1000
 
 format = """
-$python\
-$git_branch\
-${custom.git_uncommitted}\
-${custom.ai_assist}\
 $directory\
+$git_branch\
+${custom.git_status_compact}\
 $character"""
 
 [directory]
-style = "bold blue"
+style = "bold cyan"
 
 [character]
-success_symbol = "[❯](purple)"
-error_symbol = "[❌](red)"
-vimcmd_symbol = "[❮](green)"
+success_symbol = "[❯](bold white)"
+error_symbol = "[✖](bold red)"
+vimcmd_symbol = "[❮](bold cyan)"
 
 [git_branch]
-format = "[git:($branch)]($style)"
-style = "bold purple"
+format = "[git:$branch]($style) "
+style = "bold magenta"
 
-[cmd_duration]
-format = "[$duration]($style) "
-style = "yellow"
-
-[python]
-pyenv_version_name = true  # Use the pyenv version name
-format = '[${symbol}${version}(${virtualenv})]($style) '
-style = "bold blue"
-
-[custom.git_uncommitted]
-command = 'git status --porcelain | wc -l'
+[custom.git_status_compact]
+command = '''
+  count=$(git status --porcelain 2>/dev/null | wc -l | tr -d " \t")
+  sync=""
+  if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+    ahead=$(git rev-list --count @{u}..HEAD 2>/dev/null)
+    behind=$(git rev-list --count HEAD..@{u} 2>/dev/null)
+    if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
+      sync=" ⇕⇡${ahead}⇣${behind}"
+    elif [ "$ahead" -gt 0 ]; then
+      sync=" ⇡${ahead}"
+    elif [ "$behind" -gt 0 ]; then
+      sync=" ⇣${behind}"
+    fi
+  fi
+  echo "[ ±${count}${sync} ]"
+'''
 when = 'git rev-parse --is-inside-work-tree > /dev/null 2>&1'
 require_repo = true
-format = '[ ±$output ]($style) '
-style = 'bold red'
-
-[custom.ai_assist]
-command = "echo '💎'"
-when = '[[ -n "$AI_ASSIST" ]]'
-format = "[$output]($style) "
-require_repo = true
-style = "bold yellow"
+format = '[$output]($style) '
+style = 'bold yellow'
