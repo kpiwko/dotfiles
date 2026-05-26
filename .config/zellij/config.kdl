@@ -11,6 +11,15 @@ default_shell "/bin/zsh"
 
 keybinds {
     normal {
+        // Unbind Zellij ctrl defaults that conflict with Claude Code
+        unbind "Ctrl o"  // session manager → Claude: app:toggleTranscript
+        unbind "Ctrl t"  // tab mode       → Claude: app:toggleTodos
+        unbind "Ctrl p"  // pane mode      → Claude: scroll:lineUp
+        unbind "Ctrl n"  // resize mode    → Claude: scroll:lineDown
+        unbind "Ctrl b"  // move pane      → Claude: task:background
+        unbind "Ctrl r"  // rename         → Claude: history:search
+        unbind "Ctrl f"  // search/float   → Claude: scroll:fullPageDown
+
         bind "Alt h" { MoveFocus "Left"; }
         bind "Alt l" { MoveFocus "Right"; }
         bind "Alt j" { MoveFocus "Down"; }
@@ -30,6 +39,26 @@ keybinds {
         bind "Alt 2" { GoToTab 2; }
         bind "Alt 3" { GoToTab 3; }
 
+    }
 
+    // Move Lock toggle from ctrl+g to Alt+g; unbind quit
+    normal {
+        unbind "Ctrl g"
+        unbind "Ctrl q"
+        bind "Alt g" { SwitchToMode "Locked"; }
+    }
+    locked {
+        unbind "Ctrl g"
+        bind "Alt g" { SwitchToMode "Normal"; }
+    }
+
+    // Move Scroll and Move mode from ctrl to Alt
+    shared_except "scroll" "locked" {
+        unbind "Ctrl s"
+        bind "Alt s" { SwitchToMode "Scroll"; }
+    }
+    shared_except "move" "locked" {
+        unbind "Ctrl h"
+        bind "Alt m" { SwitchToMode "Move"; }
     }
 }
