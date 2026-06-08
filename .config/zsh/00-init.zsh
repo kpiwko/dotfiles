@@ -46,6 +46,8 @@ eval "$(starship init zsh)"
 eval "$(uv --generate-shell-completion zsh)"
 eval "$(mise activate zsh)"
 
+eval "$(direnv hook zsh)"
+
 # Google Cloud SDK
 if [ -f "/opt/google-cloud-sdk/path.zsh.inc" ]; then
   . "/opt/google-cloud-sdk/path.zsh.inc"
