@@ -1,68 +1,126 @@
 tap "anomalyco/tap"
-tap "azure/kubelogin"
+tap "azure/kubelogin", "https://github.com/Azure/homebrew-kubelogin"
 tap "int128/kubelogin"
 tap "mongodb/brew"
 tap "pulumi/tap"
 tap "rust-mcp-stack/tap"
+# GitOps Continuous Delivery for Kubernetes
 brew "argocd"
+# Official Amazon AWS command-line interface
 brew "awscli"
+# Bourne-Again SHell, a UNIX command interpreter
 brew "bash"
+# Secure and free password manager for all of your devices
 brew "bitwarden-cli"
+# Vector graphics library with cross-device output support
 brew "cairo"
+# Cross-platform make
 brew "cmake"
+# Access VS Code through the browser
 brew "code-server", restart_service: :changed
+# GNU File, Shell, and Text utilities
 brew "coreutils"
+# Load/unload environment variables based on $PWD
 brew "direnv"
+# Perl lib for reading and writing EXIF metadata
 brew "exiftool"
+# Image processing and image analysis library
 brew "leptonica"
+# Framework for layout and rendering of i18n text
 brew "pango"
+# OCR (Optical Character Recognition) engine
 brew "tesseract"
+# Play, record, convert, and stream select audio and video codecs
 brew "ffmpeg"
+# GitHub command-line tool
 brew "gh"
+# Enable transparent encryption/decryption of files in a git repo
 brew "git-crypt"
+# C library of Git core methods that is re-entrant and linkable
 brew "libgit2"
+# Syntax-highlighting pager for git and diff output
 brew "git-delta"
+# Open-source GitLab command-line tool
 brew "glab"
+# GNU Privacy Guard (OpenPGP)
 brew "gnupg"
+# Slightly more awesome Standard Unix Password Manager for Teams
 brew "gopass"
+# GNU grep, egrep and fgrep
 brew "grep"
+# Lightweight and flexible command-line JSON processor
 brew "jq"
+# Handy way to save and run project-specific commands
 brew "just"
+# OpenID Connect authentication plugin for kubectl
 brew "kubelogin"
+# Postgres C API library
 brew "libpq"
+# LLM inference in C/C++
 brew "llama.cpp"
+# Polyglot runtime manager (asdf rust clone)
 brew "mise"
+# MongoDB Shell to connect, configure, query, and work with your MongoDB database
 brew "mongosh"
+# Ambitious Vim-fork focused on extensibility and agility
 brew "neovim"
+# Capability-based sandbox shell for AI agents with OS-enforced isolation
 brew "nono"
+# OCI Registry As Storage
 brew "oras"
+# Swiss-army knife of markup format conversion
 brew "pandoc"
+# Package compiler and linker metadata toolkit
 brew "pkgconf"
+# Python package management tool
 brew "poetry"
+# PDF rendering library (based on the xpdf-3.0 code base)
 brew "poppler"
+# Cloud native development platform
 brew "pulumi"
+# Goal of RamaLama is to make working with AI boring
 brew "ramalama"
+# File browser
 brew "ranger"
+# Utility that provides fast incremental file transfer
 brew "rsync"
+# Used as a compiler wrapper and avoids compilation when possible
 brew "sccache"
+# Cross-shell prompt for astronauts
 brew "starship"
+# Feature-rich console based todo list manager
 brew "task"
+# Enables extra languages support for Tesseract
 brew "tesseract-lang"
+# Text interface for Git repositories
 brew "tig"
+# Terminal multiplexer
 brew "tmux"
+# Extremely fast Python package installer and resolver, written in Rust
 brew "uv"
+# Executes a program periodically, showing output fullscreen
 brew "watch"
+# Internet file retriever
 brew "wget"
+# Process YAML, JSON, XML, CSV and properties documents from the CLI
 brew "yq"
+# High-performance theorem prover
 brew "z3"
+# Pluggable terminal workspace, with terminal multiplexer as the base feature
 brew "zellij"
+# The AI coding agent built for the terminal.
 brew "anomalyco/tap/opencode", trusted: true
-brew "mongodb/brew/mongodb-database-tools"
-brew "rust-mcp-stack/tap/mcp-discovery"
+# Virtual Audio Driver
 cask "blackhole-2ch"
+# Open source, extensible AI agent that goes beyond code suggestions
 cask "block-goose"
+# Terminal emulator that uses platform-native UI and GPU acceleration
 cask "ghostty"
+# Full TeX Live distribution with GUI applications
+cask "mactex"
+# Htop on steroids
 cask "neohtop"
+# Plugin for AWS CLI to start and end sessions that connect to managed instances
 cask "session-manager-plugin"
 vscode "anthropic.claude-code"
 vscode "apollographql.vscode-apollo"
@@ -107,4 +165,3 @@ uv "pre-commit"
 uv "pyright"
 uv "specify-cli"
 npm "corepack"
-npm "pnpm"

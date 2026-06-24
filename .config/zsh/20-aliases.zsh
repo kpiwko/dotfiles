@@ -22,4 +22,5 @@ claude-ccr() {
 alias zd="zellij --layout dashboard"
 alias z="zellij"
 alias zc="zellij --layout claude"
+alias zo="zellij --layout opencode"
 alias zn="zellij attach -c"

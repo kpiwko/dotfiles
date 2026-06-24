@@ -20,14 +20,22 @@ keybinds {
         unbind "Ctrl r"  // rename         → Claude: history:search
         unbind "Ctrl f"  // search/float   → Claude: scroll:fullPageDown
 
+        // unbind Zellij Alt defaults that conflict with terminal navigation
+        unbind "Alt Left"
+        unbind "Alt Right"
+
         bind "Alt h" { MoveFocus "Left"; }
         bind "Alt l" { MoveFocus "Right"; }
         bind "Alt j" { MoveFocus "Down"; }
         bind "Alt k" { MoveFocus "Up"; }
 
-        bind "Alt n" { NewPane; }
+        bind "Alt d" { NewPane "Down"; }
+        bind "Alt r" { NewPane "Right"; }
         bind "Alt f" { ToggleFloatingPanes; }
         bind "Alt p" { TogglePanePinned; }
+        bind "Alt z" { ToggleFocusFullscreen; }
+        bind "Alt e" { EditScrollback; }
+        bind "Alt o" { LaunchOrFocusPlugin "session-manager" { floating true; }; }
 
         bind "Alt ]" { FocusNextPane; }
         bind "Alt [" { FocusPreviousPane; }

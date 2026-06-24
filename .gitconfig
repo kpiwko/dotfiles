@@ -1,6 +1,7 @@
 [user]
 	email = kpiwko@redhat.com
     name = Karel Piwko
+	signingkey = ~/.ssh/kpiwko_github_signing_ed25519
 [core]
     pager = delta
 [interactive]
@@ -15,8 +16,12 @@
 [push]
 	autoSetupRemote = true
 [init]
-	templateDir = /Users/kpiwko/.git-templates
-[coderabbit]
-	machineId = cli/b87073ef19b14f13965942d127f43183
+	templateDir = ~/.git-templates
+[include]
+	path = ~/.gitconfig.local
 [credential]
 	helper = osxkeychain
+[gpg]
+	format = ssh
+[commit]
+	gpgsign = true

@@ -24,6 +24,20 @@ config config --local status.showUntrackedFiles no
 config checkout
 ```
 
+# Machine-specific git config
+
+Machine-specific settings (e.g. CodeRabbit machineId) go in `~/.gitconfig.local`,
+which is included via `[include] path = ~/.gitconfig.local` but not tracked in this repo.
+
+Create it on each machine as needed:
+
+```zsh
+cat > ~/.gitconfig.local << 'EOF'
+[coderabbit]
+	machineId = cli/<your-machine-id>
+EOF
+```
+
 # Working with Brew
 
 You can create a snapshot of currently installed Brew dependiencies by:
