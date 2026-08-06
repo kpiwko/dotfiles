@@ -1,7 +1,5 @@
 [user]
-	email = kpiwko@redhat.com
     name = Karel Piwko
-	signingkey = ~/.ssh/kpiwko_github_signing_ed25519
 [core]
     pager = delta
 [interactive]
