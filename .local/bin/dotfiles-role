@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+ROLES_FILE="${DOTFILES_ROLES_FILE:-$HOME/.config/dotfiles/roles}"
+KNOWN_ROLES="ai-server"
+
+usage() {
+  echo "Usage: dotfiles-role <enable|disable|list|has> [role]" >&2
+  exit 1
+}
+
+is_known_role() {
+  for r in $KNOWN_ROLES; do
+    [ "$r" = "$1" ] && return 0
+  done
+  return 1
+}
+
+ensure_roles_file() {
+  mkdir -p "$(dirname "$ROLES_FILE")"
+  [ -f "$ROLES_FILE" ] || : > "$ROLES_FILE"
+}
+
+cmd_enable() {
+  role="$1"
+  is_known_role "$role" || { echo "dotfiles-role: unknown role '$role' (known: $KNOWN_ROLES)" >&2; exit 1; }
+  ensure_roles_file
+  if ! grep -qx "$role" "$ROLES_FILE"; then
+    echo "$role" >> "$ROLES_FILE"
+  fi
+}
+
+cmd_disable() {
+  role="$1"
+  ensure_roles_file
+  grep -vx "$role" "$ROLES_FILE" > "$ROLES_FILE.tmp" || true
+  mv "$ROLES_FILE.tmp" "$ROLES_FILE"
+}
+
+cmd_list() {
+  ensure_roles_file
+  cat "$ROLES_FILE"
+}
+
+cmd_has() {
+  role="$1"
+  ensure_roles_file
+  grep -qx "$role" "$ROLES_FILE"
+}
+
+[ $# -ge 1 ] || usage
+action="$1"; shift || true
+
+case "$action" in
+  enable) [ $# -eq 1 ] || usage; cmd_enable "$1" ;;
+  disable) [ $# -eq 1 ] || usage; cmd_disable "$1" ;;
+  list) cmd_list ;;
+  has) [ $# -eq 1 ] || usage; cmd_has "$1" ;;
+  *) usage ;;
+esac
