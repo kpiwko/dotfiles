@@ -1,19 +1,26 @@
-local languages = {
+local parsers = {
+    -- Shell
+    "bash",
+
+    -- Web / React
+    "html",
+    "css",
+    "javascript",
+    "typescript",
+    "tsx",
+
+    -- Other languages
     "go",
     "gomod",
     "gosum",
     "gowork",
-    "javascript",
     "json",
-    "jsonc",
     "markdown",
     "markdown_inline",
     "python",
-    "tsx",
-    "typescript",
     "yaml",
 
-    -- Needed for editing your Neovim configuration
+    -- Neovim configuration
     "lua",
     "vim",
     "vimdoc",
@@ -28,14 +35,17 @@ return {
         build = ":TSUpdate",
 
         config = function()
-            require("nvim-treesitter").install(languages)
+            require("nvim-treesitter").install(parsers)
+
+            -- JSONC uses the JSON parser
+            vim.treesitter.language.register("json", "jsonc")
 
             vim.api.nvim_create_autocmd("FileType", {
-                pattern = languages,
                 callback = function()
-                    vim.treesitter.start()
+                    pcall(vim.treesitter.start)
                 end,
             })
         end,
     },
 }
+

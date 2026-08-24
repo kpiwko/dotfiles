@@ -1,0 +1,21 @@
+layout {
+    default_tab_template {
+        children
+        pane size=1 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="Work" {
+        pane split_direction="horizontal" {
+            pane command="direnv" size="70%" {
+            args "exec" "." "opencode"
+        }
+            pane name="debug" size="30%"
+        }
+    }
+
+    tab name="Background" {
+        pane name="background tasks"
+    }
+}
