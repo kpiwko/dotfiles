@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+CADDY_ETC_DIR="${CADDY_ETC_DIR:-/usr/local/etc/caddy}"
+CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
+CADDY_ENV_FILE="${CADDY_ENV_FILE:-$CADDY_ETC_DIR/env/cloudflare.env}"
+
+if [ -f "$CADDY_ENV_FILE" ]; then
+  set -a
+  . "$CADDY_ENV_FILE"
+  set +a
+fi
+
+exec "$CADDY_BIN" run --config "$CADDY_ETC_DIR/Caddyfile" --adapter caddyfile

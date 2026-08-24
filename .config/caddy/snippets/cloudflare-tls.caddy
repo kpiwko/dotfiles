@@ -1,0 +1,5 @@
+(cloudflare_tls) {
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+}

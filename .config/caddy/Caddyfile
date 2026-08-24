@@ -1,0 +1,6 @@
+{
+	email you@example.com
+}
+
+import snippets/*.caddy
+import sites/*.caddy

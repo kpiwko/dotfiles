@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+SUDO="${SUDO-sudo}"
+DOTFILES_ROLE_BIN="${DOTFILES_ROLE_BIN:-dotfiles-role}"
+CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
+CADDY_LIBEXEC_DIR="${CADDY_LIBEXEC_DIR:-/usr/local/libexec}"
+LAUNCHD_DIR="${LAUNCHD_DIR:-/Library/LaunchDaemons}"
+LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
+LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
+
+run_privileged() {
+  if [ -n "$SUDO" ]; then
+    "$SUDO" "$@"
+  else
+    "$@"
+  fi
+}
+
+require_role() {
+  if ! "$DOTFILES_ROLE_BIN" has ai-server; then
+    echo "dotfiles-caddy-uninstall: the ai-server role is not enabled." >&2
+    exit 1
+  fi
+}
+
+stop_daemon() {
+  if "$LAUNCHCTL_BIN" list "$LAUNCHD_LABEL" >/dev/null 2>&1; then
+    run_privileged "$LAUNCHCTL_BIN" bootout "system/$LAUNCHD_LABEL"
+  fi
+}
+
+remove_files() {
+  run_privileged rm -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
+  run_privileged rm -f "$CADDY_LIBEXEC_DIR/caddy-start"
+  run_privileged rm -f "$CADDY_BIN"
+}
+
+require_role
+stop_daemon
+remove_files

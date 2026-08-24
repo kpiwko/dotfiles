@@ -1,0 +1,92 @@
+#!/bin/sh
+set -eu
+
+SUDO="${SUDO-sudo}"
+DOTFILES_ROLE_BIN="${DOTFILES_ROLE_BIN:-dotfiles-role}"
+DOTFILES_CADDY_SRC="${DOTFILES_CADDY_SRC:-$HOME/.config/caddy}"
+CADDY_ETC_DIR="${CADDY_ETC_DIR:-/usr/local/etc/caddy}"
+CADDY_LOG_DIR="${CADDY_LOG_DIR:-/var/log/caddy}"
+CADDY_VAR_DIR="${CADDY_VAR_DIR:-/var/lib/caddy}"
+INSTALL_OWNER_FLAGS="${INSTALL_OWNER_FLAGS--o root -g wheel}"
+RSYNC_CHOWN_FLAG="${RSYNC_CHOWN_FLAG---chown=root:wheel}"
+CADDY_VERSION="${CADDY_VERSION:-v2.9.1}"
+CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
+CADDY_LIBEXEC_DIR="${CADDY_LIBEXEC_DIR:-/usr/local/libexec}"
+LAUNCHD_DIR="${LAUNCHD_DIR:-/Library/LaunchDaemons}"
+LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
+LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
+XCADDY_BIN="${XCADDY_BIN:-xcaddy}"
+BREW_BIN="${BREW_BIN:-brew}"
+
+run_privileged() {
+  if [ -n "$SUDO" ]; then
+    "$SUDO" "$@"
+  else
+    "$@"
+  fi
+}
+
+require_role() {
+  if ! "$DOTFILES_ROLE_BIN" has ai-server; then
+    echo "dotfiles-caddy-install: the ai-server role is not enabled." >&2
+    echo "Run: dotfiles-role enable ai-server" >&2
+    exit 1
+  fi
+}
+
+create_directories() {
+  run_privileged mkdir -p "$CADDY_ETC_DIR/sites" "$CADDY_ETC_DIR/snippets" "$CADDY_ETC_DIR/env" "$CADDY_LOG_DIR" "$CADDY_VAR_DIR"
+  run_privileged chmod 0750 "$CADDY_ETC_DIR" "$CADDY_LOG_DIR" "$CADDY_VAR_DIR"
+  run_privileged chmod 0700 "$CADDY_ETC_DIR/env"
+}
+
+sync_config() {
+  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG "$DOTFILES_CADDY_SRC/sites/" "$CADDY_ETC_DIR/sites/"
+  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG "$DOTFILES_CADDY_SRC/snippets/" "$CADDY_ETC_DIR/snippets/"
+  run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/Caddyfile" "$CADDY_ETC_DIR/Caddyfile"
+}
+
+bootstrap_cloudflare_env() {
+  env_file="$CADDY_ETC_DIR/env/cloudflare.env"
+  if ! run_privileged test -f "$env_file"; then
+    run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$DOTFILES_CADDY_SRC/env/cloudflare.env.example" "$env_file"
+    echo "dotfiles-caddy-install: created $env_file from the example template." >&2
+    echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
+    exit 0
+  fi
+}
+
+build_caddy() {
+  if [ -x "$CADDY_BIN" ] && "$CADDY_BIN" version 2>/dev/null | grep -q "$CADDY_VERSION"; then
+    return 0
+  fi
+  command -v "$XCADDY_BIN" >/dev/null 2>&1 || "$BREW_BIN" install xcaddy
+  tmp_dir=$(mktemp -d)
+  "$XCADDY_BIN" build "$CADDY_VERSION" --with github.com/caddy-dns/cloudflare --output "$tmp_dir/caddy"
+  run_privileged install $INSTALL_OWNER_FLAGS -m 0755 "$tmp_dir/caddy" "$CADDY_BIN"
+  rm -rf "$tmp_dir"
+}
+
+validate_config() {
+  "$CADDY_BIN" validate --config "$CADDY_ETC_DIR/Caddyfile" --adapter caddyfile
+}
+
+deploy_wrapper_and_daemon() {
+  run_privileged mkdir -p "$CADDY_LIBEXEC_DIR" "$LAUNCHD_DIR"
+  run_privileged install $INSTALL_OWNER_FLAGS -m 0755 "$DOTFILES_CADDY_SRC/caddy-start" "$CADDY_LIBEXEC_DIR/caddy-start"
+  run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/local.caddy.plist" "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
+
+  if "$LAUNCHCTL_BIN" list "$LAUNCHD_LABEL" >/dev/null 2>&1; then
+    run_privileged "$LAUNCHCTL_BIN" kickstart -k "system/$LAUNCHD_LABEL"
+  else
+    run_privileged "$LAUNCHCTL_BIN" bootstrap system "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
+  fi
+}
+
+require_role
+create_directories
+sync_config
+bootstrap_cloudflare_env
+build_caddy
+validate_config
+deploy_wrapper_and_daemon
