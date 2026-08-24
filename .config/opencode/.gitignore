@@ -1,0 +1,9 @@
+node_modules
+package.json
+package-lock.json
+bun.lock
+*-vertex.json
+itpc-*.json
+*.key
+*.pem
+*.env

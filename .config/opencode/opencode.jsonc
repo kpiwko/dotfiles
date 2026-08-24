@@ -1,0 +1,84 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "superpowers@git+https://github.com/obra/superpowers.git"
+  ],
+  "mcp": {
+    "Atlassian": {
+      "type": "remote",
+      "url": "https://mcp.atlassian.com/v1/mcp/authv2",
+      "enabled": true,
+      "oauth": {}
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
+      },
+      "enabled": true
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "preserve_recent_tokens": 8000,
+    "reserved": 40000
+  },
+  "provider": {
+    "omlx": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "omlx",
+      "options": {
+        "baseURL": "{env:OMLX_BASE_URL}",
+        "apiKey": "{env:OMLX_API_KEY}"
+      },
+      "models": {
+        "Qwen3-Coder-Next-6bit": {
+          "modelID": "Qwen3-Coder-Next-6bit",
+          "name": "Qwen3 Coder",
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "options": {
+            "extraBody": {
+              "chat_template_kwargs": {
+                "enable_thinking": false,
+                "preserve_thinking": false
+              }
+            }
+          }
+        },
+        "Qwen3.8-27B-bf16": {
+          "modelID": "Qwen3.8-27B-bf16",
+          "name": "Qwen3.8",
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "options": {
+            "extraBody": {
+              "chat_template_kwargs": {
+                "enable_thinking": false,
+                "preserve_thinking": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "default_agent": "orchestrator",
+  "model": "google-vertex/gemini-3.7-flash"
+}
