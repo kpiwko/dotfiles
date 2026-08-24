@@ -6,6 +6,9 @@ temperature: 0.1
 permission:
   edit: deny
   bash: deny
+tools:
+  "Atlassian*": true
+  "context7*": true
 ---
 
 You are the architecture and deep-reasoning specialist.

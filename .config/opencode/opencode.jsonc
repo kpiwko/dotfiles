@@ -19,6 +19,10 @@
       "enabled": true
     }
   },
+  "tools": {
+    "Atlassian*": false,
+    "context7*": false
+  },
   "compaction": {
     "auto": true,
     "prune": true,
@@ -46,6 +50,10 @@
               "text"
             ]
           },
+          "limit": {
+            "context": 150000,
+            "output": 16000
+          },
           "options": {
             "extraBody": {
               "chat_template_kwargs": {
@@ -57,6 +65,31 @@
         },
         "Qwen3.8-27B-bf16": {
           "modelID": "Qwen3.8-27B-bf16",
+          "name": "Qwen3.8 Full",
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 250000,
+            "output": 16000
+          },
+          "options": {
+            "extraBody": {
+              "chat_template_kwargs": {
+                "enable_thinking": false,
+                "preserve_thinking": false
+              }
+            }
+          }
+        },
+        "Qwen3.8-27B-8bit": {
+          "modelID": "Qwen3.8-27B-8bit",
           "name": "Qwen3.8",
           "capabilities": {
             "tools": true,
