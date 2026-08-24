@@ -2,6 +2,7 @@ alias ll='ls -la -h --color'
 alias pass="gopass"
 alias config='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias maskenv='env | sort | sed -E "/(KEY|TOKEN|PASSWORD)/I s/^([^=]+)=([^=]{4,5}).*/\1=\2.../"'
+alias vim="nvim"
 
 
 claude-ccr() {
@@ -18,9 +19,8 @@ claude-ccr() {
   )
 }
 
-# LINCE aliases
-alias zd="zellij --layout dashboard"
-alias z="zellij"
+# Zellij aliases
 alias zc="zellij --layout claude"
 alias zo="zellij --layout opencode"
-alias zn="zellij attach -c"
+alias zs="zellij --session"
+alias za="zellij attach"

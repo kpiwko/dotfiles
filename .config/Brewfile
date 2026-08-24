@@ -12,6 +12,8 @@ brew "awscli"
 brew "bash"
 # Secure and free password manager for all of your devices
 brew "bitwarden-cli"
+# Bash Automated Testing System
+brew "bats-core"
 # Vector graphics library with cross-device output support
 brew "cairo"
 # Cross-platform make

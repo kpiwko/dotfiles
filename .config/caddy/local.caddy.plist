@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>local.caddy</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/libexec/caddy-start</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/var/log/caddy/caddy.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/caddy/caddy-error.log</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/var/lib/caddy</string>
+		<key>XDG_DATA_HOME</key>
+		<string>/var/lib/caddy</string>
+		<key>XDG_CONFIG_HOME</key>
+		<string>/usr/local/etc/caddy</string>
+	</dict>
+</dict>
+</plist>

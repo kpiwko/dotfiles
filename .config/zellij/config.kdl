@@ -1,9 +1,13 @@
 mouse_mode false
-pane_frames false
+pane_frames true
 simplified_ui false
 
 copy_on_select false
-scroll_buffer_size 10000
+copy_command "pbcopy"
+copy_clipboard "system"
+scroll_buffer_size 50000
+scrollback_editor "nvim"
+theme "solarized-light-pop"
 
 // login shell to preserve zsh configuration
 default_shell "/bin/zsh"

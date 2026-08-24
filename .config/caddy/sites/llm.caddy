@@ -1,0 +1,6 @@
+# Replace the domain with your real one during Task 9. The upstream port
+# is left as-is: 8000 is oMLX's default, not worth genericizing.
+llm.example.internal {
+	import cloudflare_tls
+	reverse_proxy localhost:8000
+}

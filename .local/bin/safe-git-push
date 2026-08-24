@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REMOTE="origin"
+
+die() {
+  printf 'safe-git-push: %s\n' "$*" >&2
+  exit 1
+}
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+  die "not inside a Git repository"
+
+git remote get-url "$REMOTE" >/dev/null 2>&1 ||
+  die "remote '$REMOTE' does not exist"
+
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+[[ -n "$branch" ]] || die "detached HEAD; refusing to push"
+
+# Prefer the locally cached origin/HEAD reference.
+default_ref="$(git symbolic-ref --quiet --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null || true)"
+default_branch="${default_ref#${REMOTE}/}"
+
+# Fallback may contact the remote.
+if [[ -z "$default_ref" || "$default_branch" == "$default_ref" ]]; then
+  default_branch="$(
+    git remote show "$REMOTE" 2>/dev/null |
+      sed -n 's/^[[:space:]]*HEAD branch: //p' |
+      head -n1 || true
+  )"
+fi
+
+case "$branch" in
+  "$default_branch"|main|master|trunk|develop|development|stable|production|prod)
+    die "refusing to push protected/significant branch '$branch'"
+    ;;
+  release|release/*|hotfix|hotfix/*)
+    die "refusing to push release/hotfix branch '$branch'"
+    ;;
+esac
+
+configured_remote="$(git config --get "branch.${branch}.remote" || true)"
+if [[ -n "$configured_remote" && "$configured_remote" != "$REMOTE" ]]; then
+  die "branch '$branch' tracks '$configured_remote', not '$REMOTE'"
+fi
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [[ -n "$upstream" ]]; then
+  upstream_remote="${upstream%%/*}"
+  upstream_branch="${upstream#*/}"
+
+  [[ "$upstream_remote" == "$REMOTE" ]] ||
+    die "upstream is '$upstream', not '$REMOTE/$branch'"
+
+  [[ "$upstream_branch" == "$branch" ]] ||
+    die "upstream branch '$upstream_branch' differs from current branch '$branch'"
+fi
+
+printf "safe-git-push: pushing '%s' -> '%s/%s'\n" "$branch" "$REMOTE" "$branch"
+
+if [[ -z "$upstream" ]]; then
+  exec git push --set-upstream "$REMOTE" "HEAD:refs/heads/$branch"
+else
+  exec git push "$REMOTE" "HEAD:refs/heads/$branch"
+fi

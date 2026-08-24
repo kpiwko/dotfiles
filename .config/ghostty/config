@@ -2,7 +2,7 @@
 # font-family = "Inconsolata Nerd Font Mono"
 # Keeping your old font commented out for easy fallback.
 font-family = "Red Hat Mono"
-font-size = 18
+font-size = 16
 theme = "iTerm2 Solarized Light"
 
 # Split panes
