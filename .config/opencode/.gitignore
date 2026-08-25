@@ -7,3 +7,4 @@ itpc-*.json
 *.key
 *.pem
 *.env
+*.env.local
