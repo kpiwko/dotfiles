@@ -66,6 +66,7 @@ keybinds {
             ScrollToBottom;
             SwitchToMode "Normal";
         }
+    }
 
     // Move Scroll and Move mode from ctrl to Alt
     shared_except "scroll" "locked" {
