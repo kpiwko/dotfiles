@@ -58,6 +58,10 @@ brew "just"
 brew "kubelogin"
 # Postgres C API library
 brew "libpq"
+# Kubernetes cluster for local development
+brew "kind"
+# Kubernetes command-line tool
+brew "kubernetes-cli"
 # LLM inference in C/C++
 brew "llama.cpp"
 # Polyglot runtime manager (asdf rust clone)

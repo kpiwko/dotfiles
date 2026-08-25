@@ -28,11 +28,6 @@ keybinds {
         unbind "Alt Left"
         unbind "Alt Right"
 
-        bind "Alt h" { MoveFocus "Left"; }
-        bind "Alt l" { MoveFocus "Right"; }
-        bind "Alt j" { MoveFocus "Down"; }
-        bind "Alt k" { MoveFocus "Up"; }
-
         bind "Alt d" { NewPane "Down"; }
         bind "Alt r" { NewPane "Right"; }
         bind "Alt f" { ToggleFloatingPanes; }
@@ -50,7 +45,10 @@ keybinds {
         bind "Alt 1" { GoToTab 1; }
         bind "Alt 2" { GoToTab 2; }
         bind "Alt 3" { GoToTab 3; }
-
+        
+        bind "Alt Up" { HalfPageScrollUp; }
+        bind "Alt Down" { HalfPageScrollDown; }
+        bind "Alt End" { ScrollToBottom; }
     }
 
     // Move Lock toggle from ctrl+g to Alt+g; unbind quit
@@ -62,6 +60,12 @@ keybinds {
     locked {
         unbind "Ctrl g"
         bind "Alt g" { SwitchToMode "Normal"; }
+    }
+    scroll {
+        bind "Alt End" {
+            ScrollToBottom;
+            SwitchToMode "Normal";
+        }
     }
 
     // Move Scroll and Move mode from ctrl to Alt

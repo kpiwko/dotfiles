@@ -113,5 +113,8 @@
     }
   },
   "default_agent": "orchestrator",
-  "model": "google-vertex/gemini-3.7-flash"
+  "model": "google-vertex/gemini-3.7-flash",
+  "experimental": {
+    "openTelemetry": true
+  }
 }
