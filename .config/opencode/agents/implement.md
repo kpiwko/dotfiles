@@ -20,22 +20,40 @@ permission:
     "wc*": allow
     "diff*": allow
     "git status*": allow
+    "*/.local/bin/dotfiles-git status*": allow
     "git diff*": allow
+    "~/.local/bin/dotfiles-git diff*": allow
     "git log*": allow
+    "~/.local/bin/dotfiles-git log*": allow
     "git show*": allow
+    "~/.local/bin/dotfiles-git show*": allow
     "git add*": allow
+    "~/.local/bin/dotfiles-git add*": allow
     "git commit*": allow
+    "~/.local/bin/dotfiles-git commit*": allow
     "git branch*": allow
+    "~/.local/bin/dotfiles-git branch*": allow
     "git checkout*": allow
+    "~/.local/bin/dotfiles-git checkout*": allow
     "git switch*": allow
+    "~/.local/bin/dotfiles-git switch*": allow
     "git remote*": allow
+    "~/.local/bin/dotfiles-git remote*": allow
     "git fetch*": allow
+    "~/.local/bin/dotfiles-git fetch*": allow
     "git rev-parse*": allow
+    "~/.local/bin/dotfiles-git rev-parse*": allow
     "git rebase*": allow
+    "~/.local/bin/dotfiles-git rebase*": allow
     "git pull*": allow
+    "~/.local/bin/dotfiles-git pull*": allow
     "git ls-remote*": allow
+    "~/.local/bin/dotfiles-git ls-remote*": allow
+    "git ls-files*": allow
+    "~/.local/bin/dotfiles-git ls-files*": allow
     "safe-git-push*": allow
     "~/.local/bin/safe-git-push*": allow
+    "~/.local/bin/devcluster-kubectl*": allow
     "npm test*": allow
     "npm run*": allow
     "npx*": allow
@@ -65,10 +83,11 @@ permission:
     "git checkout -f*": deny
     "git branch -D*": deny
     "git commit --amend*": deny
-    "sudo*": deny
     "git reset --hard*": deny
     "git clean*": deny
     "rm -rf*": deny
+    "kubectl*": deny
+    "sudo*": deny
 ---
 
 You are the implementation specialist.
@@ -128,6 +147,20 @@ When given an Architect result containing `ADR REQUIRED: YES`:
 
 Accepted ADRs become constraints for subsequent work.
 
+## Git commits
+
+When creating a commit, always add the following Git trailer:
+
+    Co-authored-by: OpenCode
+    Assisted-by: OpenCode
+
+The trailer must be part of the commit message, separated from the commit
+body by a blank line.
+
+Before committing, verify that the resulting commit message contains the
+required trailer.
+
+
 ## Git push workflow
 
 Normal feature-branch pushes may be autonomous through `safe-git-push`.
@@ -171,6 +204,34 @@ Before creating or updating a PR/MR:
    - `glab mr create` / `glab mr update`
 
 Merge operations always require approval.
+
+## Kubernetes
+
+You have access to the local development Kubernetes cluster through:
+
+    devcluster-kubectl
+
+Always use `devcluster-kubectl` instead of `kubectl`.
+
+Examples:
+
+    devcluster-kubectl get pods
+    devcluster-kubectl apply -k k8s/overlays/cluster
+    devcluster-kubectl logs deployment/foo
+
+The command is restricted to the local Kind development cluster.
+Do not attempt to use `kubectl` directly.
+
+## Dotfiles repository
+
+When working with the dotfiles repository, never use `git` directly.
+
+Use:
+
+    ~/.local/bin/dotfiles-git
+
+The dotfiles repository is a bare repository whose work tree is `$HOME`. You will be working
+from ~/.config/dotfiles repository, so use absolute paths when working with files and dotfiles-git.
 
 ## Superpowers
 
