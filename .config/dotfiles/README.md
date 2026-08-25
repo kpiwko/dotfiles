@@ -57,16 +57,18 @@ brew bundle --file=~/.config/Brewfile
 Every machine gets the same base configuration checked out above — there is
 no per-machine variant of the shell/git/editor config. On top of that base,
 a machine can opt into additional, non-exclusive **roles** that install
-extra software and services. Today there is one role: `ai-server`.
+extra software and services. Today there are two roles: `ai-server` and `cluster`.
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
 already on `PATH` once this repo is checked out):
 
 ```zsh
+dotfiles-role enable cluster      # enable Kubernetes cluster role
 dotfiles-role enable ai-server    # turn a role on for this machine
 dotfiles-role disable ai-server   # turn it back off
 dotfiles-role list                # show roles enabled on this machine
 dotfiles-role has ai-server       # exit 0/1, used by install scripts
+dotfiles-role has cluster         # check if cluster role is enabled
 ```
 
 Role state lives in `~/.config/dotfiles/roles`, an untracked, per-machine
@@ -186,3 +188,56 @@ Two flavors of "never commit this" exist in this repo:
 2. Commit it like any other dotfiles change.
 3. Rerun `dotfiles-caddy-install` on the AI server — it syncs `sites/` with
    `rsync --delete`, validates, and reloads.
+
+# Kubernetes (Kind) Cluster Role
+
+The `cluster` role sets up a local Kubernetes development environment using
+[Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) with Podman as the
+container runtime.
+
+## Architecture
+
+- Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests
+  for all services).
+- `dotfiles-cluster` CLI manages the cluster lifecycle: create, up, status, logs, down, delete.
+
+## Services
+
+The cluster includes:
+- **Langfuse** - Observation & analytics (Web UI + Worker)
+- **PostgreSQL** - Primary database (v16)
+- **ClickHouse** - Analytics database (v24.3)
+- **Redis** - Caching layer (v7)
+- **MinIO** - Object storage
+- **MCP Servers** - Model Context Protocol (Context7, Atlassian)
+
+## Installation
+
+```zsh
+dotfiles-role enable cluster
+dotfiles-cluster create          # Create Kind cluster
+dotfiles-cluster up              # Deploy kustomize manifests
+dotfiles-cluster status          # Check cluster status
+```
+
+Or use Make:
+```zsh
+make cluster-create
+make cluster-up
+make cluster-status
+```
+
+## Port Mapping
+
+| Container Port | Host Port | Service |
+|----------------|-----------|---------|
+| 3000 | 30000 | Langfuse Web |
+| 9001 | 30001 | MinIO Console |
+| 8080 | 30080 | MCP Context7 |
+| 8081 | 30081 | MCP Atlassian |
+
+## Documentation
+
+See the full Kubernetes stack documentation at:
+`~/.config/k8s/README.md`
+

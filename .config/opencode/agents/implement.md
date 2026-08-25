@@ -20,40 +20,39 @@ permission:
     "wc*": allow
     "diff*": allow
     "git status*": allow
-    "*/.local/bin/dotfiles-git status*": allow
+    "dotfiles-git status*": allow
     "git diff*": allow
-    "~/.local/bin/dotfiles-git diff*": allow
+    "dotfiles-git diff*": allow
     "git log*": allow
-    "~/.local/bin/dotfiles-git log*": allow
+    "dotfiles-git log*": allow
     "git show*": allow
-    "~/.local/bin/dotfiles-git show*": allow
+    "dotfiles-git show*": allow
     "git add*": allow
-    "~/.local/bin/dotfiles-git add*": allow
+    "dotfiles-git add*": allow
     "git commit*": allow
-    "~/.local/bin/dotfiles-git commit*": allow
+    "dotfiles-git commit*": allow
     "git branch*": allow
-    "~/.local/bin/dotfiles-git branch*": allow
+    "dotfiles-git branch*": allow
     "git checkout*": allow
-    "~/.local/bin/dotfiles-git checkout*": allow
+    "dotfiles-git checkout*": allow
     "git switch*": allow
-    "~/.local/bin/dotfiles-git switch*": allow
+    "dotfiles-git switch*": allow
     "git remote*": allow
-    "~/.local/bin/dotfiles-git remote*": allow
+    "dotfiles-git remote*": allow
     "git fetch*": allow
-    "~/.local/bin/dotfiles-git fetch*": allow
+    "dotfiles-git fetch*": allow
     "git rev-parse*": allow
-    "~/.local/bin/dotfiles-git rev-parse*": allow
+    "dotfiles-git rev-parse*": allow
     "git rebase*": allow
-    "~/.local/bin/dotfiles-git rebase*": allow
+    "dotfiles-git rebase*": allow
     "git pull*": allow
-    "~/.local/bin/dotfiles-git pull*": allow
+    "dotfiles-git pull*": allow
     "git ls-remote*": allow
-    "~/.local/bin/dotfiles-git ls-remote*": allow
+    "dotfiles-git ls-remote*": allow
     "git ls-files*": allow
-    "~/.local/bin/dotfiles-git ls-files*": allow
+    "dotfiles-git ls-files*": allow
     "safe-git-push*": allow
-    "~/.local/bin/safe-git-push*": allow
-    "~/.local/bin/devcluster-kubectl*": allow
+    "devcluster-kubectl*": allow
     "npm test*": allow
     "npm run*": allow
     "npx*": allow
@@ -117,6 +116,7 @@ For straightforward work, execute directly. For difficult implementation problem
 ## Implementation behavior
 
 For straightforward work:
+
 - Prefer action over discussion.
 - Make reasonable routine engineering decisions independently.
 - Keep changes narrowly scoped to the requested work.
@@ -129,6 +129,7 @@ For straightforward work:
 ## Deep Implementation
 
 For genuinely difficult coding work:
+
 - Implement rather than debate.
 - Run appropriate validation.
 - Fix failures caused by your changes.
@@ -151,7 +152,6 @@ Accepted ADRs become constraints for subsequent work.
 
 When creating a commit, always add the following Git trailer:
 
-    Co-authored-by: OpenCode
     Assisted-by: OpenCode
 
 The trailer must be part of the commit message, separated from the commit
@@ -159,7 +159,6 @@ body by a blank line.
 
 Before committing, verify that the resulting commit message contains the
 required trailer.
-
 
 ## Git push workflow
 
@@ -211,6 +210,11 @@ You have access to the local development Kubernetes cluster through:
 
     devcluster-kubectl
 
+`devcluster-kubectl` is available on `PATH`.
+
+Always invoke it by exactly this name. Do not invoke it using an absolute
+path, `~`, or `$HOME`.
+
 Always use `devcluster-kubectl` instead of `kubectl`.
 
 Examples:
@@ -220,7 +224,8 @@ Examples:
     devcluster-kubectl logs deployment/foo
 
 The command is restricted to the local Kind development cluster.
-Do not attempt to use `kubectl` directly.
+Do not attempt to use `kubectl` directly or override its kubeconfig or
+context.
 
 ## Dotfiles repository
 
@@ -228,10 +233,22 @@ When working with the dotfiles repository, never use `git` directly.
 
 Use:
 
-    ~/.local/bin/dotfiles-git
+    dotfiles-git
 
-The dotfiles repository is a bare repository whose work tree is `$HOME`. You will be working
-from ~/.config/dotfiles repository, so use absolute paths when working with files and dotfiles-git.
+`dotfiles-git` is available on `PATH`.
+
+Always invoke it by exactly this name. Do not invoke it using an absolute
+path, `~`, or `$HOME`.
+
+Examples:
+
+    dotfiles-git status
+    dotfiles-git diff
+    dotfiles-git add opencode/.gitignore
+    dotfiles-git commit
+
+The dotfiles repository is a bare repository whose work tree is `$HOME`.
+Do not manually specify `--git-dir` or `--work-tree`.
 
 ## Superpowers
 
@@ -242,9 +259,11 @@ Use relevant Superpowers skills only when they add value:
 - executing-plans when following an established plan
 - verification-before-completion before declaring success
 
-For difficult implementation problems, invoke systematic-debugging, TDD, executing-plans, and verification-before-completion as needed.
+For difficult implementation problems, invoke systematic-debugging, TDD,
+executing-plans, and verification-before-completion as needed.
 
-Do not invoke heavyweight brainstorming or planning methodology for straightforward implementation work.
+Do not invoke heavyweight brainstorming or planning methodology for
+straightforward implementation work.
 
 ## Return
 
@@ -255,5 +274,5 @@ Report concisely:
 - Git/PR status if relevant
 - any concrete blocker
 
-For difficult implementation work, include a summary of how the implementation difficulty was resolved.
-
+For difficult implementation work, include a summary of how the
+implementation difficulty was resolved.

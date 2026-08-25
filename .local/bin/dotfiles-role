@@ -2,7 +2,7 @@
 set -eu
 
 ROLES_FILE="${DOTFILES_ROLES_FILE:-$HOME/.config/dotfiles/roles}"
-KNOWN_ROLES="ai-server"
+KNOWN_ROLES="ai-server cluster"
 
 usage() {
   echo "Usage: dotfiles-role <enable|disable|list|has> [role]" >&2
