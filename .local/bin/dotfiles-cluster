@@ -1,0 +1,151 @@
+#!/bin/sh
+# dotfiles-cluster - Kubernetes (Kind) AI infrastructure management
+# Supports roles: cluster
+
+set -eu
+
+K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
+CLUSTER_NAME="kind-ai-dev"
+KIND_CONFIG="$K8S_DIR/kind-config.yaml"
+KUSTOMIZE_DIR="$K8S_DIR"
+
+usage() {
+  echo "Usage: dotfiles-cluster <command> [options]" >&2
+  echo "" >&2
+  echo "Commands:" >&2
+  echo "  create    Create Kind cluster with AI infrastructure configuration" >&2
+  echo "  up        Deploy kustomize manifests to cluster" >&2
+  echo "  status    Show cluster and pod status" >&2
+  echo "  logs      Show logs for a pod (use: logs <pod> [container])" >&2
+  echo "  down      Stop cluster (preserve state)" >&2
+  echo "  delete    Delete cluster completely" >&2
+  echo "" >&2
+  echo "Environment:" >&2
+  echo "  K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)" >&2
+  echo "  DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)" >&2
+  exit 1
+}
+
+check_cluster_role() {
+  if ! command -v dotfiles-role >/dev/null 2>&1; then
+    echo "dotfiles-cluster: error: dotfiles-role not found" >&2
+    exit 1
+  fi
+  dotfiles-role has cluster || {
+    echo "dotfiles-cluster: error: cluster role not enabled" >&2
+    echo "Run: dotfiles-role enable cluster" >&2
+    exit 1
+  }
+}
+
+check_kind() {
+  if ! command -v kind >/dev/null 2>&1; then
+    echo "dotfiles-cluster: error: kind not found" >&2
+    echo "Install with: brew install kind" >&2
+    exit 1
+  fi
+}
+
+check_kubectl() {
+  if command -v devcluster-kubectl >/dev/null 2>&1; then
+    KUBECTL_BIN="devcluster-kubectl"
+  elif command -v kubectl >/dev/null 2>&1; then
+    KUBECTL_BIN="kubectl"
+  else
+    echo "dotfiles-cluster: error: kubectl not found" >&2
+    echo "Install with: brew install kubernetes-cli" >&2
+    exit 1
+  fi
+}
+
+cmd_create() {
+  check_cluster_role
+  check_kind
+  
+  echo "Creating Kind cluster: $CLUSTER_NAME"
+  
+  if [ -f "$KIND_CONFIG" ]; then
+    export KIND_EXPERIMENTAL_PROVIDER=podman
+    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG"
+  else
+    echo "dotfiles-cluster: error: kind config not found at $KIND_CONFIG" >&2
+    exit 1
+  fi
+}
+
+cmd_up() {
+  check_kubectl
+  
+  echo "Deploying kustomize manifests..."
+  
+  if [ -d "$KUSTOMIZE_DIR" ]; then
+    $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
+  else
+    echo "dotfiles-cluster: error: kustomize dir not found at $KUSTOMIZE_DIR" >&2
+    exit 1
+  fi
+}
+
+cmd_status() {
+  check_kubectl
+  check_kind
+  
+  echo "=== Cluster Nodes ==="
+  kind get clusters
+  echo ""
+  $KUBECTL_BIN get nodes
+  
+  echo ""
+  echo "=== Pods (ai-dev namespace) ==="
+  $KUBECTL_BIN get pods -n ai-dev
+}
+
+cmd_logs() {
+  check_kubectl
+  
+  if [ $# -lt 1 ]; then
+    echo "Usage: dotfiles-cluster logs <pod> [container]" >&2
+    exit 1
+  fi
+  
+  pod="$1"
+  container="${2:-}"
+  
+  if [ -n "$container" ]; then
+    $KUBECTL_BIN logs -n ai-dev "$pod" -c "$container" --tail=100 --follow
+  else
+    $KUBECTL_BIN logs -n ai-dev "$pod" --tail=100 --follow
+  fi
+}
+
+cmd_down() {
+  check_kind
+  check_kubectl
+  
+  echo "Stopping cluster: $CLUSTER_NAME"
+  kind export kubeconfig --name "$CLUSTER_NAME"
+  # Scale down deployments
+  $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
+}
+
+cmd_delete() {
+  check_kind
+  
+  echo "Deleting cluster: $CLUSTER_NAME"
+  kind delete cluster --name "$CLUSTER_NAME"
+}
+
+# Main
+[ $# -ge 1 ] || usage
+
+action="$1"; shift || true
+
+case "$action" in
+  create) cmd_create ;;
+  up) cmd_up ;;
+  status) cmd_status ;;
+   logs) cmd_logs "$@" ;;
+  down) cmd_down ;;
+  delete) cmd_delete ;;
+  *) usage ;;
+esac

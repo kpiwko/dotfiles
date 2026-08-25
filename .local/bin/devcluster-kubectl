@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+KUBECONFIG_FILE="${HOME}/.kube/opencode-devcluster"
+CONTEXT="kind-devcluster"
+
+# Don't allow callers to escape to another kubeconfig/context.
+for arg in "$@"; do
+    case "$arg" in
+        --kubeconfig|--kubeconfig=*|--context|--context=*)
+            echo "error: overriding kubeconfig or context is not allowed" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ ! -f "$KUBECONFIG_FILE" ]]; then
+    echo "error: kubeconfig not found: $KUBECONFIG_FILE" >&2
+    exit 1
+fi
+
+exec kubectl \
+    --kubeconfig="$KUBECONFIG_FILE" \
+    --context="$CONTEXT" \
+    "$@"

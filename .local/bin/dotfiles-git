@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec git \
+  --git-dir="$HOME/.dotfiles" \
+  --work-tree="$HOME" \
+  "$@"
