@@ -1,0 +1,4 @@
+tracing.example.internal {
+	import cloudflare_tls
+	reverse_proxy localhost:3000
+}
