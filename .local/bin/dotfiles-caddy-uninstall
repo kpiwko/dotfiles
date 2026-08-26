@@ -18,8 +18,8 @@ run_privileged() {
 }
 
 require_role() {
-  if ! "$DOTFILES_ROLE_BIN" has ai-server; then
-    echo "dotfiles-caddy-uninstall: the ai-server role is not enabled." >&2
+  if ! "$DOTFILES_ROLE_BIN" has dev && ! "$DOTFILES_ROLE_BIN" has ai-server; then
+    echo "dotfiles-caddy-uninstall: neither the dev nor ai-server role is enabled." >&2
     exit 1
   fi
 }
