@@ -39,9 +39,10 @@ teardown() {
 }
 
 stub_role_enabled() {
-  cat > "$DOTFILES_ROLE_BIN" <<'EOF'
+  role="${1:-ai-server}"
+  cat > "$DOTFILES_ROLE_BIN" <<EOF
 #!/bin/sh
-[ "$1" = "has" ] && [ "$2" = "ai-server" ] && exit 0
+[ "\$1" = "has" ] && [ "\$2" = "$role" ] && exit 0
 exit 1
 EOF
   chmod +x "$DOTFILES_ROLE_BIN"
@@ -116,11 +117,25 @@ stub_all_ok() {
   stub_launchctl 1
 }
 
-@test "refuses to run when ai-server role is not enabled" {
+@test "refuses to run when neither dev nor ai-server role is enabled" {
   stub_role_disabled
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [ ! -d "$CADDY_ETC_DIR" ]
+}
+
+@test "succeeds when dev role is enabled" {
+  stub_role_enabled dev
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "succeeds when ai-server role is enabled" {
+  stub_role_enabled ai-server
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
 }
 
 @test "creates required directories when role is enabled" {
