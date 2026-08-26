@@ -47,6 +47,19 @@ teardown() {
   [[ "$output" == *"unknown role"* ]]
 }
 
+@test "enable then has succeeds for dev role" {
+  "$SCRIPT" enable dev
+  run "$SCRIPT" has dev
+  [ "$status" -eq 0 ]
+}
+
+@test "enable is idempotent for dev role" {
+  "$SCRIPT" enable dev
+  "$SCRIPT" enable dev
+  run "$SCRIPT" list
+  [ "$(echo "$output" | grep -c '^dev$')" -eq 1 ]
+}
+
 @test "enable then has succeeds for cluster role" {
   "$SCRIPT" enable cluster
   run "$SCRIPT" has cluster
