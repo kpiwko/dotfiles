@@ -16,7 +16,6 @@ permission:
     "cat*": allow
     "which*": allow
     "grep*": allow
-    "find*": allow
     "head*": allow
     "tail*": allow
     "wc*": allow
@@ -54,6 +53,7 @@ permission:
     "git ls-files*": allow
     "dotfiles-git ls-files*": allow
     "safe-git-push*": allow
+    "safe-find*": allow
     "devcluster-kubectl*": allow
     "npm test*": allow
     "npm run*": allow
@@ -86,6 +86,7 @@ permission:
     "git commit --amend*": deny
     "git reset --hard*": deny
     "git clean*": deny
+    "find*": deny
     "rm -rf*": deny
     "kubectl*": deny
     "sudo*": deny
@@ -122,6 +123,7 @@ Planning and architecture belong to the parent agent.
   - `dotfiles-git`
   - `devcluster-kubectl`
   - `safe-git-push`
+  - `safe-find`
 
 Run commands directly, for example:
 
@@ -129,6 +131,8 @@ Run commands directly, for example:
     npm test
     dotfiles-git status
     devcluster-kubectl get pods
+
+For filesystem searches, use `safe-find` instead of `find`. `safe-find` is available on PATH.<D-s>/
 
 ## ADRs
 
