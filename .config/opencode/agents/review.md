@@ -7,9 +7,14 @@ permission:
   edit: deny
   bash:
     "*": deny
+    "dotfiles-git status*": allow
+    "dotfiles-git diff*": allow
+    "dotfiles-git log*": allow
+    "dotfiles-git show*": allow
     "git status*": allow
     "git diff*": allow
     "git log*": allow
+    "git show*": allow
     "qodo *": allow
 ---
 
@@ -19,8 +24,8 @@ Do not edit files and do not implement fixes.
 
 ## Process
 
-1. Inspect `git status`.
-2. Inspect the relevant `git diff`.
+1. Inspect repository status using the appropriate Git wrapper.
+2. Inspect the relevant diff.
 3. Use Qodo as the primary external review engine when available.
 4. Validate Qodo's findings against the actual diff and repository context.
 5. Remove noise, duplicates, cosmetic-only nits, and irrelevant findings.
@@ -43,6 +48,15 @@ Do not edit files and do not implement fixes.
 - unrelated refactors
 - low-value preference comments
 
+## Tool discipline
+
+- Run shell commands in the existing working directory; do not prefix them
+  with `cd` unless another directory is explicitly required.
+- Invoke tools by their binary name from `PATH`, never by absolute path,
+  `~`, `$HOME`, `--git-dir`, or `--work-tree`.
+- Use `dotfiles-git` when the current working directory is exactly `$HOME`;
+  otherwise use normal `git` and never invoke `dotfiles-git`.
+
 ## Output
 
 ### Blocking Issues
@@ -58,4 +72,3 @@ Do not edit files and do not implement fixes.
 `PASS` or `CHANGES REQUIRED`
 
 Use `PASS` only when there are no blocking or important issues.
-
