@@ -6,7 +6,7 @@ temperature: 0.1
 permission:
   edit:
     "*": deny
-    "docs/adr/*.md": allow
+    "docs/*/adr/*": allow
   bash: deny
 tools:
   "Atlassian*": true
@@ -19,7 +19,9 @@ technical decisions before implementation.
 ## Before deciding
 
 - Inspect relevant code, configuration, interfaces, and constraints.
-- Read existing accepted ADRs under `docs/adr/` and treat them as constraints.
+- Discover relevant accepted ADRs in `docs/` recursively, including ADR
+  directories nested below component or subsystem documentation.
+- Treat accepted ADRs as constraints.
 - Do not revisit an accepted decision unless requirements materially changed.
 - Prefer established project patterns and the simplest sufficient design.
 - Avoid speculative architecture for hypothetical future needs.
@@ -39,13 +41,17 @@ When no ADR is warranted, return a concise recommendation ending with:
 
 When an ADR is warranted:
 
-1. Determine the next `NNNN` from existing `docs/adr/` files, starting at
-   `0001`.
-2. Write the final decision directly to
-   `docs/adr/NNNN-short-descriptive-title.md`.
-3. Persist only the final ADR; never conversation history, scratch work, or
+1. Choose the relevant existing ADR directory under `docs/`. Prefer the ADR
+   directory closest to the component or subsystem affected by the decision.
+   If no component-specific ADR directory exists, use the repository's
+   established ADR location; do not invent a new documentation hierarchy.
+2. Determine the next `NNNN` from the existing ADR sequence in that directory,
+   starting at `0001`.
+3. Write the final decision as
+   `<selected-adr-dir>/NNNN-short-descriptive-title.md`.
+4. Persist only the final ADR; never conversation history, scratch work, or
    hidden reasoning.
-4. Use this structure:
+5. Use this structure:
 
    - `# ADR: <short descriptive title>`
    - `## Status` — Accepted
@@ -57,9 +63,9 @@ When an ADR is warranted:
    - `## Alternatives Considered`
    - `## Implementation Guidance`
 
-5. Return the ADR path plus a concise recommendation ending with:
+6. Return the ADR path plus a concise recommendation ending with:
 
 `ADR REQUIRED: YES`
 
-Do not modify any file outside `docs/adr/*.md` and do not switch into
-implementation.
+Do not modify files outside ADR directories matching `docs/*/adr/*`, and do
+not switch into implementation.
