@@ -84,8 +84,11 @@ OpenCode configuration is stored under `~/.config/opencode/`.
   - `implement.md`: Default implementation specialist (Qwen3 Coder Next, thinking disabled).
   - `implement-deep.md`: Stronger local implementation fallback (Qwen3.8 27B, thinking disabled).
   - `plan.md`: Planning specialist for complex sequencing/multi-component tasks.
-  - `architect.md`: Architecture specialist producing ADR-ready decisions.
+  - `architect.md`: Architecture specialist that persists durable decisions directly under `docs/adr/`.
   - `review.md`: Read-only reviewer leveraging Qodo.
+- **Implementation skills:** `~/.config/opencode/skills/`
+  - `init-change`: prepares Git state and a feature branch before editing without worktrees.
+  - `publish-change`: creates logical commits, pushes safely, and handles approved PR/MR publication.
 - **Git Push Guard:** `~/.local/bin/safe-git-push` enforces branch protection, pushes to origin, and prevents accidental pushes to `main`, `develop`, release/hotfix, or detached HEAD states.
 - **Architecture Decision Records (ADRs):** Template at `~/.config/opencode/ADR-TEMPLATE.md`.
 
@@ -133,9 +136,7 @@ repo managed it), it's left untouched.
 
 ## Bootstrap
 
-On a brand-new AI server: clone this repo per the top-level install
-instructions, run `brew bundle --file=~/.config/Brewfile`, then follow
-Installation above.
+On a brand-new AI server: clone this repo per the top-level install instructions, run `brew bundle --file=~/.config/Brewfile`, then follow Installation above.
 
 ## Upgrades
 
@@ -151,43 +152,31 @@ To change the pinned Caddy version or add another `xcaddy` module, edit the
 ## Logs
 
 `/var/log/caddy/caddy.log` (stdout) and `/var/log/caddy/caddy-error.log`
-(stderr). Tail them with `tail -f /var/log/caddy/caddy.log`.
+(stderr). Tail it with `tail -f /var/log/caddy/caddy.log`.
 
 ## Troubleshooting
 
 - `caddy validate --config /usr/local/etc/caddy/Caddyfile --adapter caddyfile`
   — check the deployed config directly.
-- `sudo launchctl print system/local.caddy` — confirm the daemon is
-  loaded and see its last exit status.
-- `sudo launchctl kickstart -k system/local.caddy` — force a clean
-  restart.
+- `sudo launchctl print system/local.caddy` — confirm the daemon is loaded and see its last exit status.
+- `sudo launchctl kickstart -k system/local.caddy` — force a clean restart.
 
 ## Certificates
 
-Certificates are obtained automatically via ACME DNS-01 challenges against
-Cloudflare, so ports 80/443 don't need to be reachable from the internet for
-issuance. Caddy's certificate/state storage lives under `/var/lib/caddy`
-(the `XDG_DATA_HOME` set in the plist) — `dotfiles-caddy-uninstall` never
-touches this directory, so disabling and re-enabling the role doesn't force
-reissuance.
+Certificates are obtained automatically via ACME DNS-01 challenges against Cloudflare, so ports 80/443 don't need to be reachable from the internet for issuance. Caddy's certificate/state storage lives under `/var/lib/caddy` (the `XDG_DATA_HOME` set in the plist) — `dotfiles-caddy-uninstall` never touches this directory, so disabling and re-enabling the role doesn't force reissuance.
 
 ## Local secrets
 
 Two flavors of "never commit this" exist in this repo:
 
-- `~/.gitconfig.local` and `~/.config/dotfiles/roles` — untracked files
-  under `$HOME`, protected by a `.gitignore` in their directory as a safety
-  net against accidental `git add`.
-- `/usr/local/etc/caddy/env/cloudflare.env` — lives entirely outside `$HOME`
-  (and therefore outside this repo's work-tree), so it can never be
-  tracked by construction. Only `env/cloudflare.env.example` is committed.
+- `~/.gitconfig.local` and `~/.config/dotfiles/roles` — untracked files under `$HOME`, protected by a `.gitignore` in their directory as a safety net against accidental `git add`.
+- `/usr/local/etc/caddy/env/cloudflare.env` — lives entirely outside `$HOME` (and therefore outside this repo's work-tree), so it can never be tracked by construction. Only `env/cloudflare.env.example` is committed.
 
 ## Adding another Caddy site
 
 1. Add a new file under `.config/caddy/sites/`, e.g. `sites/notes.caddy`.
 2. Commit it like any other dotfiles change.
-3. Rerun `dotfiles-caddy-install` on the AI server — it syncs `sites/` with
-   `rsync --delete`, validates, and reloads.
+3. Rerun `dotfiles-caddy-install` on the AI server — it syncs `sites/` with `rsync --delete`, validates, and reloads.
 
 # Kubernetes (Kind) Cluster Role
 
@@ -197,8 +186,7 @@ container runtime.
 
 ## Architecture
 
-- Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests
-  for all services).
+- Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests for all services).
 - `dotfiles-cluster` CLI manages the cluster lifecycle: create, up, status, logs, down, delete.
 
 ## Services
@@ -240,4 +228,3 @@ make cluster-status
 
 See the full Kubernetes stack documentation at:
 `~/.config/k8s/README.md`
-
