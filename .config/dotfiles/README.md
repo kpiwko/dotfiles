@@ -57,16 +57,21 @@ brew bundle --file=~/.config/Brewfile
 Every machine gets the same base configuration checked out above — there is
 no per-machine variant of the shell/git/editor config. On top of that base,
 a machine can opt into additional, non-exclusive **roles** that install
-extra software and services. Today there are two roles: `ai-server` and `cluster`.
+extra software and services. Available roles include:
+- `dev`: Local development workstation (enables local Caddy reverse proxy, local TLS, developer tools).
+- `ai-server`: Dedicated AI server (Caddy reverse proxy with Cloudflare DNS-01 TLS, local LLM/tracing backends).
+- `cluster`: Local Kubernetes development environment (Kind, Podman, Langfuse, MCP servers, databases).
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
 already on `PATH` once this repo is checked out):
 
 ```zsh
+dotfiles-role enable dev          # enable local dev workstation role
 dotfiles-role enable cluster      # enable Kubernetes cluster role
-dotfiles-role enable ai-server    # turn a role on for this machine
-dotfiles-role disable ai-server   # turn it back off
+dotfiles-role enable ai-server    # enable AI server role
+dotfiles-role disable ai-server   # turn a role off
 dotfiles-role list                # show roles enabled on this machine
+dotfiles-role has dev             # exit 0/1, check if role is enabled
 dotfiles-role has ai-server       # exit 0/1, used by install scripts
 dotfiles-role has cluster         # check if cluster role is enabled
 ```
@@ -92,10 +97,10 @@ OpenCode configuration is stored under `~/.config/opencode/`.
 - **Sandbox commands:** constrained wrappers such as `sandbox-find` and `sandbox-git-push` reduce the operations available to implementation agents. `sandbox-git-push` permits ordinary feature-branch pushes to `origin` while refusing significant branches, detached HEAD, mismatched tracking, and force-push behavior.
 - **Architecture Decision Records (ADRs):** Template at `~/.config/opencode/ADR-TEMPLATE.md`.
 
-# AI server: Caddy
+# Reverse Proxy: Caddy
 
-The `ai-server` role installs [Caddy](https://caddyserver.com) as a reverse
-proxy in front of local AI services, built with `xcaddy` to include the
+The `dev` and `ai-server` roles install [Caddy](https://caddyserver.com) as a reverse
+proxy for local services and development, built with `xcaddy` to include the
 [Cloudflare DNS](https://github.com/caddy-dns/cloudflare) module for DNS-01
 ACME challenges.
 
@@ -111,6 +116,10 @@ ACME challenges.
   let your regular user account rewrite what root runs, without `sudo`.
 - The root `Caddyfile` only holds global options and `import`s — actual
   site definitions live one-per-file under `sites/`.
+- Reusable snippets are provided in `snippets/`:
+  - `snippets/local-tls.caddy` (`(local_tls)`): Internal TLS using Caddy's built-in root CA for local development (`tls internal`).
+  - `snippets/cloudflare-tls.caddy` (`(cloudflare_tls)`): Cloudflare DNS-01 ACME challenge for public/internal domain resolution.
+- Host-specific local site configs matching `*.local.caddy` (such as `sites/my-app.local.caddy`) are ignored in Git, allowing per-host site configuration without dirtying repository state.
 - The Cloudflare API token is never in the plist. `caddy-start` sources it
   from `/usr/local/etc/caddy/env/cloudflare.env` into its own process
   environment right before `exec`ing `caddy run`.
@@ -118,13 +127,13 @@ ACME challenges.
 ## Installation
 
 ```zsh
-dotfiles-role enable ai-server
+dotfiles-role enable dev        # or: dotfiles-role enable ai-server
 dotfiles-caddy-install
 ```
 
 This is idempotent — rerunning it is the normal way to pick up config
-changes (see Upgrades below). It refuses to run if the `ai-server` role
-isn't enabled.
+changes (see Upgrades below). It requires either the `dev` or `ai-server` role
+to be enabled.
 
 On first run against a machine that doesn't already have Caddy configured,
 it creates `/usr/local/etc/caddy/env/cloudflare.env` from
@@ -136,7 +145,7 @@ repo managed it), it's left untouched.
 
 ## Bootstrap
 
-On a brand-new AI server: clone this repo per the top-level install instructions, run `brew bundle --file=~/.config/Brewfile`, then follow Installation above.
+On a brand-new machine: clone this repo per the top-level install instructions, run `brew bundle --file=~/.config/Brewfile`, then follow Installation above.
 
 ## Upgrades
 
@@ -163,7 +172,7 @@ To change the pinned Caddy version or add another `xcaddy` module, edit the
 
 ## Certificates
 
-Certificates are obtained automatically via ACME DNS-01 challenges against Cloudflare, so ports 80/443 don't need to be reachable from the internet for issuance. Caddy's certificate/state storage lives under `/var/lib/caddy` (the `XDG_DATA_HOME` set in the plist) — `dotfiles-caddy-uninstall` never touches this directory, so disabling and re-enabling the role doesn't force reissuance.
+Certificates can be obtained via ACME DNS-01 challenges against Cloudflare (using `import cloudflare_tls`) or via internal TLS for local domains (using `import local_tls`). Caddy's certificate/state storage lives under `/var/lib/caddy` (the `XDG_DATA_HOME` set in the plist) — `dotfiles-caddy-uninstall` never touches this directory, so disabling and re-enabling the role doesn't force reissuance.
 
 ## Local secrets
 
@@ -174,9 +183,9 @@ Two flavors of "never commit this" exist in this repo:
 
 ## Adding another Caddy site
 
-1. Add a new file under `.config/caddy/sites/`, e.g. `sites/notes.caddy`.
-2. Commit it like any other dotfiles change.
-3. Rerun `dotfiles-caddy-install` on the AI server — it syncs `sites/` with `rsync --delete`, validates, and reloads.
+1. Add a new file under `.config/caddy/sites/`, e.g. `sites/notes.caddy` or `sites/app.local.caddy`. See `sites/local-dev.caddy.example` for a local dev template.
+2. Commit tracked site definitions as usual.
+3. Rerun `dotfiles-caddy-install` — it syncs `sites/` with `rsync --delete`, validates, and reloads.
 
 # Kubernetes (Kind) Cluster Role
 
