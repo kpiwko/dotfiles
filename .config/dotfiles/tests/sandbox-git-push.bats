@@ -4,19 +4,16 @@ setup() {
   TEST_DIR="$(mktemp -d)"
   REMOTE_DIR="$TEST_DIR/remote.git"
   REPO_DIR="$TEST_DIR/work"
-  SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/safe-git-push"
+  SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/sandbox-git-push"
 
-  # Initialize bare remote repo
   git init --bare "$REMOTE_DIR" >/dev/null 2>&1
   git -C "$REMOTE_DIR" symbolic-ref HEAD refs/heads/main
 
-  # Clone or initialize work repo
   git init "$REPO_DIR" >/dev/null 2>&1
   git -C "$REPO_DIR" config user.name "Test User"
   git -C "$REPO_DIR" config user.email "test@example.com"
   git -C "$REPO_DIR" remote add origin "$REMOTE_DIR"
 
-  # Initial commit on main and push to remote
   (
     cd "$REPO_DIR"
     git checkout -b main >/dev/null 2>&1
@@ -123,8 +120,7 @@ teardown() {
 
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"safe-git-push: pushing 'feat/new-feature' -> 'origin/feat/new-feature'"* ]]
-  # Verify remote received branch
+  [[ "$output" == *"sandbox-git-push: pushing 'feat/new-feature' -> 'origin/feat/new-feature'"* ]]
   git -C "$REMOTE_DIR" rev-parse --verify refs/heads/feat/new-feature
 }
 
@@ -142,5 +138,5 @@ teardown() {
 
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"safe-git-push: pushing 'feat/existing-feature' -> 'origin/feat/existing-feature'"* ]]
+  [[ "$output" == *"sandbox-git-push: pushing 'feat/existing-feature' -> 'origin/feat/existing-feature'"* ]]
 }
