@@ -4,7 +4,7 @@ set -euo pipefail
 REMOTE="origin"
 
 die() {
-  printf 'safe-git-push: %s\n' "$*" >&2
+  printf 'sandbox-git-push: %s\n' "$*" >&2
   exit 1
 }
 
@@ -17,11 +17,9 @@ git remote get-url "$REMOTE" >/dev/null 2>&1 ||
 branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 [[ -n "$branch" ]] || die "detached HEAD; refusing to push"
 
-# Prefer the locally cached origin/HEAD reference.
 default_ref="$(git symbolic-ref --quiet --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null || true)"
 default_branch="${default_ref#${REMOTE}/}"
 
-# Fallback may contact the remote.
 if [[ -z "$default_ref" || "$default_branch" == "$default_ref" ]]; then
   default_branch="$(
     git remote show "$REMOTE" 2>/dev/null |
@@ -56,7 +54,7 @@ if [[ -n "$upstream" ]]; then
     die "upstream branch '$upstream_branch' differs from current branch '$branch'"
 fi
 
-printf "safe-git-push: pushing '%s' -> '%s/%s'\n" "$branch" "$REMOTE" "$branch"
+printf "sandbox-git-push: pushing '%s' -> '%s/%s'\n" "$branch" "$REMOTE" "$branch"
 
 if [[ -z "$upstream" ]]; then
   exec git push --set-upstream "$REMOTE" "HEAD:refs/heads/$branch"

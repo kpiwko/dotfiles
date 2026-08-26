@@ -4,7 +4,7 @@ set -euo pipefail
 for arg in "$@"; do
     case "$arg" in
         -exec|-execdir|-delete|-ok|-okdir)
-            echo "safe-find: prohibited option: $arg" >&2
+            echo "sandbox-find: prohibited option: $arg" >&2
             exit 2
             ;;
     esac

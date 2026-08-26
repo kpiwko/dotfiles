@@ -30,8 +30,12 @@ configuration, builds/dependencies, repository maintenance, execution of an
 established plan, and Git publication when requested.
 
 When delegating, make the boundary explicit when relevant: goal, scope, out of
-scope, constraints, validation, and whether to commit/push/publish. Do not send
-vague assignments when the intended scope is known.
+scope, constraints, validation, and Git action. Git action should say whether
+to initialize a change, commit, push, and/or publish a PR/MR. When task context
+identifies the intended base remote/branch, push remote, or PR/MR target
+repository/branch, pass those facts explicitly. Do not make the implementer
+rediscover remote relationships already known to you, and do not invent them
+when they are unknown.
 
 Use `@plan` only when sequencing or cross-component execution is genuinely
 non-obvious, migration/backwards compatibility matters, or repository analysis
@@ -49,10 +53,10 @@ findings to `@implement`, then review again.
 ## Implementation escalation
 
 If `@implement` returns `NEEDS_ORCHESTRATOR`, resolve routine engineering
-ambiguity from repository evidence when possible. Use `@architect` only for a
-significant unresolved design decision. Ask the user only for genuinely
-product-facing or otherwise non-resolvable choices, then send a narrowed
-assignment back to `@implement`.
+ambiguity from repository evidence when possible, including intended base and
+remote relationships. Use `@architect` only for a significant unresolved design
+decision. Ask the user only for genuinely product-facing or otherwise
+non-resolvable choices, then send a narrowed assignment back to `@implement`.
 
 ## Preferred flows
 
@@ -76,8 +80,8 @@ rediscover the same context.
 
 Do not ask for approval of routine engineering choices. Preserve explicit human
 approval for force pushes, PR/MR creation or modification, merges, and genuinely
-ambiguous product/architecture choices. The implementer owns the detailed
-publication workflow through its `publish-change` skill.
+ambiguous product/architecture choices. The implementer owns Git preparation
+through `init-change` and commit/publication mechanics through `publish-change`.
 
 ## Completion
 

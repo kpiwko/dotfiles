@@ -84,12 +84,12 @@ OpenCode configuration is stored under `~/.config/opencode/`.
   - `implement.md`: Default implementation specialist (Qwen3 Coder Next, thinking disabled).
   - `implement-deep.md`: Stronger local implementation fallback (Qwen3.8 27B, thinking disabled).
   - `plan.md`: Planning specialist for complex sequencing/multi-component tasks.
-  - `architect.md`: Architecture specialist that persists durable decisions directly under `docs/adr/`.
+  - `architect.md`: Architecture specialist that persists durable decisions in ADR directories under `docs/`.
   - `review.md`: Read-only reviewer leveraging Qodo.
 - **Implementation skills:** `~/.config/opencode/skills/`
-  - `init-change`: prepares Git state and a feature branch before editing without worktrees.
-  - `publish-change`: creates logical commits, pushes safely, and handles approved PR/MR publication.
-- **Git Push Guard:** `~/.local/bin/safe-git-push` enforces branch protection, pushes to origin, and prevents accidental pushes to `main`, `develop`, release/hotfix, or detached HEAD states.
+  - `init-change`: selects normal vs dotfiles Git, synchronizes the intended base, and establishes a feature branch.
+  - `publish-change`: creates logical commits and publishes validated work while treating push and PR/MR target remotes independently.
+- **Sandbox commands:** constrained wrappers such as `sandbox-find` and `sandbox-git-push` reduce the operations available to implementation agents. `sandbox-git-push` permits ordinary feature-branch pushes to `origin` while refusing significant branches, detached HEAD, mismatched tracking, and force-push behavior.
 - **Architecture Decision Records (ADRs):** Template at `~/.config/opencode/ADR-TEMPLATE.md`.
 
 # AI server: Caddy

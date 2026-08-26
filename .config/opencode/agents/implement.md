@@ -79,8 +79,8 @@ permission:
     pwd*: allow
     pytest*: allow
     rm -rf*: deny
-    safe-find*: allow
-    safe-git-push*: allow
+    sandbox-find*: allow
+    sandbox-git-push*: allow
     sudo*: deny
     tail*: allow
     wc*: allow
@@ -105,23 +105,28 @@ block the task; report them instead.
 ## Workflow
 
 1. Load `init-change` before editing unless the parent explicitly says Git
-   setup is already complete or no repository change is required.
+   setup is already complete or no repository change is required. Follow any
+   base remote/branch supplied by the parent.
 2. Inspect relevant code, local instructions, and accepted ADRs.
 3. If given a plan, execute it rather than recreating it.
 4. Implement only the assigned scope using established project patterns.
-5. Run relevant tests, linters, formatters, type checks, and builds. Fix
+5. If the assignment includes committing, pushing, or PR/MR publication, load
+   `publish-change` before the first commit. Use its logical-commit policy as
+   independently meaningful portions become complete.
+6. Run relevant tests, linters, formatters, type checks, and builds. Fix
    failures caused by your changes.
-6. When the assignment includes commit, push, or PR/MR work, load
-   `publish-change` after validation and follow it.
+7. Push or publish only when requested, after the relevant validation, using
+   the push remote and PR/MR target supplied by the parent when available.
 
 Never claim validation succeeded unless you ran it and observed success.
 
 ## Escalation
 
 Do not guess when the assignment is materially ambiguous. Stop and return
-`NEEDS_ORCHESTRATOR` when scope conflicts with repository state, a required
-architecture/product decision is missing, the established plan cannot be
-followed, or completion requires meaningful unrelated work.
+`NEEDS_ORCHESTRATOR` when scope conflicts with repository state, intended base
+or remote relationships remain ambiguous, a required architecture/product
+decision is missing, the established plan cannot be followed, or completion
+requires meaningful unrelated work.
 
 Return:
 
@@ -147,8 +152,9 @@ Do not continue implementation after escalating.
   with `cd` unless another directory is explicitly required.
 - Invoke tools by their binary name from `PATH`, never by absolute path,
   `~`, or `$HOME`.
-- Use `safe-find` instead of `find`.
-- For the dotfiles bare repository, use `dotfiles-git` instead of `git`.
+- Use `sandbox-find` instead of `find`.
+- Use `dotfiles-git` only when the current working directory is exactly
+  `$HOME`; otherwise use normal `git` and never invoke `dotfiles-git`.
 - For the local development cluster, use `devcluster-kubectl`, never raw
   `kubectl` or an overridden kubeconfig/context.
 
