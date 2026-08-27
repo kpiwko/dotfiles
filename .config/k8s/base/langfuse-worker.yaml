@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-worker
+  namespace: ai-dev
+  labels:
+    app.kubernetes.io/name: langfuse-worker
+    app.kubernetes.io/part-of: ai-infrastructure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: langfuse-worker
+  template:
+    metadata:
+      labels:
+        app: langfuse-worker
+    spec:
+      containers:
+        - name: langfuse-worker
+          image: langfuse/langfuse:3
+          command:
+            - npm
+            - run
+            - worker
+          envFrom:
+            - configMapRef:
+                name: langfuse-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "1.5Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - -f
+                - "langfuse-worker"
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pgrep
+                - -f
+                - "langfuse-worker"
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
