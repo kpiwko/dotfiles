@@ -19,6 +19,10 @@ setup() {
 
 @test "k8s kind-config.yaml exists" {
   [ -f "$K8S_DIR/kind-config.yaml" ]
+  grep -q "apiServerAddress: \"127.0.0.1\"" "$K8S_DIR/kind-config.yaml"
+  grep -q "apiServerPort: 17964" "$K8S_DIR/kind-config.yaml"
+  grep -q "17988" "$K8S_DIR/kind-config.yaml"
+  grep -q "17943" "$K8S_DIR/kind-config.yaml"
   grep -q "17900" "$K8S_DIR/kind-config.yaml"
   grep -q "17901" "$K8S_DIR/kind-config.yaml"
   grep -q "17980" "$K8S_DIR/kind-config.yaml"

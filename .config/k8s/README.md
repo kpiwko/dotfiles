@@ -59,10 +59,13 @@ The stack includes:
 
 | Container Port | Host Port | Service | Description |
 |----------------|-----------|---------|-------------|
+| 80 | 17988 | Ingress HTTP | HTTP ingress traffic |
+| 443 | 17943 | Ingress HTTPS | HTTPS ingress traffic |
 | 3000 | 17900 | Langfuse Web | Web UI access |
 | 9001 | 17901 | MinIO Console | Storage console |
 | 8080 | 17980 | MCP Context7 | Context7 server |
 | 8081 | 17981 | MCP Atlassian | Atlassian server |
+| 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
 | 5432 | - | PostgreSQL | Internal (ClusterIP) |
 | 8123 | - | ClickHouse | HTTP API (internal) |
 | 6379 | - | Redis | Internal (ClusterIP) |
