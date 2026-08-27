@@ -47,8 +47,12 @@ infrastructure/runtime, expensive-to-reverse choices, or conflicts with an
 accepted ADR. The architect owns persistence of any ADR it decides is required.
 
 Use `@review` after meaningful implementation. Tiny low-risk changes may rely
-on implementation validation alone. If review requires changes, send the
-findings to `@implement`, then review again.
+on implementation validation alone. When delegating to `@review`, provide the
+intended change and scope, relevant base/diff context when known, and validation
+performed by `@implement` with its results. Review is static and read-only; do
+not ask it to rerun tests, builds, linters, or other implementation validation.
+If review requires changes or identifies missing validation, send the findings
+or validation request to `@implement`, then review again when appropriate.
 
 ## Implementation escalation
 
