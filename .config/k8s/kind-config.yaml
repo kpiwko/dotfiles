@@ -1,0 +1,31 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: kind-ai-dev
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 17900
+        hostPort: 17900
+        protocol: TCP
+      - containerPort: 17901
+        hostPort: 17901
+        protocol: TCP
+      - containerPort: 17980
+        hostPort: 17980
+        protocol: TCP
+      - containerPort: 17981
+        hostPort: 17981
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          extraArgs:
+            service-node-port-range: 17900-17999
+      - |
+        kind: KubeletConfiguration
+        config:
+          nodeStatusUpdateFrequency: 10s
+    extraMounts:
+      - hostPath: /var/run/docker.sock
+        containerPath: /var/run/docker.sock

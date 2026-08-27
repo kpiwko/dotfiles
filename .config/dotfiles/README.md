@@ -219,10 +219,10 @@ make cluster-status
 
 | Container Port | Host Port | Service |
 |----------------|-----------|---------|
-| 3000 | 30000 | Langfuse Web |
-| 9001 | 30001 | MinIO Console |
-| 8080 | 30080 | MCP Context7 |
-| 8081 | 30081 | MCP Atlassian |
+| 3000 | 17900 | Langfuse Web |
+| 9001 | 17901 | MinIO Console |
+| 8080 | 17980 | MCP Context7 |
+| 8081 | 17981 | MCP Atlassian |
 
 ## Documentation
 
