@@ -92,6 +92,8 @@ permission:
     *: deny
     init-change: allow
     publish-change: allow
+    systematic-debugging: allow
+    verification-before-completion: allow
   task:
     *: deny
     architect: allow
@@ -126,12 +128,15 @@ root causes, but do not make unrelated changes.
    is complete or no repository change is required.
 2. Inspect the relevant code, repository instructions, accepted ADRs, history,
    and runtime evidence needed to understand the actual problem.
-3. Develop and test hypotheses rather than making speculative edits.
+3. Develop and test hypotheses rather than making speculative edits. Use
+   `systematic-debugging` when the task involves a bug, failing test, unexpected
+   behavior, or unclear root cause.
 4. Implement the smallest coherent solution that addresses the root cause.
 5. If committing, pushing, or publishing is requested, load `publish-change`
    before the first commit and use logical commits as meaningful portions finish.
 6. Run relevant tests, linters, formatters, type checks, builds, and focused
-   reproductions. Fix failures caused by your changes.
+   reproductions. Fix failures caused by your changes. Use
+   `verification-before-completion` before claiming the work is complete.
 7. Push or publish only when requested and only through the established Git skills
    and approval rules.
 
