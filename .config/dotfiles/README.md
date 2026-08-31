@@ -197,7 +197,23 @@ The cluster includes:
 - **ClickHouse** - Analytics database (v24.3)
 - **Redis** - Caching layer (v7)
 - **MinIO** - Object storage
-- **MCP Servers** - Model Context Protocol (Context7, Atlassian)
+- **MCP Servers** - Model Context Protocol (NotebookLM, Workspace)
+
+## Secret Management & Google Workspace OAuth
+
+- **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults.
+- **Auto-Provisioning**: Running `dotfiles-cluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment.
+- **Google Workspace OAuth**: To connect the `workspace-mcp` server:
+  1. Create a GCP Project and enable APIs (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script).
+  2. Configure OAuth Consent Screen & Data Access scopes (Add or Remove Scopes).
+  3. Create an OAuth 2.0 Web Application client with Authorized redirect URI: `http://localhost:17981/oauth2callback`.
+  4. Export credentials in your shell (e.g. in `~/.config/zsh/10-env.zsh` or `secrets.zsh`):
+     ```zsh
+     export GOOGLE_OAUTH_CLIENT_ID="<client-id>"
+     export GOOGLE_OAUTH_CLIENT_SECRET="<client-secret>"
+     ```
+  5. Run `dotfiles-cluster up` to deploy and sync secrets.
+  6. See `~/.config/k8s/README.md` for the full setup guide.
 
 ## Installation
 

@@ -43,12 +43,12 @@ spec:
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: langfuse-secrets
+                  name: ai-dev-secrets
                   key: MINIO_ROOT_USER
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: langfuse-secrets
+                  name: ai-dev-secrets
                   key: MINIO_ROOT_PASSWORD
           command:
             - minio

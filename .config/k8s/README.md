@@ -126,47 +126,126 @@ kubectl logs -n ai-dev -l app=langfuse-web --follow
 kubectl logs -n ai-dev -l app=postgres --follow
 ```
 
-### Secret Management
+### Secret Management & Auto-Provisioning
 
-1. Copy environment template:
-   ```bash
-   cp ~/.config/k8s/env.example ~/.config/k8s/.env
-   ```
+Secrets are managed via separated Kubernetes secrets and auto-provisioned automatically by `dotfiles-cluster up`.
 
-2. Fill in secrets:
-   ```bash
-   # Generate secure passwords
-   openssl rand -base64 32
-   ```
+- **Zero-Config Dev Defaults**: For local development, all database and Langfuse secrets have built-in defaults. You do not need to configure any environment variables to run Langfuse, PostgreSQL, ClickHouse, MinIO, or Redis locally.
+- **Shell Environment Variables (Primary)**: Customize credentials by setting variables in your shell configuration (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`). When `dotfiles-cluster up` runs, it reads these variables from your active shell environment.
+- **Fallback `.env`**: Alternatively, you can copy `~/.config/k8s/env.example` to `~/.config/k8s/.env` as a fallback. Shell environment variables always take precedence.
 
-3. Create secrets:
-   ```bash
-   kubectl create secret generic langfuse-secrets \
-     --from-env-file=~/.config/k8s/.env \
-     -n ai-dev
-   ```
+When `dotfiles-cluster up` executes, it automatically generates and applies two separated secrets:
+1. `ai-dev-secrets`: Infrastructure & Langfuse secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `REDIS_PASSWORD`, `LANGFUSE_SECRET_KEY`).
+2. `workspace-mcp-secrets`: Google Workspace OAuth secrets (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`).
 
-4. Update environment:
-   ```bash
-   kubectl create configmap langfuse-config \
-     --from-env-file=~/.config/k8s/.env \
-     -n ai-dev
-   ```
+Manual creation (if needed):
+```bash
+# Provision ai-dev-secrets
+kubectl create secret generic ai-dev-secrets \
+  --namespace ai-dev \
+  --from-literal=POSTGRES_USER="${POSTGRES_USER:-langfuse}" \
+  --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgresdevpass123}" \
+  --from-literal=CLICKHOUSE_USER="${CLICKHOUSE_USER:-langfuse}" \
+  --from-literal=CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-clickhousedevpass123}" \
+  --from-literal=MINIO_ROOT_USER="${MINIO_ROOT_USER:-langfuse}" \
+  --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-miniodevpass123}" \
+  --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD:-redisdevpass123}" \
+  --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Provision workspace-mcp-secrets
+kubectl create secret generic workspace-mcp-secrets \
+  --namespace ai-dev \
+  --from-literal=GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}" \
+  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 
 ## Secrets Reference
 
-| Secret Key | Purpose |
-|------------|---------|
-| `LANGFUSE_SECRET_KEY` | NextAuth secret for Langfuse |
-| `POSTGRES_USER` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | PostgreSQL password |
-| `CLICKHOUSE_USER` | ClickHouse username |
-| `CLICKHOUSE_PASSWORD` | ClickHouse password |
-| `REDIS_PASSWORD` | Redis authentication |
-| `MINIO_ROOT_USER` | MinIO access key |
-| `MINIO_ROOT_PASSWORD` | MinIO secret key |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID for Workspace MCP |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret for Workspace MCP |
+### `ai-dev-secrets` (Langfuse & Databases)
+
+| Secret Key | Purpose | Default Dev Value |
+|------------|---------|-------------------|
+| `POSTGRES_USER` | PostgreSQL username | `langfuse` |
+| `POSTGRES_PASSWORD` | PostgreSQL password | `postgresdevpass123` |
+| `CLICKHOUSE_USER` | ClickHouse username | `langfuse` |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password | `clickhousedevpass123` |
+| `MINIO_ROOT_USER` | MinIO access key | `langfuse` |
+| `MINIO_ROOT_PASSWORD` | MinIO secret key | `miniodevpass123` |
+| `REDIS_PASSWORD` | Redis password | `redisdevpass123` |
+| `LANGFUSE_SECRET_KEY` | NextAuth secret key | `devsecretkey_0123456789abcdef0123456789abcdef` |
+
+### `workspace-mcp-secrets` (Google Workspace MCP)
+
+| Secret Key | Purpose | Default Dev Value |
+|------------|---------|-------------------|
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth Client ID | `""` (empty until configured) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth Client Secret | `""` (empty until configured) |
+
+---
+
+## Google Workspace OAuth Setup Guide
+
+The `workspace-mcp` service connects AI tools to Google Workspace (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script). Follow this guide to set up credentials in the Google Cloud Console.
+
+### 1. Create a Google Cloud Project & Enable APIs
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project (e.g., `ai-dev-workspace-mcp`) or select an existing project.
+3. Navigate to **APIs & Services** > **Library**.
+4. Search for and **Enable** each of the following APIs:
+   - **Gmail API**
+   - **Google Calendar API**
+   - **Google Drive API**
+   - **Google Docs API**
+   - **Google Sheets API**
+   - **Google Slides API**
+   - **Google Forms API**
+   - **Google Apps Script API**
+
+### 2. Configure OAuth Consent Screen & Data Access Scopes
+
+1. Navigate to **APIs & Services** > **OAuth consent screen**.
+2. Select User Type:
+   - Choose **Internal** if using a Google Workspace organization account.
+   - Choose **External** if using a personal `@gmail.com` account (set Publishing status to **Testing** and add your email under **Test users**).
+3. Fill in the required application details (App name, User support email, Developer contact email) and click **Save and Continue**.
+4. On the **Scopes** (or **Data Access**) screen:
+   - Click **Add or Remove Scopes**.
+   - Select the required scopes for Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, and Apps Script.
+   - Click **Update** and **Save and Continue**.
+
+### 3. Create OAuth 2.0 Credentials
+
+1. Navigate to **APIs & Services** > **Credentials**.
+2. Click **Create Credentials** > **OAuth client ID**.
+3. Set Application type to **Web application**.
+4. Set Name to `workspace-mcp-client` (or any descriptive name).
+5. Under **Authorized redirect URIs**, add:
+   ```
+   http://localhost:17981/oauth2callback
+   ```
+6. Click **Create**.
+7. Copy the generated **Client ID** and **Client Secret**.
+
+### 4. Configure Shell Environment
+
+Export your credentials in your shell startup file (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`):
+
+```zsh
+export GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_OAUTH_CLIENT_SECRET="GOCSPX-your-client-secret"
+```
+
+### 5. Deploy & Authenticate
+
+1. Apply manifests and secrets:
+   ```bash
+   dotfiles-cluster up
+   ```
+2. `dotfiles-cluster up` automatically provisions `workspace-mcp-secrets` into the `ai-dev` namespace from your shell environment.
+3. Access the Workspace MCP OAuth flow at `http://localhost:17981` to authorize access.
 
 ## Troubleshooting
 

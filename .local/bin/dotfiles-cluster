@@ -76,6 +76,45 @@ cmd_create() {
 cmd_up() {
   check_kubectl
   
+  if [ -f "$K8S_DIR/.env" ]; then
+    # Load .env as fallback for any variable not already set in shell environment
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        \#*|"") continue ;;
+        *=*)
+          key="${line%%=*}"
+          val="${line#*=}"
+          key=$(echo "$key" | tr -d '[:space:]')
+          val=$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+          if [ -n "$key" ]; then
+            eval ": \${$key:=\$val}"
+          fi
+          ;;
+      esac
+    done < "$K8S_DIR/.env"
+  fi
+
+  echo "Provisioning secrets for namespace ai-dev..."
+  $KUBECTL_BIN create namespace ai-dev --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+
+  $KUBECTL_BIN create secret generic ai-dev-secrets \
+    --namespace ai-dev \
+    --from-literal=POSTGRES_USER="${POSTGRES_USER:-langfuse}" \
+    --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgresdevpass123}" \
+    --from-literal=CLICKHOUSE_USER="${CLICKHOUSE_USER:-langfuse}" \
+    --from-literal=CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-clickhousedevpass123}" \
+    --from-literal=MINIO_ROOT_USER="${MINIO_ROOT_USER:-langfuse}" \
+    --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-miniodevpass123}" \
+    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD:-redisdevpass123}" \
+    --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}" \
+    --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+
+  $KUBECTL_BIN create secret generic workspace-mcp-secrets \
+    --namespace ai-dev \
+    --from-literal=GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}" \
+    --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}" \
+    --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+
   echo "Deploying kustomize manifests..."
   
   if [ -d "$KUSTOMIZE_DIR" ]; then

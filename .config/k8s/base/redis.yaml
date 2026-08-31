@@ -47,7 +47,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: langfuse-secrets
+                  name: ai-dev-secrets
                   key: REDIS_PASSWORD
           volumeMounts:
             - name: redis-data

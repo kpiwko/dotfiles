@@ -55,6 +55,9 @@ EOF
   cat > "$STUB_DIR/devcluster-kubectl" << 'EOF'
 #!/bin/sh
 echo "devcluster-kubectl (stub) $*"
+if [ "$1" = "apply" ] && [ "$2" = "-f" ] && [ "$3" = "-" ]; then
+  cat -
+fi
 exit 0
 EOF
   chmod +x "$STUB_DIR/devcluster-kubectl"
@@ -63,6 +66,9 @@ EOF
   cat > "$STUB_DIR/kubectl" << 'EOF'
 #!/bin/sh
 echo "kubectl (stub) $*"
+if [ "$1" = "apply" ] && [ "$2" = "-f" ] && [ "$3" = "-" ]; then
+  cat -
+fi
 exit 0
 EOF
   chmod +x "$STUB_DIR/kubectl"
@@ -116,7 +122,49 @@ EOF
 @test "up command requires kubectl" {
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Provisioning secrets for namespace ai-dev"* ]]
   [[ "$output" == *"Deploying kustomize manifests"* ]]
+}
+
+@test "up command auto-provisions secrets with default values" {
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"create secret generic ai-dev-secrets"* ]]
+  [[ "$output" == *"POSTGRES_USER=langfuse"* ]]
+  [[ "$output" == *"POSTGRES_PASSWORD=postgresdevpass123"* ]]
+  [[ "$output" == *"CLICKHOUSE_USER=langfuse"* ]]
+  [[ "$output" == *"CLICKHOUSE_PASSWORD=clickhousedevpass123"* ]]
+  [[ "$output" == *"MINIO_ROOT_USER=langfuse"* ]]
+  [[ "$output" == *"MINIO_ROOT_PASSWORD=miniodevpass123"* ]]
+  [[ "$output" == *"REDIS_PASSWORD=redisdevpass123"* ]]
+  [[ "$output" == *"LANGFUSE_SECRET_KEY=devsecretkey_0123456789abcdef0123456789abcdef"* ]]
+  [[ "$output" == *"create secret generic workspace-mcp-secrets"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID="* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET="* ]]
+}
+
+@test "up command auto-provisions secrets with shell environment variables" {
+  export POSTGRES_PASSWORD="custompostgrespass"
+  export GOOGLE_OAUTH_CLIENT_ID="custom-client-id.apps.googleusercontent.com"
+  export GOOGLE_OAUTH_CLIENT_SECRET="custom-client-secret"
+  
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"POSTGRES_PASSWORD=custompostgrespass"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=custom-client-id.apps.googleusercontent.com"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET=custom-client-secret"* ]]
+}
+
+@test "up command falls back to .env file when env variables are not exported" {
+  cat > "$K8S_DIR/.env" << 'EOF'
+POSTGRES_PASSWORD=envfilepostgrespass
+GOOGLE_OAUTH_CLIENT_ID=env-client-id
+EOF
+
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"POSTGRES_PASSWORD=envfilepostgrespass"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=env-client-id"* ]]
 }
 
 @test "status command shows cluster info" {
