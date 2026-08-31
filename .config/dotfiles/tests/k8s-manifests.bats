@@ -15,6 +15,8 @@ setup() {
 
 @test "k8s env.example exists" {
   [ -f "$K8S_DIR/env.example" ]
+  grep -q "LANGFUSE_INIT_USER_EMAIL" "$K8S_DIR/env.example"
+  grep -q "LANGFUSE_INIT_PROJECT_PUBLIC_KEY" "$K8S_DIR/env.example"
 }
 
 @test "k8s kind-config.yaml exists" {
@@ -96,6 +98,7 @@ setup() {
   grep -q "image: langfuse/langfuse:3" "$K8S_DIR/base/langfuse-web.yaml"
   grep -q "17900" "$K8S_DIR/base/langfuse-web.yaml"
   grep -q "type: NodePort" "$K8S_DIR/base/langfuse-web.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/langfuse-web.yaml"
   grep -q "requests:" "$K8S_DIR/base/langfuse-web.yaml"
   grep -q "limits:" "$K8S_DIR/base/langfuse-web.yaml"
 }
@@ -104,6 +107,7 @@ setup() {
   [ -f "$K8S_DIR/base/langfuse-worker.yaml" ]
   grep -q "image: langfuse/langfuse-worker:3" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "worker" "$K8S_DIR/base/langfuse-worker.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "requests:" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "limits:" "$K8S_DIR/base/langfuse-worker.yaml"
 }
