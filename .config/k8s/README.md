@@ -10,7 +10,7 @@ The stack includes:
 - **ClickHouse** - Analytics database (v24.3)
 - **Redis** - Caching layer (v7)
 - **MinIO** - Object storage (v2024)
-- **MCP Servers** - Model Context Protocol servers (Context7, Atlassian)
+- **MCP Servers** - Model Context Protocol servers (NotebookLM, Workspace)
 
 ## Sizing Rationale
 
@@ -52,7 +52,7 @@ The stack includes:
 ### MCP Servers
 - Requests: 100m CPU, 256Mi memory each
 - Limits: 500m CPU, 512Mi memory each
-- NodePorts: 17980 (Context7), 17981 (Atlassian)
+- NodePorts: 17980 (NotebookLM), 17981 (Workspace)
 - Reasoning: Lightweight API servers; minimal resource requirements
 
 ## Port Mapping
@@ -63,8 +63,8 @@ The stack includes:
 | 443 | 17943 | Ingress HTTPS | HTTPS ingress traffic |
 | 3000 | 17900 | Langfuse Web | Web UI access |
 | 9001 | 17901 | MinIO Console | Storage console |
-| 8080 | 17980 | MCP Context7 | Context7 server |
-| 8081 | 17981 | MCP Atlassian | Atlassian server |
+| 17200 | 17980 | MCP NotebookLM | NotebookLM MCP server |
+| 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
 | 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
 | 5432 | - | PostgreSQL | Internal (ClusterIP) |
 | 8123 | - | ClickHouse | HTTP API (internal) |
@@ -165,8 +165,8 @@ kubectl logs -n ai-dev -l app=postgres --follow
 | `REDIS_PASSWORD` | Redis authentication |
 | `MINIO_ROOT_USER` | MinIO access key |
 | `MINIO_ROOT_PASSWORD` | MinIO secret key |
-| `MCP_CONTEXT7_API_KEY` | Context7 API key |
-| `MCP_ATLASSIAN_API_KEY` | Atlassian API key |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID for Workspace MCP |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret for Workspace MCP |
 
 ## Troubleshooting
 

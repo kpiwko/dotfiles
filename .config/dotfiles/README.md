@@ -223,8 +223,8 @@ make cluster-status
 | 443 | 17943 | Ingress HTTPS |
 | 3000 | 17900 | Langfuse Web |
 | 9001 | 17901 | MinIO Console |
-| 8080 | 17980 | MCP Context7 |
-| 8081 | 17981 | MCP Atlassian |
+| 17200 | 17980 | MCP NotebookLM |
+| 8000 | 17981 | MCP Workspace |
 | 6443 | 17964 | Kubernetes API |
 
 ## Documentation
