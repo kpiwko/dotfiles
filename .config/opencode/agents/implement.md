@@ -5,7 +5,7 @@ mode: subagent
 model: omlx/Qwen3-Coder-Next-6bit
 permission:
   bash:
-    *: ask
+    "*": ask
     cargo build*: allow
     cargo check*: allow
     cargo test*: allow
@@ -89,7 +89,7 @@ permission:
   edit: allow
   list: allow
   skill:
-    *: deny
+    "*": deny
     init-change: allow
     publish-change: allow
   task: deny

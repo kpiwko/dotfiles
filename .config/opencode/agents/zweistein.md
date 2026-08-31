@@ -5,7 +5,7 @@ model: openai/gpt-5.6-terra
 reasoningEffort: high
 permission:
   bash:
-    *: ask
+    "*": ask
     cargo build*: allow
     cargo check*: allow
     cargo test*: allow
@@ -89,13 +89,13 @@ permission:
   edit: allow
   list: allow
   skill:
-    *: deny
+    "*": deny
     init-change: allow
     publish-change: allow
     systematic-debugging: allow
     verification-before-completion: allow
   task:
-    *: deny
+    "*": deny
     architect: allow
     review: allow
 temperature: 0.2

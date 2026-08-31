@@ -8,7 +8,7 @@ permission:
   bash: deny
   edit: deny
   task:
-    *: deny
+    "*": deny
     architect: allow
     implement: allow
     plan: allow
