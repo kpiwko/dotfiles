@@ -161,6 +161,15 @@ EOF
   [[ "$output" == *"MINIO_ROOT_PASSWORD=miniodevpass123"* ]]
   [[ "$output" == *"REDIS_PASSWORD=redisdevpass123"* ]]
   [[ "$output" == *"LANGFUSE_SECRET_KEY=devsecretkey_0123456789abcdef0123456789abcdef"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=kpiwko@localhost"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_NAME=Karel Piwko"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_PASSWORD=langfusedevpass123"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_ORG_ID=local-dev"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_ORG_NAME=Local Dev"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_PROJECT_ID=local-project"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_PROJECT_NAME=Local Project"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-0123456789abcdef0123456789abcdef"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-0123456789abcdef0123456789abcdef"* ]]
   [[ "$output" == *"create secret generic workspace-mcp-secrets"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID="* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET="* ]]
@@ -168,12 +177,16 @@ EOF
 
 @test "up command auto-provisions secrets with shell environment variables" {
   export POSTGRES_PASSWORD="custompostgrespass"
+  export LANGFUSE_INIT_USER_EMAIL="admin@example.com"
+  export LANGFUSE_INIT_PROJECT_ID="custom-project"
   export GOOGLE_OAUTH_CLIENT_ID="custom-client-id.apps.googleusercontent.com"
   export GOOGLE_OAUTH_CLIENT_SECRET="custom-client-secret"
   
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=custompostgrespass"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=admin@example.com"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_PROJECT_ID=custom-project"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=custom-client-id.apps.googleusercontent.com"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET=custom-client-secret"* ]]
 }

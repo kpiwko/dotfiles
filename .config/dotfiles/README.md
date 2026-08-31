@@ -201,7 +201,7 @@ The cluster includes:
 
 ## Secret Management & Google Workspace OAuth
 
-- **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults.
+- **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults, including headless auto-initialization of Langfuse users, organizations, and project API keys.
 - **Auto-Provisioning**: Running `dotfiles-cluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment.
 - **Google Workspace OAuth**: To connect the `workspace-mcp` server:
   1. Create a GCP Project and enable APIs (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script).

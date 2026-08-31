@@ -124,6 +124,15 @@ cmd_up() {
     --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-miniodevpass123}" \
     --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD:-redisdevpass123}" \
     --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}" \
+    --from-literal=LANGFUSE_INIT_USER_EMAIL="${LANGFUSE_INIT_USER_EMAIL:-kpiwko@localhost}" \
+    --from-literal=LANGFUSE_INIT_USER_NAME="${LANGFUSE_INIT_USER_NAME:-Karel Piwko}" \
+    --from-literal=LANGFUSE_INIT_USER_PASSWORD="${LANGFUSE_INIT_USER_PASSWORD:-langfusedevpass123}" \
+    --from-literal=LANGFUSE_INIT_ORG_ID="${LANGFUSE_INIT_ORG_ID:-local-dev}" \
+    --from-literal=LANGFUSE_INIT_ORG_NAME="${LANGFUSE_INIT_ORG_NAME:-Local Dev}" \
+    --from-literal=LANGFUSE_INIT_PROJECT_ID="${LANGFUSE_INIT_PROJECT_ID:-local-project}" \
+    --from-literal=LANGFUSE_INIT_PROJECT_NAME="${LANGFUSE_INIT_PROJECT_NAME:-Local Project}" \
+    --from-literal=LANGFUSE_INIT_PROJECT_PUBLIC_KEY="${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-0123456789abcdef0123456789abcdef}" \
+    --from-literal=LANGFUSE_INIT_PROJECT_SECRET_KEY="${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-0123456789abcdef0123456789abcdef}" \
     --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
 
   $KUBECTL_BIN create secret generic workspace-mcp-secrets \

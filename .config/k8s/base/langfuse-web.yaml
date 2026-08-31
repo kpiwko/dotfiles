@@ -25,6 +25,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: langfuse-config
+            - secretRef:
+                name: ai-dev-secrets
           resources:
             requests:
               memory: "512Mi"

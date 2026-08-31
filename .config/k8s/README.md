@@ -131,12 +131,13 @@ kubectl logs -n ai-dev -l app=postgres --follow
 
 Secrets are managed via separated Kubernetes secrets and auto-provisioned automatically by `dotfiles-cluster up`.
 
-- **Zero-Config Dev Defaults**: For local development, all database and Langfuse secrets have built-in defaults. You do not need to configure any environment variables to run Langfuse, PostgreSQL, ClickHouse, MinIO, or Redis locally.
+- **Zero-Config Dev Defaults**: For local development, all database and Langfuse secrets (including headless organization, project, and user provisioning) have built-in defaults. You do not need to configure any environment variables to run Langfuse, PostgreSQL, ClickHouse, MinIO, or Redis locally.
+- **Headless Auto-Initialization**: Langfuse automatically seeds an initial admin user, organization, and project with deterministic API keys on first boot using `LANGFUSE_INIT_*` environment variables passed via `ai-dev-secrets`.
 - **Shell Environment Variables (Primary)**: Customize credentials by setting variables in your shell configuration (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`). When `dotfiles-cluster up` runs, it reads these variables from your active shell environment.
 - **Fallback `.env`**: Alternatively, you can copy `~/.config/k8s/env.example` to `~/.config/k8s/.env` as a fallback. Shell environment variables always take precedence.
 
 When `dotfiles-cluster up` executes, it automatically generates and applies two separated secrets:
-1. `ai-dev-secrets`: Infrastructure & Langfuse secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `REDIS_PASSWORD`, `LANGFUSE_SECRET_KEY`).
+1. `ai-dev-secrets`: Infrastructure & Langfuse secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `REDIS_PASSWORD`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_INIT_*`).
 2. `workspace-mcp-secrets`: Google Workspace OAuth secrets (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`).
 
 Manual creation (if needed):
@@ -152,6 +153,15 @@ kubectl create secret generic ai-dev-secrets \
   --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-miniodevpass123}" \
   --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD:-redisdevpass123}" \
   --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}" \
+  --from-literal=LANGFUSE_INIT_USER_EMAIL="${LANGFUSE_INIT_USER_EMAIL:-kpiwko@localhost}" \
+  --from-literal=LANGFUSE_INIT_USER_NAME="${LANGFUSE_INIT_USER_NAME:-Karel Piwko}" \
+  --from-literal=LANGFUSE_INIT_USER_PASSWORD="${LANGFUSE_INIT_USER_PASSWORD:-langfusedevpass123}" \
+  --from-literal=LANGFUSE_INIT_ORG_ID="${LANGFUSE_INIT_ORG_ID:-local-dev}" \
+  --from-literal=LANGFUSE_INIT_ORG_NAME="${LANGFUSE_INIT_ORG_NAME:-Local Dev}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_ID="${LANGFUSE_INIT_PROJECT_ID:-local-project}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_NAME="${LANGFUSE_INIT_PROJECT_NAME:-Local Project}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_PUBLIC_KEY="${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-0123456789abcdef0123456789abcdef}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_SECRET_KEY="${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-0123456789abcdef0123456789abcdef}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Provision workspace-mcp-secrets
@@ -176,6 +186,15 @@ kubectl create secret generic workspace-mcp-secrets \
 | `MINIO_ROOT_PASSWORD` | MinIO secret key | `miniodevpass123` |
 | `REDIS_PASSWORD` | Redis password | `redisdevpass123` |
 | `LANGFUSE_SECRET_KEY` | NextAuth secret key | `devsecretkey_0123456789abcdef0123456789abcdef` |
+| `LANGFUSE_INIT_USER_EMAIL` | Headless seed admin user email | `kpiwko@localhost` |
+| `LANGFUSE_INIT_USER_NAME` | Headless seed admin user name | `Karel Piwko` |
+| `LANGFUSE_INIT_USER_PASSWORD` | Headless seed admin user password | `langfusedevpass123` |
+| `LANGFUSE_INIT_ORG_ID` | Headless seed organization ID | `local-dev` |
+| `LANGFUSE_INIT_ORG_NAME` | Headless seed organization name | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_ID` | Headless seed project ID | `local-project` |
+| `LANGFUSE_INIT_PROJECT_NAME` | Headless seed project name | `Local Project` |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | Headless seed project public API key | `pk-lf-0123456789abcdef0123456789abcdef` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | Headless seed project secret API key | `sk-lf-0123456789abcdef0123456789abcdef` |
 
 ### `workspace-mcp-secrets` (Google Workspace MCP)
 
