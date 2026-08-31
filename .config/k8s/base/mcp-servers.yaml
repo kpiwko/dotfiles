@@ -16,12 +16,19 @@ spec:
       labels:
         app: notebooklm-mcp
     spec:
+      enableServiceLinks: false
       containers:
         - name: notebooklm-mcp
           image: ghcr.io/kpiwko/notebooklm-mcp:latest
           ports:
             - containerPort: 17200
               name: http
+          env:
+            - name: NOTEBOOKLM_MCP_PORT
+              value: "17200"
+          volumeMounts:
+            - name: notebooklm-config
+              mountPath: /root/.config/notebooklm-mcp-cli
           resources:
             requests:
               memory: "256Mi"
@@ -43,6 +50,9 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
+      volumes:
+        - name: notebooklm-config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -80,6 +90,7 @@ spec:
       labels:
         app: workspace-mcp
     spec:
+      enableServiceLinks: false
       containers:
         - name: workspace-mcp
           image: ghcr.io/kpiwko/workspace-mcp:latest
@@ -87,6 +98,10 @@ spec:
             - containerPort: 8000
               name: http
           env:
+            - name: PORT
+              value: "8000"
+            - name: WORKSPACE_MCP_PORT
+              value: "8000"
             - name: GOOGLE_OAUTH_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -101,6 +116,9 @@ spec:
               value: "http://localhost:17981/oauth2callback"
             - name: OAUTHLIB_INSECURE_TRANSPORT
               value: "1"
+          volumeMounts:
+            - name: workspace-config
+              mountPath: /root/.config/workspace-mcp
           resources:
             requests:
               memory: "256Mi"
@@ -122,6 +140,9 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
+      volumes:
+        - name: workspace-config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

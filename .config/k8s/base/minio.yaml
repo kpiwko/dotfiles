@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: minio
-          image: minio/minio:RELEASE.2024-08-31T23-25-44Z
+          image: minio/minio:latest
           ports:
             - containerPort: 9000
               name: api
@@ -50,8 +50,7 @@ spec:
                 secretKeyRef:
                   name: ai-dev-secrets
                   key: MINIO_ROOT_PASSWORD
-          command:
-            - minio
+          args:
             - server
             - /data
             - --console-address

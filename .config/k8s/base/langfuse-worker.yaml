@@ -18,11 +18,7 @@ spec:
     spec:
       containers:
         - name: langfuse-worker
-          image: langfuse/langfuse:3
-          command:
-            - npm
-            - run
-            - worker
+          image: langfuse/langfuse-worker:3
           envFrom:
             - configMapRef:
                 name: langfuse-config
@@ -38,7 +34,7 @@ spec:
               command:
                 - pgrep
                 - -f
-                - "langfuse-worker"
+                - "node"
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
@@ -48,7 +44,7 @@ spec:
               command:
                 - pgrep
                 - -f
-                - "langfuse-worker"
+                - "node"
             initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 3
