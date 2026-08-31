@@ -8,6 +8,7 @@ K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
 CLUSTER_NAME="kind-ai-dev"
 KIND_CONFIG="$K8S_DIR/kind-config.yaml"
 KUSTOMIZE_DIR="$K8S_DIR"
+DEVCLUSTER_KUBECONFIG="${DEVCLUSTER_KUBECONFIG:-$HOME/.kube/opencode-devcluster}"
 
 usage() {
   echo "Usage: dotfiles-cluster <command> [options]" >&2
@@ -58,6 +59,13 @@ check_kubectl() {
   fi
 }
 
+export_kubeconfig() {
+  check_kind
+  mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
+  export KIND_EXPERIMENTAL_PROVIDER=podman
+  kind export kubeconfig --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
+}
+
 cmd_create() {
   check_cluster_role
   check_kind
@@ -65,8 +73,10 @@ cmd_create() {
   echo "Creating Kind cluster: $CLUSTER_NAME"
   
   if [ -f "$KIND_CONFIG" ]; then
+    mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
     export KIND_EXPERIMENTAL_PROVIDER=podman
-    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG"
+    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
+    export_kubeconfig
   else
     echo "dotfiles-cluster: error: kind config not found at $KIND_CONFIG" >&2
     exit 1
@@ -74,6 +84,13 @@ cmd_create() {
 }
 
 cmd_up() {
+  if [ ! -f "$DEVCLUSTER_KUBECONFIG" ]; then
+    if command -v kind >/dev/null 2>&1; then
+      echo "Exporting kubeconfig to $DEVCLUSTER_KUBECONFIG..."
+      export_kubeconfig || true
+    fi
+  fi
+
   check_kubectl
   
   if [ -f "$K8S_DIR/.env" ]; then
@@ -162,7 +179,7 @@ cmd_down() {
   check_kubectl
   
   echo "Stopping cluster: $CLUSTER_NAME"
-  kind export kubeconfig --name "$CLUSTER_NAME"
+  export_kubeconfig
   # Scale down deployments
   $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
 }
@@ -171,7 +188,9 @@ cmd_delete() {
   check_kind
   
   echo "Deleting cluster: $CLUSTER_NAME"
-  kind delete cluster --name "$CLUSTER_NAME"
+  export KIND_EXPERIMENTAL_PROVIDER=podman
+  kind delete cluster --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG" 2>/dev/null || kind delete cluster --name "$CLUSTER_NAME"
+  rm -f "$DEVCLUSTER_KUBECONFIG"
 }
 
 # Main

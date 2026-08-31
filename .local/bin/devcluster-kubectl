@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-KUBECONFIG_FILE="${HOME}/.kube/opencode-devcluster"
+KUBECONFIG_FILE="${DEVCLUSTER_KUBECONFIG:-${HOME}/.kube/opencode-devcluster}"
 CONTEXT="kind-kind-ai-dev"
 
 # Don't allow callers to escape to another kubeconfig/context.
