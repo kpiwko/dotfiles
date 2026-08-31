@@ -4,6 +4,7 @@ setup() {
   TEST_HOME="$(mktemp -d)"
   export K8S_DIR="$TEST_HOME/k8s"
   export DOTFILES_ROLES_FILE="$TEST_HOME/.config/dotfiles/roles"
+  export DEVCLUSTER_KUBECONFIG="$TEST_HOME/.kube/opencode-devcluster"
   mkdir -p "$K8S_DIR"
   mkdir -p "$(dirname "$DOTFILES_ROLES_FILE")"
   
@@ -47,6 +48,16 @@ EOF
   cat > "$STUB_DIR/kind" << 'EOF'
 #!/bin/sh
 echo "kind (stub) $*"
+if [ "$1" = "export" ] && [ "$2" = "kubeconfig" ]; then
+  prev=""
+  for arg in "$@"; do
+    if [ "$prev" = "--kubeconfig" ]; then
+      mkdir -p "$(dirname "$arg")"
+      touch "$arg"
+    fi
+    prev="$arg"
+  done
+fi
 exit 0
 EOF
   chmod +x "$STUB_DIR/kind"
@@ -117,6 +128,18 @@ EOF
   run "$SCRIPT" create
   [ "$status" -eq 0 ]
   [[ "$output" == *"Creating Kind cluster"* ]]
+  [[ "$output" == *"kind (stub) create cluster --name kind-ai-dev --config $K8S_DIR/kind-config.yaml --kubeconfig $DEVCLUSTER_KUBECONFIG"* ]]
+  [[ "$output" == *"kind (stub) export kubeconfig --name kind-ai-dev --kubeconfig $DEVCLUSTER_KUBECONFIG"* ]]
+  [ -f "$DEVCLUSTER_KUBECONFIG" ]
+}
+
+@test "up command exports kubeconfig when missing" {
+  [ ! -f "$DEVCLUSTER_KUBECONFIG" ]
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Exporting kubeconfig to $DEVCLUSTER_KUBECONFIG"* ]]
+  [[ "$output" == *"kind (stub) export kubeconfig --name kind-ai-dev --kubeconfig $DEVCLUSTER_KUBECONFIG"* ]]
+  [ -f "$DEVCLUSTER_KUBECONFIG" ]
 }
 
 @test "up command requires kubectl" {
@@ -193,7 +216,13 @@ EOF
 }
 
 @test "delete command works" {
+  mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
+  touch "$DEVCLUSTER_KUBECONFIG"
+  [ -f "$DEVCLUSTER_KUBECONFIG" ]
+
   run "$SCRIPT" delete
   [ "$status" -eq 0 ]
   [[ "$output" == *"Deleting cluster"* ]]
+  [[ "$output" == *"kind (stub) delete cluster --name kind-ai-dev --kubeconfig $DEVCLUSTER_KUBECONFIG"* ]]
+  [ ! -f "$DEVCLUSTER_KUBECONFIG" ]
 }
