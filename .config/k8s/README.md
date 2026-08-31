@@ -52,7 +52,7 @@ The stack includes:
 ### MCP Servers
 - Requests: 100m CPU, 256Mi memory each
 - Limits: 500m CPU, 512Mi memory each
-- NodePorts: 17980 (NotebookLM), 17981 (Workspace)
+- NodePorts: 17980 (NotebookLM MCP), 17981 (Workspace MCP), 17982 (NotebookLM noVNC)
 - Reasoning: Lightweight API servers; minimal resource requirements
 
 ## Port Mapping
@@ -64,6 +64,7 @@ The stack includes:
 | 3000 | 17900 | Langfuse Web | Web UI access |
 | 9001 | 17901 | MinIO Console | Storage console |
 | 17200 | 17980 | MCP NotebookLM | NotebookLM MCP server |
+| 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
 | 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
 | 5432 | - | PostgreSQL | Internal (ClusterIP) |
@@ -316,7 +317,8 @@ kubectl apply -k ~/.config/k8s/
     └───────────┘      └───────────┘      └─────────┘
                                               │
                                     ┌─────────┴─────────┐
-                                    │  NodePorts 17980  │
-                                    │  NodePorts 17981  │
+                                    │  NodePort 17980   │
+                                    │  NodePort 17981   │
+                                    │  NodePort 17982   │
                                     └───────────────────┘
 ```
