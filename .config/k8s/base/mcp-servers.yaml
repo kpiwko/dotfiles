@@ -1,33 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-context7
+  name: notebooklm-mcp
   namespace: ai-dev
   labels:
-    app.kubernetes.io/name: mcp-context7
+    app.kubernetes.io/name: notebooklm-mcp
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mcp-context7
+      app: notebooklm-mcp
   template:
     metadata:
       labels:
-        app: mcp-context7
+        app: notebooklm-mcp
     spec:
       containers:
-        - name: mcp-context7
-          image: mcp/context7:latest
+        - name: notebooklm-mcp
+          image: ghcr.io/kpiwko/notebooklm-mcp:latest
           ports:
-            - containerPort: 8080
+            - containerPort: 17200
               name: http
-          env:
-            - name: MCP_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: langfuse-secrets
-                  key: MCP_CONTEXT7_API_KEY
           resources:
             requests:
               memory: "256Mi"
@@ -36,17 +30,15 @@ spec:
               memory: "512Mi"
               cpu: "500m"
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            tcpSocket:
+              port: 17200
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            tcpSocket:
+              port: 17200
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3
@@ -55,17 +47,17 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mcp-context7
+  name: notebooklm-mcp
   namespace: ai-dev
   labels:
-    app.kubernetes.io/name: mcp-context7
+    app.kubernetes.io/name: notebooklm-mcp
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
   selector:
-    app: mcp-context7
+    app: notebooklm-mcp
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 17200
+      targetPort: 17200
       nodePort: 17980
       name: http
   type: NodePort
@@ -73,33 +65,42 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mcp-atlassian
+  name: workspace-mcp
   namespace: ai-dev
   labels:
-    app.kubernetes.io/name: mcp-atlassian
+    app.kubernetes.io/name: workspace-mcp
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mcp-atlassian
+      app: workspace-mcp
   template:
     metadata:
       labels:
-        app: mcp-atlassian
+        app: workspace-mcp
     spec:
       containers:
-        - name: mcp-atlassian
-          image: mcp/atlassian:latest
+        - name: workspace-mcp
+          image: ghcr.io/kpiwko/workspace-mcp:latest
           ports:
-            - containerPort: 8081
+            - containerPort: 8000
               name: http
           env:
-            - name: MCP_API_KEY
+            - name: GOOGLE_OAUTH_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: langfuse-secrets
-                  key: MCP_ATLASSIAN_API_KEY
+                  key: GOOGLE_OAUTH_CLIENT_ID
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-secrets
+                  key: GOOGLE_OAUTH_CLIENT_SECRET
+            - name: GOOGLE_OAUTH_REDIRECT_URI
+              value: "http://localhost:17981/oauth2callback"
+            - name: OAUTHLIB_INSECURE_TRANSPORT
+              value: "1"
           resources:
             requests:
               memory: "256Mi"
@@ -108,17 +109,15 @@ spec:
               memory: "512Mi"
               cpu: "500m"
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8081
+            tcpSocket:
+              port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /health
-              port: 8081
+            tcpSocket:
+              port: 8000
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3
@@ -127,17 +126,17 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mcp-atlassian
+  name: workspace-mcp
   namespace: ai-dev
   labels:
-    app.kubernetes.io/name: mcp-atlassian
+    app.kubernetes.io/name: workspace-mcp
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
   selector:
-    app: mcp-atlassian
+    app: workspace-mcp
   ports:
-    - port: 8081
-      targetPort: 8081
+    - port: 8000
+      targetPort: 8000
       nodePort: 17981
       name: http
   type: NodePort
