@@ -58,12 +58,12 @@ spec:
             - name: CLICKHOUSE_USER
               valueFrom:
                 secretKeyRef:
-                  name: langfuse-secrets
+                  name: ai-dev-secrets
                   key: CLICKHOUSE_USER
             - name: CLICKHOUSE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: langfuse-secrets
+                  name: ai-dev-secrets
                   key: CLICKHOUSE_PASSWORD
           volumeMounts:
             - name: clickhouse-data

@@ -43,6 +43,10 @@ setup() {
   grep -q "apiVersion:" "$K8S_DIR/base/configmap.yaml"
   grep -q "kind: ConfigMap" "$K8S_DIR/base/configmap.yaml"
   grep -q "name: langfuse-config" "$K8S_DIR/base/configmap.yaml"
+  grep -q "DATABASE_URL: \"postgresql://langfuse:postgresdevpass123@postgres:5432/langfuse\"" "$K8S_DIR/base/configmap.yaml"
+  grep -q "CLICKHOUSE_PASSWORD: \"clickhousedevpass123\"" "$K8S_DIR/base/configmap.yaml"
+  grep -q "REDIS_PASSWORD: \"redisdevpass123\"" "$K8S_DIR/base/configmap.yaml"
+  grep -q "MINIO_SECRET_KEY: \"miniodevpass123\"" "$K8S_DIR/base/configmap.yaml"
 }
 
 @test "k8s base/postgres.yaml exists and has required resources" {
@@ -51,6 +55,7 @@ setup() {
   grep -q "kind: PersistentVolumeClaim" "$K8S_DIR/base/postgres.yaml"
   grep -q "kind: Deployment" "$K8S_DIR/base/postgres.yaml"
   grep -q "image: postgres:16" "$K8S_DIR/base/postgres.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/postgres.yaml"
   grep -q "requests:" "$K8S_DIR/base/postgres.yaml"
   grep -q "limits:" "$K8S_DIR/base/postgres.yaml"
 }
@@ -59,6 +64,7 @@ setup() {
   [ -f "$K8S_DIR/base/clickhouse.yaml" ]
   grep -q "apiVersion:" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "image: clickhouse/clickhouse-server:24.3" "$K8S_DIR/base/clickhouse.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "requests:" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "limits:" "$K8S_DIR/base/clickhouse.yaml"
   # Check for dual PVC
@@ -70,6 +76,7 @@ setup() {
   [ -f "$K8S_DIR/base/redis.yaml" ]
   grep -q "image: redis:7" "$K8S_DIR/base/redis.yaml"
   grep -q "noeviction" "$K8S_DIR/base/redis.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/redis.yaml"
   grep -q "requests:" "$K8S_DIR/base/redis.yaml"
   grep -q "limits:" "$K8S_DIR/base/redis.yaml"
 }
@@ -78,6 +85,7 @@ setup() {
   [ -f "$K8S_DIR/base/minio.yaml" ]
   grep -q "image: minio/minio" "$K8S_DIR/base/minio.yaml"
   grep -q "type: NodePort" "$K8S_DIR/base/minio.yaml"
+  grep -q "name: ai-dev-secrets" "$K8S_DIR/base/minio.yaml"
   # Check port 17901 is defined in service
   grep -q "17901" "$K8S_DIR/base/minio.yaml"
 }
@@ -103,6 +111,7 @@ setup() {
   [ -f "$K8S_DIR/base/mcp-servers.yaml" ]
   grep -q "notebooklm-mcp" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "workspace-mcp" "$K8S_DIR/base/mcp-servers.yaml"
+  grep -q "name: workspace-mcp-secrets" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "17980" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "17981" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "type: NodePort" "$K8S_DIR/base/mcp-servers.yaml"
@@ -121,4 +130,7 @@ setup() {
   grep -q "Stack Overview" "$K8S_DIR/README.md"
   grep -q "Port Mapping" "$K8S_DIR/README.md"
   grep -q "Commands Reference" "$K8S_DIR/README.md"
+  grep -q "Google Workspace OAuth Setup Guide" "$K8S_DIR/README.md"
+  grep -q "ai-dev-secrets" "$K8S_DIR/README.md"
+  grep -q "workspace-mcp-secrets" "$K8S_DIR/README.md"
 }
