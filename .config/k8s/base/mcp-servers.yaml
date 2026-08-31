@@ -20,6 +20,7 @@ spec:
       containers:
         - name: notebooklm-mcp
           image: ghcr.io/kpiwko/notebooklm-mcp:latest
+          command: ["/bin/bash", "-c", "ulimit -n 4096 && exec /entrypoint.sh"]
           ports:
             - containerPort: 17200
               name: http

@@ -240,6 +240,7 @@ make cluster-status
 | 3000 | 17900 | Langfuse Web |
 | 9001 | 17901 | MinIO Console |
 | 17200 | 17980 | MCP NotebookLM |
+| 6080 | 17982 | MCP NotebookLM noVNC |
 | 8000 | 17981 | MCP Workspace |
 | 6443 | 17964 | Kubernetes API |
 
