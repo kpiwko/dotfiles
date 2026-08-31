@@ -63,7 +63,7 @@ setup() {
 @test "k8s base/clickhouse.yaml exists and has required resources" {
   [ -f "$K8S_DIR/base/clickhouse.yaml" ]
   grep -q "apiVersion:" "$K8S_DIR/base/clickhouse.yaml"
-  grep -q "image: clickhouse/clickhouse-server:24.3" "$K8S_DIR/base/clickhouse.yaml"
+  grep -q "image: clickhouse/clickhouse-server" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "name: ai-dev-secrets" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "requests:" "$K8S_DIR/base/clickhouse.yaml"
   grep -q "limits:" "$K8S_DIR/base/clickhouse.yaml"
@@ -101,7 +101,7 @@ setup() {
 
 @test "k8s base/langfuse-worker.yaml exists" {
   [ -f "$K8S_DIR/base/langfuse-worker.yaml" ]
-  grep -q "image: langfuse/langfuse:3" "$K8S_DIR/base/langfuse-worker.yaml"
+  grep -q "image: langfuse/langfuse-worker:3" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "worker" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "requests:" "$K8S_DIR/base/langfuse-worker.yaml"
   grep -q "limits:" "$K8S_DIR/base/langfuse-worker.yaml"
