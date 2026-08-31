@@ -11,5 +11,6 @@ resources:
   - base/langfuse-web.yaml
   - base/langfuse-worker.yaml
   - base/mcp-servers.yaml
-commonLabels:
-  app.kubernetes.io/managed-by: dotfiles
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: dotfiles

@@ -91,7 +91,7 @@ cmd_status() {
   check_kind
   
   echo "=== Cluster Nodes ==="
-  kind get clusters
+  kind get clusters 2>/dev/null || true
   echo ""
   $KUBECTL_BIN get nodes
   
