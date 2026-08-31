@@ -27,6 +27,7 @@ setup() {
   grep -q "17901" "$K8S_DIR/kind-config.yaml"
   grep -q "17980" "$K8S_DIR/kind-config.yaml"
   grep -q "17981" "$K8S_DIR/kind-config.yaml"
+  grep -q "17982" "$K8S_DIR/kind-config.yaml"
   grep -q "service-node-port-range: 17900-17999" "$K8S_DIR/kind-config.yaml"
 }
 
@@ -110,10 +111,12 @@ setup() {
 @test "k8s base/mcp-servers.yaml exists and has both MCP servers" {
   [ -f "$K8S_DIR/base/mcp-servers.yaml" ]
   grep -q "notebooklm-mcp" "$K8S_DIR/base/mcp-servers.yaml"
+  grep -q "/dev/shm" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "workspace-mcp" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "name: workspace-mcp-secrets" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "17980" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "17981" "$K8S_DIR/base/mcp-servers.yaml"
+  grep -q "17982" "$K8S_DIR/base/mcp-servers.yaml"
   grep -q "type: NodePort" "$K8S_DIR/base/mcp-servers.yaml"
 }
 

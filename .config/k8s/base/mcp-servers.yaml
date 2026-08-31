@@ -23,19 +23,23 @@ spec:
           ports:
             - containerPort: 17200
               name: http
+            - containerPort: 6080
+              name: novnc
           env:
             - name: NOTEBOOKLM_MCP_PORT
               value: "17200"
           volumeMounts:
             - name: notebooklm-config
               mountPath: /root/.config/notebooklm-mcp-cli
+            - name: dshm
+              mountPath: /dev/shm
           resources:
             requests:
               memory: "256Mi"
               cpu: "100m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "2Gi"
+              cpu: "1000m"
           livenessProbe:
             tcpSocket:
               port: 17200
@@ -53,6 +57,9 @@ spec:
       volumes:
         - name: notebooklm-config
           emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
 ---
 apiVersion: v1
 kind: Service
@@ -70,6 +77,10 @@ spec:
       targetPort: 17200
       nodePort: 17980
       name: http
+    - port: 6080
+      targetPort: 6080
+      nodePort: 17982
+      name: novnc
   type: NodePort
 ---
 apiVersion: apps/v1
