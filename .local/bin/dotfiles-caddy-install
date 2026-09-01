@@ -27,9 +27,9 @@ run_privileged() {
 }
 
 require_role() {
-  if ! "$DOTFILES_ROLE_BIN" has dev && ! "$DOTFILES_ROLE_BIN" has ai-server; then
-    echo "dotfiles-caddy-install: neither the dev nor ai-server role is enabled." >&2
-    echo "Run: dotfiles-role enable dev (or ai-server)" >&2
+  if ! "$DOTFILES_ROLE_BIN" has ai-server && ! "$DOTFILES_ROLE_BIN" has cluster && ! "$DOTFILES_ROLE_BIN" has dev; then
+    echo "dotfiles-caddy-install: none of ai-server, cluster, or dev roles is enabled." >&2
+    echo "Run: dotfiles-role enable <role>" >&2
     exit 1
   fi
 }

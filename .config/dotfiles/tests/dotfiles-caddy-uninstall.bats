@@ -61,7 +61,7 @@ EOF
   chmod +x "$LAUNCHCTL_BIN"
 }
 
-@test "refuses to run when neither dev nor ai-server role is enabled" {
+@test "refuses to run when none of ai-server, cluster, or dev role is enabled" {
   stub_role_disabled
   stub_launchctl 0
   run "$SCRIPT"
@@ -71,6 +71,16 @@ EOF
 
 @test "succeeds when dev role is enabled" {
   stub_role_enabled dev
+  stub_launchctl 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist" ]
+  [ ! -f "$CADDY_LIBEXEC_DIR/caddy-start" ]
+  [ ! -f "$CADDY_BIN" ]
+}
+
+@test "succeeds when cluster role is enabled" {
+  stub_role_enabled cluster
   stub_launchctl 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
