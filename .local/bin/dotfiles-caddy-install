@@ -17,6 +17,8 @@ LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
 LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
 XCADDY_BIN="${XCADDY_BIN:-xcaddy}"
 BREW_BIN="${BREW_BIN:-brew}"
+GO_BIN="${GO_BIN:-go}"
+MISE_BIN="${MISE_BIN:-mise}"
 
 run_privileged() {
   if [ -n "$SUDO" ]; then
@@ -56,11 +58,99 @@ bootstrap_cloudflare_env() {
   fi
 }
 
+find_xcaddy() {
+  if [ -n "${XCADDY_BIN:-}" ] && [ -x "$XCADDY_BIN" ]; then
+    return 0
+  fi
+  if [ -n "${XCADDY_BIN:-}" ] && command -v "$XCADDY_BIN" >/dev/null 2>&1; then
+    XCADDY_BIN="$(command -v "$XCADDY_BIN")"
+    return 0
+  fi
+  if command -v xcaddy >/dev/null 2>&1; then
+    XCADDY_BIN="$(command -v xcaddy)"
+    return 0
+  fi
+
+  if command -v "$GO_BIN" >/dev/null 2>&1; then
+    _gobin="$("$GO_BIN" env GOBIN 2>/dev/null || true)"
+    if [ -n "$_gobin" ] && [ -x "$_gobin/xcaddy" ]; then
+      XCADDY_BIN="$_gobin/xcaddy"
+      return 0
+    fi
+    _gopath="$("$GO_BIN" env GOPATH 2>/dev/null || true)"
+    if [ -n "$_gopath" ] && [ -x "$_gopath/bin/xcaddy" ]; then
+      XCADDY_BIN="$_gopath/bin/xcaddy"
+      return 0
+    fi
+  fi
+
+  if [ -n "${GOPATH:-}" ] && [ -x "$GOPATH/bin/xcaddy" ]; then
+    XCADDY_BIN="$GOPATH/bin/xcaddy"
+    return 0
+  fi
+
+  for candidate in \
+    "$HOME/go/bin/xcaddy" \
+    "$HOME/.local/bin/xcaddy" \
+    /opt/homebrew/bin/xcaddy \
+    /usr/local/bin/xcaddy \
+    "$HOME/.local/share/mise/shims/xcaddy"
+  do
+    if [ -x "$candidate" ]; then
+      XCADDY_BIN="$candidate"
+      return 0
+    fi
+  done
+
+  for candidate in "$HOME"/.local/share/mise/installs/go/*/bin/xcaddy; do
+    if [ -x "$candidate" ]; then
+      XCADDY_BIN="$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+ensure_xcaddy() {
+  if find_xcaddy; then
+    return 0
+  fi
+
+  if command -v "$GO_BIN" >/dev/null 2>&1; then
+    echo "dotfiles-caddy-install: installing xcaddy via go install..." >&2
+    "$GO_BIN" install github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
+    if find_xcaddy; then
+      return 0
+    fi
+  fi
+
+  if command -v "$MISE_BIN" >/dev/null 2>&1; then
+    echo "dotfiles-caddy-install: installing xcaddy via mise..." >&2
+    "$MISE_BIN" use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
+    if find_xcaddy; then
+      return 0
+    fi
+  fi
+
+  if command -v "$BREW_BIN" >/dev/null 2>&1; then
+    echo "dotfiles-caddy-install: installing xcaddy via brew..." >&2
+    "$BREW_BIN" install xcaddy || true
+    if find_xcaddy; then
+      return 0
+    fi
+  fi
+
+  echo "dotfiles-caddy-install: xcaddy is required but was not found and could not be installed." >&2
+  echo "Install it via 'go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest' or 'brew install xcaddy'." >&2
+  exit 1
+}
+
 build_caddy() {
   if [ -x "$CADDY_BIN" ] && "$CADDY_BIN" version 2>/dev/null | grep -q "$CADDY_VERSION"; then
     return 0
   fi
-  command -v "$XCADDY_BIN" >/dev/null 2>&1 || "$BREW_BIN" install xcaddy
+  ensure_xcaddy
   tmp_dir=$(mktemp -d)
   "$XCADDY_BIN" build "$CADDY_VERSION" --with github.com/caddy-dns/cloudflare --output "$tmp_dir/caddy"
   run_privileged install $INSTALL_OWNER_FLAGS -m 0755 "$tmp_dir/caddy" "$CADDY_BIN"
