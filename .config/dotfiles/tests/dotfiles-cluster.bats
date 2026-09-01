@@ -175,8 +175,9 @@ EOF
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET="* ]]
 }
 
-@test "up command auto-provisions secrets with shell environment variables" {
+@test "up command auto-provisions secrets with legacy shell environment variables" {
   export POSTGRES_PASSWORD="custompostgrespass"
+  export LANGFUSE_SECRET_KEY="customsecretkey"
   export LANGFUSE_INIT_USER_EMAIL="admin@example.com"
   export LANGFUSE_INIT_PROJECT_ID="custom-project"
   export GOOGLE_OAUTH_CLIENT_ID="custom-client-id.apps.googleusercontent.com"
@@ -185,21 +186,68 @@ EOF
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=custompostgrespass"* ]]
+  [[ "$output" == *"LANGFUSE_SECRET_KEY=customsecretkey"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=admin@example.com"* ]]
   [[ "$output" == *"LANGFUSE_INIT_PROJECT_ID=custom-project"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=custom-client-id.apps.googleusercontent.com"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_SECRET=custom-client-secret"* ]]
 }
 
+@test "up command prioritizes DEVCLUSTER_ variables over legacy variables" {
+  export POSTGRES_PASSWORD="legacypassword"
+  export LANGFUSE_SECRET_KEY="legacykey"
+  export LANGFUSE_INIT_USER_EMAIL="legacy@example.com"
+  export GOOGLE_OAUTH_CLIENT_ID="legacy-id"
+  
+  export DEVCLUSTER_POSTGRES_PASSWORD="devclusterpostgrespass"
+  export DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY="devclusterencryptionkey"
+  export DEVCLUSTER_LANGFUSE_INIT_USER_EMAIL="devcluster@example.com"
+  export DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID="devcluster-client-id"
+  
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"POSTGRES_PASSWORD=devclusterpostgrespass"* ]]
+  [[ "$output" == *"LANGFUSE_SECRET_KEY=devclusterencryptionkey"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=devcluster@example.com"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=devcluster-client-id"* ]]
+}
+
+@test "up command prioritizes AI_DEV_ variables over DEVCLUSTER_ and legacy variables" {
+  export POSTGRES_PASSWORD="legacypassword"
+  export DEVCLUSTER_POSTGRES_PASSWORD="devclusterpostgrespass"
+  export AI_DEV_POSTGRES_PASSWORD="aidevpostgrespass"
+
+  export LANGFUSE_SECRET_KEY="legacykey"
+  export DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY="devclusterencryptionkey"
+  export AI_DEV_LANGFUSE_ENCRYPTION_KEY="aidevencryptionkey"
+
+  export LANGFUSE_INIT_USER_EMAIL="legacy@example.com"
+  export DEVCLUSTER_LANGFUSE_INIT_USER_EMAIL="devcluster@example.com"
+  export AI_DEV_LANGFUSE_INIT_USER_EMAIL="aidev@example.com"
+
+  export GOOGLE_OAUTH_CLIENT_ID="legacy-id"
+  export DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID="devcluster-client-id"
+  export AI_DEV_GOOGLE_OAUTH_CLIENT_ID="aidev-client-id"
+  
+  run "$SCRIPT" up
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"POSTGRES_PASSWORD=aidevpostgrespass"* ]]
+  [[ "$output" == *"LANGFUSE_SECRET_KEY=aidevencryptionkey"* ]]
+  [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=aidev@example.com"* ]]
+  [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=aidev-client-id"* ]]
+}
+
 @test "up command falls back to .env file when env variables are not exported" {
   cat > "$K8S_DIR/.env" << 'EOF'
-POSTGRES_PASSWORD=envfilepostgrespass
-GOOGLE_OAUTH_CLIENT_ID=env-client-id
+AI_DEV_POSTGRES_PASSWORD=envfilepostgrespass
+AI_DEV_LANGFUSE_ENCRYPTION_KEY=envfileencryptionkey
+AI_DEV_GOOGLE_OAUTH_CLIENT_ID=env-client-id
 EOF
 
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=envfilepostgrespass"* ]]
+  [[ "$output" == *"LANGFUSE_SECRET_KEY=envfileencryptionkey"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=env-client-id"* ]]
 }
 
