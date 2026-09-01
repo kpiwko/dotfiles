@@ -25,15 +25,15 @@ test:
 
 cluster-create:
 	@echo "Creating Kind cluster..."
-	@dotfiles-cluster create
+	@devcluster create
 
 cluster-up:
 	@echo "Deploying manifests..."
-	@dotfiles-cluster up
+	@devcluster up
 
 cluster-status:
 	@echo "Checking cluster status..."
-	@dotfiles-cluster status
+	@devcluster status
 
 cluster-logs:
 	@if [ -z "$(LOGS_POD)" ]; then \
@@ -41,15 +41,15 @@ cluster-logs:
 		exit 1; \
 	fi
 	@if [ -n "$(LOGS_CONTAINER)" ]; then \
-		dotfiles-cluster logs "$(LOGS_POD)" "$(LOGS_CONTAINER)"; \
+		devcluster logs "$(LOGS_POD)" "$(LOGS_CONTAINER)"; \
 	else \
-		dotfiles-cluster logs "$(LOGS_POD)"; \
+		devcluster logs "$(LOGS_POD)"; \
 	fi
 
 cluster-down:
 	@echo "Stopping cluster..."
-	@dotfiles-cluster down
+	@devcluster down
 
 cluster-delete:
 	@echo "Deleting cluster..."
-	@dotfiles-cluster delete
+	@devcluster delete
