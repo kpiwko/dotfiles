@@ -133,6 +133,13 @@ Secrets are managed via separated Kubernetes secrets and auto-provisioned automa
 
 - **Zero-Config Dev Defaults**: For local development, all database and Langfuse secrets (including headless organization, project, and user provisioning) have built-in defaults. You do not need to configure any environment variables to run Langfuse, PostgreSQL, ClickHouse, MinIO, or Redis locally.
 - **Headless Auto-Initialization**: Langfuse automatically seeds an initial admin user, organization, and project with deterministic API keys on first boot using `LANGFUSE_INIT_*` environment variables passed via `ai-dev-secrets`.
+- **Environment Variable Hierarchy & Prefixes**: To avoid variable collisions in global shell environments (`~/.config/zsh/`), environment variables support `AI_DEV_*` (highest priority) and `DEVCLUSTER_*` prefixes, falling back to legacy unprefixed names:
+  - `POSTGRES_PASSWORD`: `${AI_DEV_POSTGRES_PASSWORD:-${DEVCLUSTER_POSTGRES_PASSWORD:-${POSTGRES_PASSWORD:-postgresdevpass123}}}`
+  - `CLICKHOUSE_PASSWORD`: `${AI_DEV_CLICKHOUSE_PASSWORD:-${DEVCLUSTER_CLICKHOUSE_PASSWORD:-${CLICKHOUSE_PASSWORD:-clickhousedevpass123}}}`
+  - `MINIO_ROOT_PASSWORD`: `${AI_DEV_MINIO_ROOT_PASSWORD:-${DEVCLUSTER_MINIO_ROOT_PASSWORD:-${MINIO_ROOT_PASSWORD:-miniodevpass123}}}`
+  - `REDIS_PASSWORD`: `${AI_DEV_REDIS_PASSWORD:-${DEVCLUSTER_REDIS_PASSWORD:-${REDIS_PASSWORD:-redisdevpass123}}}`
+  - `LANGFUSE_SECRET_KEY` (encryption/session key): `${AI_DEV_LANGFUSE_ENCRYPTION_KEY:-${DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY:-${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}}}`
+  - Headless Init: `${AI_DEV_LANGFUSE_INIT_*:-${DEVCLUSTER_LANGFUSE_INIT_*:-${LANGFUSE_INIT_*:-...}}}`
 - **Shell Environment Variables (Primary)**: Customize credentials by setting variables in your shell configuration (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`). When `dotfiles-cluster up` runs, it reads these variables from your active shell environment.
 - **Fallback `.env`**: Alternatively, you can copy `~/.config/k8s/env.example` to `~/.config/k8s/.env` as a fallback. Shell environment variables always take precedence.
 
@@ -145,30 +152,30 @@ Manual creation (if needed):
 # Provision ai-dev-secrets
 kubectl create secret generic ai-dev-secrets \
   --namespace ai-dev \
-  --from-literal=POSTGRES_USER="${POSTGRES_USER:-langfuse}" \
-  --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgresdevpass123}" \
-  --from-literal=CLICKHOUSE_USER="${CLICKHOUSE_USER:-langfuse}" \
-  --from-literal=CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-clickhousedevpass123}" \
-  --from-literal=MINIO_ROOT_USER="${MINIO_ROOT_USER:-langfuse}" \
-  --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-miniodevpass123}" \
-  --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD:-redisdevpass123}" \
-  --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}" \
-  --from-literal=LANGFUSE_INIT_USER_EMAIL="${LANGFUSE_INIT_USER_EMAIL:-kpiwko@localhost}" \
-  --from-literal=LANGFUSE_INIT_USER_NAME="${LANGFUSE_INIT_USER_NAME:-Karel Piwko}" \
-  --from-literal=LANGFUSE_INIT_USER_PASSWORD="${LANGFUSE_INIT_USER_PASSWORD:-langfusedevpass123}" \
-  --from-literal=LANGFUSE_INIT_ORG_ID="${LANGFUSE_INIT_ORG_ID:-local-dev}" \
-  --from-literal=LANGFUSE_INIT_ORG_NAME="${LANGFUSE_INIT_ORG_NAME:-Local Dev}" \
-  --from-literal=LANGFUSE_INIT_PROJECT_ID="${LANGFUSE_INIT_PROJECT_ID:-local-project}" \
-  --from-literal=LANGFUSE_INIT_PROJECT_NAME="${LANGFUSE_INIT_PROJECT_NAME:-Local Project}" \
-  --from-literal=LANGFUSE_INIT_PROJECT_PUBLIC_KEY="${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-0123456789abcdef0123456789abcdef}" \
-  --from-literal=LANGFUSE_INIT_PROJECT_SECRET_KEY="${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-0123456789abcdef0123456789abcdef}" \
+  --from-literal=POSTGRES_USER="${AI_DEV_POSTGRES_USER:-${DEVCLUSTER_POSTGRES_USER:-${POSTGRES_USER:-langfuse}}}" \
+  --from-literal=POSTGRES_PASSWORD="${AI_DEV_POSTGRES_PASSWORD:-${DEVCLUSTER_POSTGRES_PASSWORD:-${POSTGRES_PASSWORD:-postgresdevpass123}}}" \
+  --from-literal=CLICKHOUSE_USER="${AI_DEV_CLICKHOUSE_USER:-${DEVCLUSTER_CLICKHOUSE_USER:-${CLICKHOUSE_USER:-langfuse}}}" \
+  --from-literal=CLICKHOUSE_PASSWORD="${AI_DEV_CLICKHOUSE_PASSWORD:-${DEVCLUSTER_CLICKHOUSE_PASSWORD:-${CLICKHOUSE_PASSWORD:-clickhousedevpass123}}}" \
+  --from-literal=MINIO_ROOT_USER="${AI_DEV_MINIO_ROOT_USER:-${DEVCLUSTER_MINIO_ROOT_USER:-${MINIO_ROOT_USER:-langfuse}}}" \
+  --from-literal=MINIO_ROOT_PASSWORD="${AI_DEV_MINIO_ROOT_PASSWORD:-${DEVCLUSTER_MINIO_ROOT_PASSWORD:-${MINIO_ROOT_PASSWORD:-miniodevpass123}}}" \
+  --from-literal=REDIS_PASSWORD="${AI_DEV_REDIS_PASSWORD:-${DEVCLUSTER_REDIS_PASSWORD:-${REDIS_PASSWORD:-redisdevpass123}}}" \
+  --from-literal=LANGFUSE_SECRET_KEY="${AI_DEV_LANGFUSE_ENCRYPTION_KEY:-${DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY:-${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}}}" \
+  --from-literal=LANGFUSE_INIT_USER_EMAIL="${AI_DEV_LANGFUSE_INIT_USER_EMAIL:-${DEVCLUSTER_LANGFUSE_INIT_USER_EMAIL:-${LANGFUSE_INIT_USER_EMAIL:-kpiwko@localhost}}}" \
+  --from-literal=LANGFUSE_INIT_USER_NAME="${AI_DEV_LANGFUSE_INIT_USER_NAME:-${DEVCLUSTER_LANGFUSE_INIT_USER_NAME:-${LANGFUSE_INIT_USER_NAME:-Karel Piwko}}}" \
+  --from-literal=LANGFUSE_INIT_USER_PASSWORD="${AI_DEV_LANGFUSE_INIT_USER_PASSWORD:-${DEVCLUSTER_LANGFUSE_INIT_USER_PASSWORD:-${LANGFUSE_INIT_USER_PASSWORD:-langfusedevpass123}}}" \
+  --from-literal=LANGFUSE_INIT_ORG_ID="${AI_DEV_LANGFUSE_INIT_ORG_ID:-${DEVCLUSTER_LANGFUSE_INIT_ORG_ID:-${LANGFUSE_INIT_ORG_ID:-local-dev}}}" \
+  --from-literal=LANGFUSE_INIT_ORG_NAME="${AI_DEV_LANGFUSE_INIT_ORG_NAME:-${DEVCLUSTER_LANGFUSE_INIT_ORG_NAME:-${LANGFUSE_INIT_ORG_NAME:-Local Dev}}}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_ID="${AI_DEV_LANGFUSE_INIT_PROJECT_ID:-${DEVCLUSTER_LANGFUSE_INIT_PROJECT_ID:-${LANGFUSE_INIT_PROJECT_ID:-local-project}}}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_NAME="${AI_DEV_LANGFUSE_INIT_PROJECT_NAME:-${DEVCLUSTER_LANGFUSE_INIT_PROJECT_NAME:-${LANGFUSE_INIT_PROJECT_NAME:-Local Project}}}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_PUBLIC_KEY="${AI_DEV_LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-${DEVCLUSTER_LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-0123456789abcdef0123456789abcdef}}}" \
+  --from-literal=LANGFUSE_INIT_PROJECT_SECRET_KEY="${AI_DEV_LANGFUSE_INIT_PROJECT_SECRET_KEY:-${DEVCLUSTER_LANGFUSE_INIT_PROJECT_SECRET_KEY:-${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-0123456789abcdef0123456789abcdef}}}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Provision workspace-mcp-secrets
 kubectl create secret generic workspace-mcp-secrets \
   --namespace ai-dev \
-  --from-literal=GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}" \
-  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}" \
+  --from-literal=GOOGLE_OAUTH_CLIENT_ID="${AI_DEV_GOOGLE_OAUTH_CLIENT_ID:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID:-${GOOGLE_OAUTH_CLIENT_ID:-}}}" \
+  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET:-${GOOGLE_OAUTH_CLIENT_SECRET:-}}}" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -176,32 +183,32 @@ kubectl create secret generic workspace-mcp-secrets \
 
 ### `ai-dev-secrets` (Langfuse & Databases)
 
-| Secret Key | Purpose | Default Dev Value |
-|------------|---------|-------------------|
-| `POSTGRES_USER` | PostgreSQL username | `langfuse` |
-| `POSTGRES_PASSWORD` | PostgreSQL password | `postgresdevpass123` |
-| `CLICKHOUSE_USER` | ClickHouse username | `langfuse` |
-| `CLICKHOUSE_PASSWORD` | ClickHouse password | `clickhousedevpass123` |
-| `MINIO_ROOT_USER` | MinIO access key | `langfuse` |
-| `MINIO_ROOT_PASSWORD` | MinIO secret key | `miniodevpass123` |
-| `REDIS_PASSWORD` | Redis password | `redisdevpass123` |
-| `LANGFUSE_SECRET_KEY` | NextAuth secret key | `devsecretkey_0123456789abcdef0123456789abcdef` |
-| `LANGFUSE_INIT_USER_EMAIL` | Headless seed admin user email | `kpiwko@localhost` |
-| `LANGFUSE_INIT_USER_NAME` | Headless seed admin user name | `Karel Piwko` |
-| `LANGFUSE_INIT_USER_PASSWORD` | Headless seed admin user password | `langfusedevpass123` |
-| `LANGFUSE_INIT_ORG_ID` | Headless seed organization ID | `local-dev` |
-| `LANGFUSE_INIT_ORG_NAME` | Headless seed organization name | `Local Dev` |
-| `LANGFUSE_INIT_PROJECT_ID` | Headless seed project ID | `local-project` |
-| `LANGFUSE_INIT_PROJECT_NAME` | Headless seed project name | `Local Project` |
-| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | Headless seed project public API key | `pk-lf-0123456789abcdef0123456789abcdef` |
-| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | Headless seed project secret API key | `sk-lf-0123456789abcdef0123456789abcdef` |
+| Secret Key | Env Variable Hierarchy | Purpose | Default Dev Value |
+|------------|------------------------|---------|-------------------|
+| `POSTGRES_USER` | `AI_DEV_POSTGRES_USER` / `DEVCLUSTER_POSTGRES_USER` / `POSTGRES_USER` | PostgreSQL username | `langfuse` |
+| `POSTGRES_PASSWORD` | `AI_DEV_POSTGRES_PASSWORD` / `DEVCLUSTER_POSTGRES_PASSWORD` / `POSTGRES_PASSWORD` | PostgreSQL password | `postgresdevpass123` |
+| `CLICKHOUSE_USER` | `AI_DEV_CLICKHOUSE_USER` / `DEVCLUSTER_CLICKHOUSE_USER` / `CLICKHOUSE_USER` | ClickHouse username | `langfuse` |
+| `CLICKHOUSE_PASSWORD` | `AI_DEV_CLICKHOUSE_PASSWORD` / `DEVCLUSTER_CLICKHOUSE_PASSWORD` / `CLICKHOUSE_PASSWORD` | ClickHouse password | `clickhousedevpass123` |
+| `MINIO_ROOT_USER` | `AI_DEV_MINIO_ROOT_USER` / `DEVCLUSTER_MINIO_ROOT_USER` / `MINIO_ROOT_USER` | MinIO access key | `langfuse` |
+| `MINIO_ROOT_PASSWORD` | `AI_DEV_MINIO_ROOT_PASSWORD` / `DEVCLUSTER_MINIO_ROOT_PASSWORD` / `MINIO_ROOT_PASSWORD` | MinIO secret key | `miniodevpass123` |
+| `REDIS_PASSWORD` | `AI_DEV_REDIS_PASSWORD` / `DEVCLUSTER_REDIS_PASSWORD` / `REDIS_PASSWORD` | Redis password | `redisdevpass123` |
+| `LANGFUSE_SECRET_KEY` | `AI_DEV_LANGFUSE_ENCRYPTION_KEY` / `DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY` / `LANGFUSE_SECRET_KEY` | NextAuth secret key | `devsecretkey_0123456789abcdef0123456789abcdef` |
+| `LANGFUSE_INIT_USER_EMAIL` | `AI_DEV_LANGFUSE_INIT_USER_EMAIL` / `DEVCLUSTER_LANGFUSE_INIT_USER_EMAIL` / `LANGFUSE_INIT_USER_EMAIL` | Headless seed admin user email | `kpiwko@localhost` |
+| `LANGFUSE_INIT_USER_NAME` | `AI_DEV_LANGFUSE_INIT_USER_NAME` / `DEVCLUSTER_LANGFUSE_INIT_USER_NAME` / `LANGFUSE_INIT_USER_NAME` | Headless seed admin user name | `Karel Piwko` |
+| `LANGFUSE_INIT_USER_PASSWORD` | `AI_DEV_LANGFUSE_INIT_USER_PASSWORD` / `DEVCLUSTER_LANGFUSE_INIT_USER_PASSWORD` / `LANGFUSE_INIT_USER_PASSWORD` | Headless seed admin user password | `langfusedevpass123` |
+| `LANGFUSE_INIT_ORG_ID` | `AI_DEV_LANGFUSE_INIT_ORG_ID` / `DEVCLUSTER_LANGFUSE_INIT_ORG_ID` / `LANGFUSE_INIT_ORG_ID` | Headless seed organization ID | `local-dev` |
+| `LANGFUSE_INIT_ORG_NAME` | `AI_DEV_LANGFUSE_INIT_ORG_NAME` / `DEVCLUSTER_LANGFUSE_INIT_ORG_NAME` / `LANGFUSE_INIT_ORG_NAME` | Headless seed organization name | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_ID` | `AI_DEV_LANGFUSE_INIT_PROJECT_ID` / `DEVCLUSTER_LANGFUSE_INIT_PROJECT_ID` / `LANGFUSE_INIT_PROJECT_ID` | Headless seed project ID | `local-project` |
+| `LANGFUSE_INIT_PROJECT_NAME` | `AI_DEV_LANGFUSE_INIT_PROJECT_NAME` / `DEVCLUSTER_LANGFUSE_INIT_PROJECT_NAME` / `LANGFUSE_INIT_PROJECT_NAME` | Headless seed project name | `Local Project` |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `AI_DEV_LANGFUSE_INIT_PROJECT_PUBLIC_KEY` / `DEVCLUSTER_LANGFUSE_INIT_PROJECT_PUBLIC_KEY` / `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | Headless seed project public API key | `pk-lf-0123456789abcdef0123456789abcdef` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `AI_DEV_LANGFUSE_INIT_PROJECT_SECRET_KEY` / `DEVCLUSTER_LANGFUSE_INIT_PROJECT_SECRET_KEY` / `LANGFUSE_INIT_PROJECT_SECRET_KEY` | Headless seed project secret API key | `sk-lf-0123456789abcdef0123456789abcdef` |
 
 ### `workspace-mcp-secrets` (Google Workspace MCP)
 
-| Secret Key | Purpose | Default Dev Value |
-|------------|---------|-------------------|
-| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth Client ID | `""` (empty until configured) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth Client Secret | `""` (empty until configured) |
+| Secret Key | Env Variable Hierarchy | Purpose | Default Dev Value |
+|------------|------------------------|---------|-------------------|
+| `GOOGLE_OAUTH_CLIENT_ID` | `AI_DEV_GOOGLE_OAUTH_CLIENT_ID` / `DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth Client ID | `""` (empty until configured) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | `AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET` / `DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth Client Secret | `""` (empty until configured) |
 
 ---
 
@@ -254,8 +261,8 @@ The `workspace-mcp` service connects AI tools to Google Workspace (Gmail, Calend
 Export your credentials in your shell startup file (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`):
 
 ```zsh
-export GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-export GOOGLE_OAUTH_CLIENT_SECRET="GOCSPX-your-client-secret"
+export AI_DEV_GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET="GOCSPX-your-client-secret"
 ```
 
 ### 5. Deploy & Authenticate

@@ -202,15 +202,15 @@ The cluster includes:
 ## Secret Management & Google Workspace OAuth
 
 - **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults, including headless auto-initialization of Langfuse users, organizations, and project API keys.
-- **Auto-Provisioning**: Running `dotfiles-cluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment.
+- **Auto-Provisioning**: Running `dotfiles-cluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment. To prevent collisions in global shell environments (`~/.config/zsh/`), environment variables support `AI_DEV_*` (highest priority) and `DEVCLUSTER_*` prefixes (e.g. `AI_DEV_POSTGRES_PASSWORD`, `AI_DEV_LANGFUSE_ENCRYPTION_KEY`, `AI_DEV_LANGFUSE_INIT_*`).
 - **Google Workspace OAuth**: To connect the `workspace-mcp` server:
   1. Create a GCP Project and enable APIs (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script).
   2. Configure OAuth Consent Screen & Data Access scopes (Add or Remove Scopes).
   3. Create an OAuth 2.0 Web Application client with Authorized redirect URI: `http://localhost:17981/oauth2callback`.
   4. Export credentials in your shell (e.g. in `~/.config/zsh/10-env.zsh` or `secrets.zsh`):
      ```zsh
-     export GOOGLE_OAUTH_CLIENT_ID="<client-id>"
-     export GOOGLE_OAUTH_CLIENT_SECRET="<client-secret>"
+     export AI_DEV_GOOGLE_OAUTH_CLIENT_ID="<client-id>"
+     export AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET="<client-secret>"
      ```
   5. Run `dotfiles-cluster up` to deploy and sync secrets.
   6. See `~/.config/k8s/README.md` for the full setup guide.
