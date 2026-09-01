@@ -187,7 +187,7 @@ container runtime.
 ## Architecture
 
 - Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests for all services).
-- `dotfiles-cluster` CLI manages the cluster lifecycle: create, up, status, logs, down, delete.
+- `devcluster` CLI manages the cluster lifecycle: create, up, status, logs, down, delete.
 
 ## Services
 
@@ -202,7 +202,7 @@ The cluster includes:
 ## Secret Management & Google Workspace OAuth
 
 - **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults, including headless auto-initialization of Langfuse users, organizations, and project API keys.
-- **Auto-Provisioning**: Running `dotfiles-cluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment. To prevent collisions in global shell environments (`~/.config/zsh/`), environment variables support `AI_DEV_*` (highest priority) and `DEVCLUSTER_*` prefixes (e.g. `AI_DEV_POSTGRES_PASSWORD`, `AI_DEV_LANGFUSE_ENCRYPTION_KEY`, `AI_DEV_LANGFUSE_INIT_*`).
+- **Auto-Provisioning**: Running `devcluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment. To prevent collisions in global shell environments (`~/.config/zsh/`), environment variables support `AI_DEV_*` (highest priority) and `DEVCLUSTER_*` prefixes (e.g. `AI_DEV_POSTGRES_PASSWORD`, `AI_DEV_LANGFUSE_ENCRYPTION_KEY`, `AI_DEV_LANGFUSE_INIT_*`).
 - **Google Workspace OAuth**: To connect the `workspace-mcp` server:
   1. Create a GCP Project and enable APIs (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script).
   2. Configure OAuth Consent Screen & Data Access scopes (Add or Remove Scopes).
@@ -212,16 +212,16 @@ The cluster includes:
      export AI_DEV_GOOGLE_OAUTH_CLIENT_ID="<client-id>"
      export AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET="<client-secret>"
      ```
-  5. Run `dotfiles-cluster up` to deploy and sync secrets.
+  5. Run `devcluster up` to deploy and sync secrets.
   6. See `~/.config/k8s/README.md` for the full setup guide.
 
 ## Installation
 
 ```zsh
 dotfiles-role enable cluster
-dotfiles-cluster create          # Create Kind cluster
-dotfiles-cluster up              # Deploy kustomize manifests
-dotfiles-cluster status          # Check cluster status
+devcluster create          # Create Kind cluster
+devcluster up              # Deploy kustomize manifests
+devcluster status          # Check cluster status
 ```
 
 Or use Make:

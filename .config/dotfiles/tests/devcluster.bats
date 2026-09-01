@@ -87,7 +87,7 @@ EOF
   # Add stubs to PATH
   export PATH="$STUB_DIR:$PATH"
   
-  SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/dotfiles-cluster"
+  SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/devcluster"
 }
 
 teardown() {
@@ -155,11 +155,16 @@ EOF
   [[ "$output" == *"create secret generic ai-dev-secrets"* ]]
   [[ "$output" == *"POSTGRES_USER=langfuse"* ]]
   [[ "$output" == *"POSTGRES_PASSWORD=postgresdevpass123"* ]]
+  [[ "$output" == *"DATABASE_URL=postgresql://langfuse:postgresdevpass123@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"DIRECT_URL=postgresql://langfuse:postgresdevpass123@postgres:5432/langfuse"* ]]
   [[ "$output" == *"CLICKHOUSE_USER=langfuse"* ]]
   [[ "$output" == *"CLICKHOUSE_PASSWORD=clickhousedevpass123"* ]]
+  [[ "$output" == *"CLICKHOUSE_URL=http://langfuse:clickhousedevpass123@clickhouse:8123"* ]]
+  [[ "$output" == *"CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse:clickhousedevpass123@clickhouse:9000/default"* ]]
   [[ "$output" == *"MINIO_ROOT_USER=langfuse"* ]]
   [[ "$output" == *"MINIO_ROOT_PASSWORD=miniodevpass123"* ]]
   [[ "$output" == *"REDIS_PASSWORD=redisdevpass123"* ]]
+  [[ "$output" == *"REDIS_AUTH=redisdevpass123"* ]]
   [[ "$output" == *"LANGFUSE_SECRET_KEY=devsecretkey_0123456789abcdef0123456789abcdef"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=kpiwko@localhost"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_NAME=Karel Piwko"* ]]
@@ -177,6 +182,8 @@ EOF
 
 @test "up command auto-provisions secrets with legacy shell environment variables" {
   export POSTGRES_PASSWORD="custompostgrespass"
+  export CLICKHOUSE_PASSWORD="customclickhousepass"
+  export REDIS_PASSWORD="customredispass"
   export LANGFUSE_SECRET_KEY="customsecretkey"
   export LANGFUSE_INIT_USER_EMAIL="admin@example.com"
   export LANGFUSE_INIT_PROJECT_ID="custom-project"
@@ -186,6 +193,13 @@ EOF
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=custompostgrespass"* ]]
+  [[ "$output" == *"DATABASE_URL=postgresql://langfuse:custompostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"DIRECT_URL=postgresql://langfuse:custompostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"CLICKHOUSE_PASSWORD=customclickhousepass"* ]]
+  [[ "$output" == *"CLICKHOUSE_URL=http://langfuse:customclickhousepass@clickhouse:8123"* ]]
+  [[ "$output" == *"CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse:customclickhousepass@clickhouse:9000/default"* ]]
+  [[ "$output" == *"REDIS_PASSWORD=customredispass"* ]]
+  [[ "$output" == *"REDIS_AUTH=customredispass"* ]]
   [[ "$output" == *"LANGFUSE_SECRET_KEY=customsecretkey"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=admin@example.com"* ]]
   [[ "$output" == *"LANGFUSE_INIT_PROJECT_ID=custom-project"* ]]
@@ -195,11 +209,15 @@ EOF
 
 @test "up command prioritizes DEVCLUSTER_ variables over legacy variables" {
   export POSTGRES_PASSWORD="legacypassword"
+  export CLICKHOUSE_PASSWORD="legacypassword"
+  export REDIS_PASSWORD="legacypassword"
   export LANGFUSE_SECRET_KEY="legacykey"
   export LANGFUSE_INIT_USER_EMAIL="legacy@example.com"
   export GOOGLE_OAUTH_CLIENT_ID="legacy-id"
   
   export DEVCLUSTER_POSTGRES_PASSWORD="devclusterpostgrespass"
+  export DEVCLUSTER_CLICKHOUSE_PASSWORD="devclusterclickhousepass"
+  export DEVCLUSTER_REDIS_PASSWORD="devclusterredispass"
   export DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY="devclusterencryptionkey"
   export DEVCLUSTER_LANGFUSE_INIT_USER_EMAIL="devcluster@example.com"
   export DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID="devcluster-client-id"
@@ -207,6 +225,13 @@ EOF
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=devclusterpostgrespass"* ]]
+  [[ "$output" == *"DATABASE_URL=postgresql://langfuse:devclusterpostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"DIRECT_URL=postgresql://langfuse:devclusterpostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"CLICKHOUSE_PASSWORD=devclusterclickhousepass"* ]]
+  [[ "$output" == *"CLICKHOUSE_URL=http://langfuse:devclusterclickhousepass@clickhouse:8123"* ]]
+  [[ "$output" == *"CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse:devclusterclickhousepass@clickhouse:9000/default"* ]]
+  [[ "$output" == *"REDIS_PASSWORD=devclusterredispass"* ]]
+  [[ "$output" == *"REDIS_AUTH=devclusterredispass"* ]]
   [[ "$output" == *"LANGFUSE_SECRET_KEY=devclusterencryptionkey"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=devcluster@example.com"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=devcluster-client-id"* ]]
@@ -216,6 +241,14 @@ EOF
   export POSTGRES_PASSWORD="legacypassword"
   export DEVCLUSTER_POSTGRES_PASSWORD="devclusterpostgrespass"
   export AI_DEV_POSTGRES_PASSWORD="aidevpostgrespass"
+
+  export CLICKHOUSE_PASSWORD="legacypassword"
+  export DEVCLUSTER_CLICKHOUSE_PASSWORD="devclusterclickhousepass"
+  export AI_DEV_CLICKHOUSE_PASSWORD="aidevclickhousepass"
+
+  export REDIS_PASSWORD="legacypassword"
+  export DEVCLUSTER_REDIS_PASSWORD="devclusterredispass"
+  export AI_DEV_REDIS_PASSWORD="aidevredispass"
 
   export LANGFUSE_SECRET_KEY="legacykey"
   export DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY="devclusterencryptionkey"
@@ -232,6 +265,13 @@ EOF
   run "$SCRIPT" up
   [ "$status" -eq 0 ]
   [[ "$output" == *"POSTGRES_PASSWORD=aidevpostgrespass"* ]]
+  [[ "$output" == *"DATABASE_URL=postgresql://langfuse:aidevpostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"DIRECT_URL=postgresql://langfuse:aidevpostgrespass@postgres:5432/langfuse"* ]]
+  [[ "$output" == *"CLICKHOUSE_PASSWORD=aidevclickhousepass"* ]]
+  [[ "$output" == *"CLICKHOUSE_URL=http://langfuse:aidevclickhousepass@clickhouse:8123"* ]]
+  [[ "$output" == *"CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse:aidevclickhousepass@clickhouse:9000/default"* ]]
+  [[ "$output" == *"REDIS_PASSWORD=aidevredispass"* ]]
+  [[ "$output" == *"REDIS_AUTH=aidevredispass"* ]]
   [[ "$output" == *"LANGFUSE_SECRET_KEY=aidevencryptionkey"* ]]
   [[ "$output" == *"LANGFUSE_INIT_USER_EMAIL=aidev@example.com"* ]]
   [[ "$output" == *"GOOGLE_OAUTH_CLIENT_ID=aidev-client-id"* ]]

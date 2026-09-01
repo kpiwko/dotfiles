@@ -1,6 +1,6 @@
 # Kubernetes AI Development Stack
 
-This directory contains Kubernetes manifests for the AI development infrastructure managed by dotfiles-cluster.
+This directory contains Kubernetes manifests for the AI development infrastructure managed by devcluster.
 
 ## Stack Overview
 
@@ -78,32 +78,32 @@ The stack includes:
 
 ```bash
 # Create cluster
-dotfiles-cluster create
+devcluster create
 # or
 make cluster-create
 
 # Deploy manifests
-dotfiles-cluster up
+devcluster up
 # or
 make cluster-up
 
 # Check status
-dotfiles-cluster status
+devcluster status
 # or
 make cluster-status
 
 # View logs
-dotfiles-cluster logs <pod-name> [container]
+devcluster logs <pod-name> [container]
 # or
 make cluster-logs
 
 # Stop cluster (preserve state)
-dotfiles-cluster down
+devcluster down
 # or
 make cluster-down
 
 # Delete cluster
-dotfiles-cluster delete
+devcluster delete
 # or
 make cluster-delete
 ```
@@ -129,7 +129,7 @@ kubectl logs -n ai-dev -l app=postgres --follow
 
 ### Secret Management & Auto-Provisioning
 
-Secrets are managed via separated Kubernetes secrets and auto-provisioned automatically by `dotfiles-cluster up`.
+Secrets are managed via separated Kubernetes secrets and auto-provisioned automatically by `devcluster up`.
 
 - **Zero-Config Dev Defaults**: For local development, all database and Langfuse secrets (including headless organization, project, and user provisioning) have built-in defaults. You do not need to configure any environment variables to run Langfuse, PostgreSQL, ClickHouse, MinIO, or Redis locally.
 - **Headless Auto-Initialization**: Langfuse automatically seeds an initial admin user, organization, and project with deterministic API keys on first boot using `LANGFUSE_INIT_*` environment variables passed via `ai-dev-secrets`.
@@ -140,10 +140,10 @@ Secrets are managed via separated Kubernetes secrets and auto-provisioned automa
   - `REDIS_PASSWORD`: `${AI_DEV_REDIS_PASSWORD:-${DEVCLUSTER_REDIS_PASSWORD:-${REDIS_PASSWORD:-redisdevpass123}}}`
   - `LANGFUSE_SECRET_KEY` (encryption/session key): `${AI_DEV_LANGFUSE_ENCRYPTION_KEY:-${DEVCLUSTER_LANGFUSE_ENCRYPTION_KEY:-${LANGFUSE_SECRET_KEY:-devsecretkey_0123456789abcdef0123456789abcdef}}}`
   - Headless Init: `${AI_DEV_LANGFUSE_INIT_*:-${DEVCLUSTER_LANGFUSE_INIT_*:-${LANGFUSE_INIT_*:-...}}}`
-- **Shell Environment Variables (Primary)**: Customize credentials by setting variables in your shell configuration (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`). When `dotfiles-cluster up` runs, it reads these variables from your active shell environment.
+- **Shell Environment Variables (Primary)**: Customize credentials by setting variables in your shell configuration (e.g. `~/.config/zsh/10-env.zsh` or `~/.config/zsh/secrets.zsh`). When `devcluster up` runs, it reads these variables from your active shell environment.
 - **Fallback `.env`**: Alternatively, you can copy `~/.config/k8s/env.example` to `~/.config/k8s/.env` as a fallback. Shell environment variables always take precedence.
 
-When `dotfiles-cluster up` executes, it automatically generates and applies two separated secrets:
+When `devcluster up` executes, it automatically generates and applies two separated secrets:
 1. `ai-dev-secrets`: Infrastructure & Langfuse secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `REDIS_PASSWORD`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_INIT_*`).
 2. `workspace-mcp-secrets`: Google Workspace OAuth secrets (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`).
 
@@ -269,9 +269,9 @@ export AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET="GOCSPX-your-client-secret"
 
 1. Apply manifests and secrets:
    ```bash
-   dotfiles-cluster up
+   devcluster up
    ```
-2. `dotfiles-cluster up` automatically provisions `workspace-mcp-secrets` into the `ai-dev` namespace from your shell environment.
+2. `devcluster up` automatically provisions `workspace-mcp-secrets` into the `ai-dev` namespace from your shell environment.
 3. Access the Workspace MCP OAuth flow at `http://localhost:17981` to authorize access.
 
 ## Troubleshooting
