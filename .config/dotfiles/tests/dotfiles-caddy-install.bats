@@ -30,11 +30,9 @@ setup() {
   export LAUNCHCTL_BIN="$FAKE_BIN_DIR/launchctl"
   export GO_BIN="$FAKE_BIN_DIR/go"
   export MISE_BIN="$FAKE_BIN_DIR/mise"
-  export BREW_BIN="$FAKE_BIN_DIR/brew"
   export XCADDY_CALL_LOG="$TEST_DIR/xcaddy-calls.log"
   export LAUNCHCTL_CALL_LOG="$TEST_DIR/launchctl-calls.log"
   export GO_CALL_LOG="$TEST_DIR/go-calls.log"
-  export BREW_CALL_LOG="$TEST_DIR/brew-calls.log"
   export MISE_CALL_LOG="$TEST_DIR/mise-calls.log"
 
   SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/dotfiles-caddy-install"
@@ -188,44 +186,6 @@ INNER
 esac
 EOF
   chmod +x "$MISE_BIN"
-}
-
-stub_brew_creates() {
-  install_target="$1"
-  cat > "$BREW_BIN" <<EOF
-#!/bin/sh
-echo "brew \$*" >> "$BREW_CALL_LOG"
-case "\$1" in
-  install)
-    mkdir -p "\$(dirname "$install_target")"
-    cat > "$install_target" <<'INNER'
-#!/bin/sh
-prev=""
-out=""
-for arg in "\$@"; do
-  if [ "\$prev" = "--output" ]; then
-    out="\$arg"
-  fi
-  prev="\$arg"
-done
-cat > "\$out" <<'CADDY'
-#!/bin/sh
-case "\$1" in
-  version) echo "v2.9.1" ;;
-  validate) exit 0 ;;
-  *) exit 0 ;;
-esac
-CADDY
-chmod +x "\$out"
-echo "called" >> "$XCADDY_CALL_LOG"
-INNER
-    chmod +x "$install_target"
-    exit 0
-    ;;
-  *) exit 0 ;;
-esac
-EOF
-  chmod +x "$BREW_BIN"
 }
 
 # $1: version string `caddy version` should report
@@ -432,12 +392,12 @@ INNEREOF
   [ "$(cat "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist")" = "test-plist" ]
 }
 
-@test "discovers xcaddy from standard home go bin path" {
+@test "discovers xcaddy from mise shims directory" {
   stub_role_enabled
   stub_launchctl 1
   export HOME="$TEST_DIR/home"
   export XCADDY_BIN="xcaddy"
-  stub_xcaddy_at "$HOME/go/bin/xcaddy"
+  stub_xcaddy_at "$HOME/.local/share/mise/shims/xcaddy"
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
 
@@ -460,23 +420,21 @@ INNEREOF
   [ -f "$XCADDY_CALL_LOG" ]
 }
 
-@test "installs xcaddy via go install when xcaddy is missing" {
+@test "discovers xcaddy from standard home go bin path" {
   stub_role_enabled
   stub_launchctl 1
   export HOME="$TEST_DIR/home"
   export XCADDY_BIN="xcaddy"
-  stub_go_install_creates "$HOME/go/bin/xcaddy"
+  stub_xcaddy_at "$HOME/go/bin/xcaddy"
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
 
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ -f "$GO_CALL_LOG" ]
-  grep -q "go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest" "$GO_CALL_LOG"
   [ -f "$XCADDY_CALL_LOG" ]
 }
 
-@test "installs xcaddy via mise when go is missing" {
+@test "installs xcaddy via mise when xcaddy is missing" {
   stub_role_enabled
   stub_launchctl 1
   export HOME="$TEST_DIR/home"
@@ -488,21 +446,24 @@ INNEREOF
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ -f "$MISE_CALL_LOG" ]
+  grep -q "mise use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest" "$MISE_CALL_LOG"
   [ -f "$XCADDY_CALL_LOG" ]
 }
 
-@test "installs xcaddy via brew fallback when go and mise are missing" {
+@test "installs xcaddy via go install fallback when mise is missing" {
   stub_role_enabled
   stub_launchctl 1
   export HOME="$TEST_DIR/home"
   export XCADDY_BIN="xcaddy"
-  stub_brew_creates "$HOME/.local/bin/xcaddy"
+  export MISE_BIN="$FAKE_BIN_DIR/nonexistent-mise"
+  stub_go_install_creates "$HOME/go/bin/xcaddy"
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
 
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ -f "$BREW_CALL_LOG" ]
+  [ -f "$GO_CALL_LOG" ]
+  grep -q "go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest" "$GO_CALL_LOG"
   [ -f "$XCADDY_CALL_LOG" ]
 }
 
@@ -511,10 +472,12 @@ INNEREOF
   stub_launchctl 1
   export HOME="$TEST_DIR/home"
   export XCADDY_BIN="xcaddy"
+  export MISE_BIN="$FAKE_BIN_DIR/nonexistent-mise"
+  export GO_BIN="$FAKE_BIN_DIR/nonexistent-go"
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
 
   run "$SCRIPT"
   [ "$status" -ne 0 ]
-  [[ "$output" =~ "xcaddy is required but was not found" ]]
+  [[ "$output" =~ "Neither 'mise' nor 'go' is available to install xcaddy" ]]
 }

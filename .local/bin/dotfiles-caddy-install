@@ -16,7 +16,6 @@ LAUNCHD_DIR="${LAUNCHD_DIR:-/Library/LaunchDaemons}"
 LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
 LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
 XCADDY_BIN="${XCADDY_BIN:-xcaddy}"
-BREW_BIN="${BREW_BIN:-brew}"
 GO_BIN="${GO_BIN:-go}"
 MISE_BIN="${MISE_BIN:-mise}"
 
@@ -71,6 +70,18 @@ find_xcaddy() {
     return 0
   fi
 
+  if [ -x "$HOME/.local/share/mise/shims/xcaddy" ]; then
+    XCADDY_BIN="$HOME/.local/share/mise/shims/xcaddy"
+    return 0
+  fi
+
+  for candidate in "$HOME"/.local/share/mise/installs/go/*/bin/xcaddy; do
+    if [ -x "$candidate" ]; then
+      XCADDY_BIN="$candidate"
+      return 0
+    fi
+  done
+
   if command -v "$GO_BIN" >/dev/null 2>&1; then
     _gobin="$("$GO_BIN" env GOBIN 2>/dev/null || true)"
     if [ -n "$_gobin" ] && [ -x "$_gobin/xcaddy" ]; then
@@ -92,17 +103,8 @@ find_xcaddy() {
   for candidate in \
     "$HOME/go/bin/xcaddy" \
     "$HOME/.local/bin/xcaddy" \
-    /opt/homebrew/bin/xcaddy \
-    /usr/local/bin/xcaddy \
-    "$HOME/.local/share/mise/shims/xcaddy"
+    /usr/local/bin/xcaddy
   do
-    if [ -x "$candidate" ]; then
-      XCADDY_BIN="$candidate"
-      return 0
-    fi
-  done
-
-  for candidate in "$HOME"/.local/share/mise/installs/go/*/bin/xcaddy; do
     if [ -x "$candidate" ]; then
       XCADDY_BIN="$candidate"
       return 0
@@ -117,14 +119,6 @@ ensure_xcaddy() {
     return 0
   fi
 
-  if command -v "$GO_BIN" >/dev/null 2>&1; then
-    echo "dotfiles-caddy-install: installing xcaddy via go install..." >&2
-    "$GO_BIN" install github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
-    if find_xcaddy; then
-      return 0
-    fi
-  fi
-
   if command -v "$MISE_BIN" >/dev/null 2>&1; then
     echo "dotfiles-caddy-install: installing xcaddy via mise..." >&2
     "$MISE_BIN" use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
@@ -133,16 +127,15 @@ ensure_xcaddy() {
     fi
   fi
 
-  if command -v "$BREW_BIN" >/dev/null 2>&1; then
-    echo "dotfiles-caddy-install: installing xcaddy via brew..." >&2
-    "$BREW_BIN" install xcaddy || true
+  if command -v "$GO_BIN" >/dev/null 2>&1; then
+    echo "dotfiles-caddy-install: installing xcaddy via go install..." >&2
+    "$GO_BIN" install github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
     if find_xcaddy; then
       return 0
     fi
   fi
 
-  echo "dotfiles-caddy-install: xcaddy is required but was not found and could not be installed." >&2
-  echo "Install it via 'go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest' or 'brew install xcaddy'." >&2
+  echo "dotfiles-caddy-install: Neither 'mise' nor 'go' is available to install xcaddy. Run: mise use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest or go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest" >&2
   exit 1
 }
 
