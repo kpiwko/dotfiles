@@ -117,7 +117,7 @@ stub_all_ok() {
   stub_launchctl 1
 }
 
-@test "refuses to run when neither dev nor ai-server role is enabled" {
+@test "refuses to run when none of ai-server, cluster, or dev role is enabled" {
   stub_role_disabled
   run "$SCRIPT"
   [ "$status" -eq 1 ]
@@ -126,6 +126,13 @@ stub_all_ok() {
 
 @test "succeeds when dev role is enabled" {
   stub_role_enabled dev
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "succeeds when cluster role is enabled" {
+  stub_role_enabled cluster
   stub_all_ok
   run "$SCRIPT"
   [ "$status" -eq 0 ]
