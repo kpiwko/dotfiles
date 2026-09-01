@@ -25,8 +25,11 @@ setup() {
 @test "mcp site example exists and configures devcluster MCP and noVNC targets" {
   [ -f "$CADDY_DIR/sites/mcp.caddy.example" ]
   grep -q "import local_tls" "$CADDY_DIR/sites/mcp.caddy.example"
+  grep -q "mcp-google\.local\.test" "$CADDY_DIR/sites/mcp.caddy.example"
   grep -q "reverse_proxy 127.0.0.1:17981" "$CADDY_DIR/sites/mcp.caddy.example"
+  grep -q "mcp-gemini-ntb\.local\.test" "$CADDY_DIR/sites/mcp.caddy.example"
   grep -q "reverse_proxy 127.0.0.1:17980" "$CADDY_DIR/sites/mcp.caddy.example"
+  grep -q "mcp-novnc-gemini-ntb\.local\.test" "$CADDY_DIR/sites/mcp.caddy.example"
   grep -q "reverse_proxy 127.0.0.1:17982" "$CADDY_DIR/sites/mcp.caddy.example"
 }
 
