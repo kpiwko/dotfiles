@@ -151,7 +151,7 @@ build_caddy() {
 }
 
 validate_config() {
-  "$CADDY_BIN" validate --config "$CADDY_ETC_DIR/Caddyfile" --adapter caddyfile
+  run_privileged "$CADDY_BIN" validate --config "$CADDY_ETC_DIR/Caddyfile" --adapter caddyfile
 }
 
 deploy_wrapper_and_daemon() {

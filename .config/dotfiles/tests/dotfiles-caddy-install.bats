@@ -327,6 +327,32 @@ INNEREOF
   grep -q "test -f.*cloudflare.env" "$SUDO_LOG"
 }
 
+@test "performs caddy validate via run_privileged" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  SUDO_LOG="$TEST_DIR/sudo.log"
+  mkdir -p "$(dirname "$SUDO_LOG")"
+
+  STUB_SUDO="$FAKE_BIN_DIR/sudo"
+  cat > "$STUB_SUDO" <<'INNEREOF'
+#!/bin/sh
+echo "$@" >> "$SUDO_LOG"
+exec "$@"
+INNEREOF
+  chmod +x "$STUB_SUDO"
+
+  export SUDO="$STUB_SUDO"
+  export SUDO_LOG
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+
+  grep -q "$CADDY_BIN validate --config $CADDY_ETC_DIR/Caddyfile --adapter caddyfile" "$SUDO_LOG"
+}
+
 @test "builds caddy via xcaddy when the binary is missing" {
   stub_role_enabled
   stub_xcaddy
