@@ -47,13 +47,54 @@ sync_config() {
   run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/Caddyfile" "$CADDY_ETC_DIR/Caddyfile"
 }
 
+is_placeholder_token() {
+  case "$1" in
+    ""|"changeme"|"your_cloudflare_dns_edit_api_token"|"your_api_token_here")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+write_cloudflare_env() {
+  token="$1"
+  tmp_env="$(mktemp)"
+  cat > "$tmp_env" <<EOF
+# Copied to $CADDY_ETC_DIR/env/cloudflare.env by dotfiles-caddy-install
+CF_API_TOKEN=$token
+EOF
+  run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$tmp_env" "$CADDY_ETC_DIR/env/cloudflare.env"
+  rm -f "$tmp_env"
+}
+
 bootstrap_cloudflare_env() {
   env_file="$CADDY_ETC_DIR/env/cloudflare.env"
+  env_token="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-${AI_DEV_CF_API_TOKEN:-${DEVCLUSTER_CF_API_TOKEN:-}}}}"
+
   if ! run_privileged test -f "$env_file"; then
-    run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$DOTFILES_CADDY_SRC/env/cloudflare.env.example" "$env_file"
-    echo "dotfiles-caddy-install: created $env_file from the example template." >&2
-    echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
-    exit 0
+    if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
+      write_cloudflare_env "$env_token"
+      echo "dotfiles-caddy-install: populated $env_file with API token from shell environment." >&2
+    else
+      run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$DOTFILES_CADDY_SRC/env/cloudflare.env.example" "$env_file"
+      echo "dotfiles-caddy-install: created $env_file from the example template." >&2
+      echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
+      exit 0
+    fi
+  else
+    file_token="$(run_privileged /bin/sh -c "CF_API_TOKEN=''; . '$env_file' 2>/dev/null || true; printf '%s' \"\$CF_API_TOKEN\"" 2>/dev/null || true)"
+    if is_placeholder_token "$file_token"; then
+      if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
+        write_cloudflare_env "$env_token"
+        echo "dotfiles-caddy-install: updated placeholder in $env_file with API token from shell environment." >&2
+      else
+        echo "dotfiles-caddy-install: $env_file contains placeholder token ($file_token)." >&2
+        echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
+        exit 0
+      fi
+    fi
   fi
 }
 
@@ -151,7 +192,7 @@ build_caddy() {
 }
 
 validate_config() {
-  run_privileged "$CADDY_BIN" validate --config "$CADDY_ETC_DIR/Caddyfile" --adapter caddyfile
+  run_privileged /bin/sh -c "if [ -f \"$CADDY_ETC_DIR/env/cloudflare.env\" ]; then set -a; . \"$CADDY_ETC_DIR/env/cloudflare.env\" 2>/dev/null || true; set +a; fi; CF_API_TOKEN=\"\${CF_API_TOKEN:-placeholder-for-validation}\" \"$CADDY_BIN\" validate --config \"$CADDY_ETC_DIR/Caddyfile\" --adapter caddyfile"
 }
 
 deploy_wrapper_and_daemon() {
