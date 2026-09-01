@@ -99,7 +99,7 @@ OpenCode configuration is stored under `~/.config/opencode/`.
 
 # Reverse Proxy: Caddy
 
-The `dev` and `ai-server` roles install [Caddy](https://caddyserver.com) as a reverse
+The `dev`, `cluster`, and `ai-server` roles support [Caddy](https://caddyserver.com) as a reverse
 proxy for local services and development, built with `xcaddy` to include the
 [Cloudflare DNS](https://github.com/caddy-dns/cloudflare) module for DNS-01
 ACME challenges.
@@ -120,6 +120,7 @@ ACME challenges.
   - `snippets/local-tls.caddy` (`(local_tls)`): Internal TLS using Caddy's built-in root CA for local development (`tls internal`).
   - `snippets/cloudflare-tls.caddy` (`(cloudflare_tls)`): Cloudflare DNS-01 ACME challenge for public/internal domain resolution.
 - Host-specific local site configs matching `*.local.caddy` (such as `sites/my-app.local.caddy`) are ignored in Git, allowing per-host site configuration without dirtying repository state.
+- Fronting `devcluster` services: Caddy can reverse proxy local cluster services exposed via NodePort / HostPort, such as Langfuse Web (`127.0.0.1:17900`), Workspace MCP (`127.0.0.1:17981`), NotebookLM MCP (`127.0.0.1:17980`), and NotebookLM noVNC (`127.0.0.1:17982`). See `sites/tracing.caddy`, `sites/mcp.caddy.example`, and `sites/local-dev.caddy.example`.
 - The Cloudflare API token is never in the plist. `caddy-start` sources it
   from `/usr/local/etc/caddy/env/cloudflare.env` into its own process
   environment right before `exec`ing `caddy run`.
@@ -127,12 +128,12 @@ ACME challenges.
 ## Installation
 
 ```zsh
-dotfiles-role enable dev        # or: dotfiles-role enable ai-server
+dotfiles-role enable dev        # or: dotfiles-role enable cluster / dotfiles-role enable ai-server
 dotfiles-caddy-install
 ```
 
 This is idempotent — rerunning it is the normal way to pick up config
-changes (see Upgrades below). It requires either the `dev` or `ai-server` role
+changes (see Upgrades below). It requires any of the `dev`, `cluster`, or `ai-server` roles
 to be enabled.
 
 On first run against a machine that doesn't already have Caddy configured,
