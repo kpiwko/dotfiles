@@ -5,6 +5,7 @@ setup() {
   export SUDO=""
   export INSTALL_OWNER_FLAGS=""
   export RSYNC_CHOWN_FLAG=""
+  unset CF_API_TOKEN CLOUDFLARE_API_TOKEN AI_DEV_CF_API_TOKEN DEVCLUSTER_CF_API_TOKEN
   export DOTFILES_CADDY_SRC="$TEST_DIR/src"
   export CADDY_ETC_DIR="$TEST_DIR/etc"
   export CADDY_LOG_DIR="$TEST_DIR/log"
@@ -293,11 +294,91 @@ stub_all_ok() {
   [ ! -f "$LAUNCHCTL_CALL_LOG" ]
 }
 
-@test "never overwrites an existing cloudflare.env" {
+@test "auto-populates cloudflare.env from CF_API_TOKEN in shell environment when missing" {
+  stub_role_enabled
+  stub_all_ok
+  export CF_API_TOKEN="my-env-cf-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$CADDY_ETC_DIR/env/cloudflare.env" ]
+  grep -q "CF_API_TOKEN=my-env-cf-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env prioritizing CF_API_TOKEN over CLOUDFLARE_API_TOKEN" {
+  stub_role_enabled
+  stub_all_ok
+  export CF_API_TOKEN="primary-token"
+  export CLOUDFLARE_API_TOKEN="fallback-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=primary-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env from CLOUDFLARE_API_TOKEN when CF_API_TOKEN is unset" {
+  stub_role_enabled
+  stub_all_ok
+  export CLOUDFLARE_API_TOKEN="cloudflare-token"
+  export AI_DEV_CF_API_TOKEN="ai-dev-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=cloudflare-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env prioritizing AI_DEV_CF_API_TOKEN over DEVCLUSTER_CF_API_TOKEN" {
+  stub_role_enabled
+  stub_all_ok
+  export AI_DEV_CF_API_TOKEN="ai-dev-token"
+  export DEVCLUSTER_CF_API_TOKEN="devcluster-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=ai-dev-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env from DEVCLUSTER_CF_API_TOKEN when higher precedence vars are unset" {
+  stub_role_enabled
+  stub_all_ok
+  export DEVCLUSTER_CF_API_TOKEN="devcluster-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=devcluster-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "replaces placeholder in existing cloudflare.env if token is in shell environment" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=your_cloudflare_dns_edit_api_token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+  export CF_API_TOKEN="real-populated-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=real-populated-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "prompts user when existing cloudflare.env contains placeholder and no shell env var is set" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=your_cloudflare_dns_edit_api_token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "contains placeholder token" ]]
+  [ ! -f "$XCADDY_CALL_LOG" ]
+  [ ! -f "$LAUNCHCTL_CALL_LOG" ]
+}
+
+@test "never overwrites an existing non-placeholder cloudflare.env" {
   stub_role_enabled
   stub_all_ok
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret-value" > "$CADDY_ETC_DIR/env/cloudflare.env"
+  export CF_API_TOKEN="different-token-in-env"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(cat "$CADDY_ETC_DIR/env/cloudflare.env")" = "CF_API_TOKEN=real-secret-value" ]
@@ -327,7 +408,7 @@ INNEREOF
   grep -q "test -f.*cloudflare.env" "$SUDO_LOG"
 }
 
-@test "performs caddy validate via run_privileged" {
+@test "performs caddy validate via run_privileged with cloudflare.env sourcing" {
   stub_role_enabled
   stub_all_ok
   mkdir -p "$CADDY_ETC_DIR/env"
@@ -350,7 +431,36 @@ INNEREOF
   run "$SCRIPT"
   [ "$status" -eq 0 ]
 
-  grep -q "$CADDY_BIN validate --config $CADDY_ETC_DIR/Caddyfile --adapter caddyfile" "$SUDO_LOG"
+  grep -q "cloudflare.env" "$SUDO_LOG"
+  grep -q "validate --config .*Caddyfile.* --adapter caddyfile" "$SUDO_LOG"
+}
+
+@test "validate_config sources cloudflare.env and exports CF_API_TOKEN to caddy validate" {
+  stub_role_enabled
+  stub_xcaddy
+  stub_launchctl 1
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=validated-secret-token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  VALIDATE_ENV_LOG="$TEST_DIR/validate-env.log"
+  mkdir -p "$(dirname "$CADDY_BIN")"
+  cat > "$CADDY_BIN" <<EOF
+#!/bin/sh
+case "\$1" in
+  version) echo "$CADDY_VERSION" ;;
+  validate)
+    echo "TOKEN=\$CF_API_TOKEN" > "$VALIDATE_ENV_LOG"
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$CADDY_BIN"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$VALIDATE_ENV_LOG" ]
+  [ "$(cat "$VALIDATE_ENV_LOG")" = "TOKEN=validated-secret-token" ]
 }
 
 @test "builds caddy via xcaddy when the binary is missing" {
