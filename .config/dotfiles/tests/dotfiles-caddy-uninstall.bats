@@ -31,9 +31,10 @@ teardown() {
 }
 
 stub_role_enabled() {
-  cat > "$DOTFILES_ROLE_BIN" <<'EOF'
+  role="${1:-ai-server}"
+  cat > "$DOTFILES_ROLE_BIN" <<EOF
 #!/bin/sh
-[ "$1" = "has" ] && [ "$2" = "ai-server" ] && exit 0
+[ "\$1" = "has" ] && [ "\$2" = "$role" ] && exit 0
 exit 1
 EOF
   chmod +x "$DOTFILES_ROLE_BIN"
@@ -60,12 +61,42 @@ EOF
   chmod +x "$LAUNCHCTL_BIN"
 }
 
-@test "refuses to run when ai-server role is not enabled" {
+@test "refuses to run when none of ai-server, cluster, or dev role is enabled" {
   stub_role_disabled
   stub_launchctl 0
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [ -f "$CADDY_BIN" ]
+}
+
+@test "succeeds when dev role is enabled" {
+  stub_role_enabled dev
+  stub_launchctl 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist" ]
+  [ ! -f "$CADDY_LIBEXEC_DIR/caddy-start" ]
+  [ ! -f "$CADDY_BIN" ]
+}
+
+@test "succeeds when cluster role is enabled" {
+  stub_role_enabled cluster
+  stub_launchctl 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist" ]
+  [ ! -f "$CADDY_LIBEXEC_DIR/caddy-start" ]
+  [ ! -f "$CADDY_BIN" ]
+}
+
+@test "succeeds when ai-server role is enabled" {
+  stub_role_enabled ai-server
+  stub_launchctl 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist" ]
+  [ ! -f "$CADDY_LIBEXEC_DIR/caddy-start" ]
+  [ ! -f "$CADDY_BIN" ]
 }
 
 @test "removes the plist, wrapper, and binary" {

@@ -1,0 +1,20 @@
+# Example site configuration for devcluster MCP servers and web interfaces.
+# Copy to sites/<name>.local.caddy (or sites/<name>.caddy) and adapt domain/host names.
+
+# Google Workspace MCP server
+mcp-google.local.test {
+	import local_tls
+	reverse_proxy 127.0.0.1:17981
+}
+
+# NotebookLM / Gemini MCP server
+mcp-gemini-ntb.local.test {
+	import local_tls
+	reverse_proxy 127.0.0.1:17980
+}
+
+# NotebookLM noVNC Web UI
+mcp-novnc-gemini-ntb.local.test {
+	import local_tls
+	reverse_proxy 127.0.0.1:17982
+}

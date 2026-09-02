@@ -41,10 +41,38 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "disable removes an enabled dev role" {
+  "$SCRIPT" enable dev
+  "$SCRIPT" disable dev
+  run "$SCRIPT" has dev
+  [ "$status" -eq 1 ]
+}
+
+@test "disable removes an enabled cluster role" {
+  "$SCRIPT" enable cluster
+  "$SCRIPT" disable cluster
+  run "$SCRIPT" has cluster
+  [ "$status" -eq 1 ]
+}
+
 @test "enable rejects an unknown role name" {
   run "$SCRIPT" enable not-a-real-role
   [ "$status" -eq 1 ]
   [[ "$output" == *"unknown role"* ]]
+  [[ "$output" == *"known: ai-server cluster dev"* ]]
+}
+
+@test "enable then has succeeds for dev role" {
+  "$SCRIPT" enable dev
+  run "$SCRIPT" has dev
+  [ "$status" -eq 0 ]
+}
+
+@test "enable is idempotent for dev role" {
+  "$SCRIPT" enable dev
+  "$SCRIPT" enable dev
+  run "$SCRIPT" list
+  [ "$(echo "$output" | grep -c '^dev$')" -eq 1 ]
 }
 
 @test "enable then has succeeds for cluster role" {

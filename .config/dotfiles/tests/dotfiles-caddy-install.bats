@@ -5,6 +5,7 @@ setup() {
   export SUDO=""
   export INSTALL_OWNER_FLAGS=""
   export RSYNC_CHOWN_FLAG=""
+  unset CF_API_TOKEN CLOUDFLARE_API_TOKEN AI_DEV_CF_API_TOKEN DEVCLUSTER_CF_API_TOKEN
   export DOTFILES_CADDY_SRC="$TEST_DIR/src"
   export CADDY_ETC_DIR="$TEST_DIR/etc"
   export CADDY_LOG_DIR="$TEST_DIR/log"
@@ -28,8 +29,12 @@ setup() {
   export DOTFILES_ROLE_BIN="$FAKE_BIN_DIR/dotfiles-role"
   export XCADDY_BIN="$TEST_DIR/xcaddy-bin/xcaddy"
   export LAUNCHCTL_BIN="$FAKE_BIN_DIR/launchctl"
+  export GO_BIN="$FAKE_BIN_DIR/go"
+  export MISE_BIN="$FAKE_BIN_DIR/mise"
   export XCADDY_CALL_LOG="$TEST_DIR/xcaddy-calls.log"
   export LAUNCHCTL_CALL_LOG="$TEST_DIR/launchctl-calls.log"
+  export GO_CALL_LOG="$TEST_DIR/go-calls.log"
+  export MISE_CALL_LOG="$TEST_DIR/mise-calls.log"
 
   SCRIPT="$BATS_TEST_DIRNAME/../../../.local/bin/dotfiles-caddy-install"
 }
@@ -39,9 +44,10 @@ teardown() {
 }
 
 stub_role_enabled() {
-  cat > "$DOTFILES_ROLE_BIN" <<'EOF'
+  role="${1:-ai-server}"
+  cat > "$DOTFILES_ROLE_BIN" <<EOF
 #!/bin/sh
-[ "$1" = "has" ] && [ "$2" = "ai-server" ] && exit 0
+[ "\$1" = "has" ] && [ "\$2" = "$role" ] && exit 0
 exit 1
 EOF
   chmod +x "$DOTFILES_ROLE_BIN"
@@ -80,6 +86,109 @@ EOF
   chmod +x "$XCADDY_BIN"
 }
 
+stub_xcaddy_at() {
+  target_path="$1"
+  mkdir -p "$(dirname "$target_path")"
+  cat > "$target_path" <<EOF
+#!/bin/sh
+prev=""
+out=""
+for arg in "\$@"; do
+  if [ "\$prev" = "--output" ]; then
+    out="\$arg"
+  fi
+  prev="\$arg"
+done
+cat > "\$out" <<'CADDY'
+#!/bin/sh
+case "\$1" in
+  version) echo "v2.9.1" ;;
+  validate) exit 0 ;;
+  *) exit 0 ;;
+esac
+CADDY
+chmod +x "\$out"
+echo "called" >> "$XCADDY_CALL_LOG"
+EOF
+  chmod +x "$target_path"
+}
+
+stub_go_install_creates() {
+  install_target="$1"
+  cat > "$GO_BIN" <<EOF
+#!/bin/sh
+case "\$1" in
+  install)
+    echo "go \$*" >> "$GO_CALL_LOG"
+    mkdir -p "\$(dirname "$install_target")"
+    cat > "$install_target" <<'INNER'
+#!/bin/sh
+prev=""
+out=""
+for arg in "\$@"; do
+  if [ "\$prev" = "--output" ]; then
+    out="\$arg"
+  fi
+  prev="\$arg"
+done
+cat > "\$out" <<'CADDY'
+#!/bin/sh
+case "\$1" in
+  version) echo "v2.9.1" ;;
+  validate) exit 0 ;;
+  *) exit 0 ;;
+esac
+CADDY
+chmod +x "\$out"
+echo "called" >> "$XCADDY_CALL_LOG"
+INNER
+    chmod +x "$install_target"
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$GO_BIN"
+}
+
+stub_mise_creates() {
+  install_target="$1"
+  cat > "$MISE_BIN" <<EOF
+#!/bin/sh
+echo "mise \$*" >> "$MISE_CALL_LOG"
+case "\$1" in
+  use)
+    mkdir -p "\$(dirname "$install_target")"
+    cat > "$install_target" <<'INNER'
+#!/bin/sh
+prev=""
+out=""
+for arg in "\$@"; do
+  if [ "\$prev" = "--output" ]; then
+    out="\$arg"
+  fi
+  prev="\$arg"
+done
+cat > "\$out" <<'CADDY'
+#!/bin/sh
+case "\$1" in
+  version) echo "v2.9.1" ;;
+  validate) exit 0 ;;
+  *) exit 0 ;;
+esac
+CADDY
+chmod +x "\$out"
+echo "called" >> "$XCADDY_CALL_LOG"
+INNER
+    chmod +x "$install_target"
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$MISE_BIN"
+}
+
 # $1: version string `caddy version` should report
 # $2: exit code `caddy validate` should return
 stub_caddy() {
@@ -116,11 +225,32 @@ stub_all_ok() {
   stub_launchctl 1
 }
 
-@test "refuses to run when ai-server role is not enabled" {
+@test "refuses to run when none of ai-server, cluster, or dev role is enabled" {
   stub_role_disabled
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [ ! -d "$CADDY_ETC_DIR" ]
+}
+
+@test "succeeds when dev role is enabled" {
+  stub_role_enabled dev
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "succeeds when cluster role is enabled" {
+  stub_role_enabled cluster
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "succeeds when ai-server role is enabled" {
+  stub_role_enabled ai-server
+  stub_all_ok
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
 }
 
 @test "creates required directories when role is enabled" {
@@ -164,11 +294,91 @@ stub_all_ok() {
   [ ! -f "$LAUNCHCTL_CALL_LOG" ]
 }
 
-@test "never overwrites an existing cloudflare.env" {
+@test "auto-populates cloudflare.env from CF_API_TOKEN in shell environment when missing" {
+  stub_role_enabled
+  stub_all_ok
+  export CF_API_TOKEN="my-env-cf-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$CADDY_ETC_DIR/env/cloudflare.env" ]
+  grep -q "CF_API_TOKEN=my-env-cf-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env prioritizing CF_API_TOKEN over CLOUDFLARE_API_TOKEN" {
+  stub_role_enabled
+  stub_all_ok
+  export CF_API_TOKEN="primary-token"
+  export CLOUDFLARE_API_TOKEN="fallback-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=primary-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env from CLOUDFLARE_API_TOKEN when CF_API_TOKEN is unset" {
+  stub_role_enabled
+  stub_all_ok
+  export CLOUDFLARE_API_TOKEN="cloudflare-token"
+  export AI_DEV_CF_API_TOKEN="ai-dev-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=cloudflare-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env prioritizing AI_DEV_CF_API_TOKEN over DEVCLUSTER_CF_API_TOKEN" {
+  stub_role_enabled
+  stub_all_ok
+  export AI_DEV_CF_API_TOKEN="ai-dev-token"
+  export DEVCLUSTER_CF_API_TOKEN="devcluster-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=ai-dev-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "auto-populates cloudflare.env from DEVCLUSTER_CF_API_TOKEN when higher precedence vars are unset" {
+  stub_role_enabled
+  stub_all_ok
+  export DEVCLUSTER_CF_API_TOKEN="devcluster-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=devcluster-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "replaces placeholder in existing cloudflare.env if token is in shell environment" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=your_cloudflare_dns_edit_api_token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+  export CF_API_TOKEN="real-populated-token"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "CF_API_TOKEN=real-populated-token" "$CADDY_ETC_DIR/env/cloudflare.env"
+}
+
+@test "prompts user when existing cloudflare.env contains placeholder and no shell env var is set" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=your_cloudflare_dns_edit_api_token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "contains placeholder token" ]]
+  [ ! -f "$XCADDY_CALL_LOG" ]
+  [ ! -f "$LAUNCHCTL_CALL_LOG" ]
+}
+
+@test "never overwrites an existing non-placeholder cloudflare.env" {
   stub_role_enabled
   stub_all_ok
   mkdir -p "$CADDY_ETC_DIR/env"
   echo "CF_API_TOKEN=real-secret-value" > "$CADDY_ETC_DIR/env/cloudflare.env"
+  export CF_API_TOKEN="different-token-in-env"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(cat "$CADDY_ETC_DIR/env/cloudflare.env")" = "CF_API_TOKEN=real-secret-value" ]
@@ -196,6 +406,61 @@ INNEREOF
 
   # Proves the existence check went through run_privileged, not a raw [ -f ]
   grep -q "test -f.*cloudflare.env" "$SUDO_LOG"
+}
+
+@test "performs caddy validate via run_privileged with cloudflare.env sourcing" {
+  stub_role_enabled
+  stub_all_ok
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  SUDO_LOG="$TEST_DIR/sudo.log"
+  mkdir -p "$(dirname "$SUDO_LOG")"
+
+  STUB_SUDO="$FAKE_BIN_DIR/sudo"
+  cat > "$STUB_SUDO" <<'INNEREOF'
+#!/bin/sh
+echo "$@" >> "$SUDO_LOG"
+exec "$@"
+INNEREOF
+  chmod +x "$STUB_SUDO"
+
+  export SUDO="$STUB_SUDO"
+  export SUDO_LOG
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+
+  grep -q "cloudflare.env" "$SUDO_LOG"
+  grep -q "validate --config .*Caddyfile.* --adapter caddyfile" "$SUDO_LOG"
+}
+
+@test "validate_config sources cloudflare.env and exports CF_API_TOKEN to caddy validate" {
+  stub_role_enabled
+  stub_xcaddy
+  stub_launchctl 1
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=validated-secret-token" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  VALIDATE_ENV_LOG="$TEST_DIR/validate-env.log"
+  mkdir -p "$(dirname "$CADDY_BIN")"
+  cat > "$CADDY_BIN" <<EOF
+#!/bin/sh
+case "\$1" in
+  version) echo "$CADDY_VERSION" ;;
+  validate)
+    echo "TOKEN=\$CF_API_TOKEN" > "$VALIDATE_ENV_LOG"
+    exit 0
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$CADDY_BIN"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$VALIDATE_ENV_LOG" ]
+  [ "$(cat "$VALIDATE_ENV_LOG")" = "TOKEN=validated-secret-token" ]
 }
 
 @test "builds caddy via xcaddy when the binary is missing" {
@@ -261,4 +526,94 @@ INNEREOF
   [ "$status" -eq 0 ]
   [ "$(cat "$CADDY_LIBEXEC_DIR/caddy-start")" = "test-caddy-start" ]
   [ "$(cat "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist")" = "test-plist" ]
+}
+
+@test "discovers xcaddy from mise shims directory" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  stub_xcaddy_at "$HOME/.local/share/mise/shims/xcaddy"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$XCADDY_CALL_LOG" ]
+}
+
+@test "discovers xcaddy from mise installs directory" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  stub_xcaddy_at "$HOME/.local/share/mise/installs/go/1.24.0/bin/xcaddy"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$XCADDY_CALL_LOG" ]
+}
+
+@test "discovers xcaddy from standard home go bin path" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  stub_xcaddy_at "$HOME/go/bin/xcaddy"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$XCADDY_CALL_LOG" ]
+}
+
+@test "installs xcaddy via mise when xcaddy is missing" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  stub_mise_creates "$HOME/.local/share/mise/installs/go/1.24.0/bin/xcaddy"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$MISE_CALL_LOG" ]
+  grep -q "mise use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest" "$MISE_CALL_LOG"
+  [ -f "$XCADDY_CALL_LOG" ]
+}
+
+@test "installs xcaddy via go install fallback when mise is missing" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  export MISE_BIN="$FAKE_BIN_DIR/nonexistent-mise"
+  stub_go_install_creates "$HOME/go/bin/xcaddy"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$GO_CALL_LOG" ]
+  grep -q "go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest" "$GO_CALL_LOG"
+  [ -f "$XCADDY_CALL_LOG" ]
+}
+
+@test "fails when xcaddy is missing and cannot be installed" {
+  stub_role_enabled
+  stub_launchctl 1
+  export HOME="$TEST_DIR/home"
+  export XCADDY_BIN="xcaddy"
+  export MISE_BIN="$FAKE_BIN_DIR/nonexistent-mise"
+  export GO_BIN="$FAKE_BIN_DIR/nonexistent-go"
+  mkdir -p "$CADDY_ETC_DIR/env"
+  echo "CF_API_TOKEN=real-secret" > "$CADDY_ETC_DIR/env/cloudflare.env"
+
+  run "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "Neither 'mise' nor 'go' is available to install xcaddy" ]]
 }
