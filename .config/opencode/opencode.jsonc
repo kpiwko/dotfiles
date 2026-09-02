@@ -17,6 +17,16 @@
         "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
       },
       "enabled": true
+    },
+    "notebooklm": {
+      "type": "remote",
+      "url": "{env:NOTEBOOKLM_MCP_URL}",
+      "enabled": true
+    },
+    "workspace": {
+      "type": "remote",
+      "url": "{env:WORKSPACE_MCP_URL}",
+      "enabled": true
     }
   },
   "tools": {
