@@ -1,0 +1,60 @@
+name: dotfiles tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  UV_WORKING_DIRECTORY: .config/dotfiles
+
+jobs:
+  affected-binaries:
+    name: affected binary tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: '3.13'
+          working-directory: .config/dotfiles
+          enable-cache: true
+      - name: Run tests owned by changed binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t binaries < <(
+            git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
+              | sed -n 's#^\.local/bin/##p' \
+              | sort -u
+          )
+          if (( ${#binaries[@]} == 0 )); then
+            echo "No .local/bin executables changed."
+            exit 0
+          fi
+          for binary in "${binaries[@]}"; do
+            echo "::group::pytest --binary ${binary}"
+            uv run --group test pytest --binary "${binary}"
+            echo "::endgroup::"
+          done
+
+  full-suite:
+    name: full pytest suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: '3.13'
+          working-directory: .config/dotfiles
+          enable-cache: true
+      - name: Run tests
+        run: uv run --group test pytest
