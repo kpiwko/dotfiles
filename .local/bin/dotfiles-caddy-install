@@ -1,319 +1,273 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env python3
+"""Install and configure the dotfiles-managed Caddy service."""
 
-SUDO="${SUDO-sudo}"
-DOTFILES_ROLE_BIN="${DOTFILES_ROLE_BIN:-dotfiles-role}"
-DOTFILES_CADDY_SRC="${DOTFILES_CADDY_SRC:-$HOME/.config/caddy}"
-CADDY_ETC_DIR="${CADDY_ETC_DIR:-/usr/local/etc/caddy}"
-CADDY_LOG_DIR="${CADDY_LOG_DIR:-/var/log/caddy}"
-CADDY_VAR_DIR="${CADDY_VAR_DIR:-/var/lib/caddy}"
-INSTALL_OWNER_FLAGS="${INSTALL_OWNER_FLAGS--o root -g wheel}"
-RSYNC_CHOWN_FLAG="${RSYNC_CHOWN_FLAG---chown=root:wheel}"
-CADDY_VERSION="${CADDY_VERSION:-v2.9.1}"
-CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
-CADDY_LIBEXEC_DIR="${CADDY_LIBEXEC_DIR:-/usr/local/libexec}"
-LAUNCHD_DIR="${LAUNCHD_DIR:-/Library/LaunchDaemons}"
-LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
-LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
-XCADDY_BIN="${XCADDY_BIN:-xcaddy}"
-GO_BIN="${GO_BIN:-go}"
-MISE_BIN="${MISE_BIN:-mise}"
+from __future__ import annotations
 
-CLEAN_MODE="${CLEAN_MODE:-0}"
-REINSTALL_MODE="${REINSTALL_MODE:-0}"
+import argparse
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
-run_privileged() {
-  if [ -n "$SUDO" ]; then
-    "$SUDO" "$@"
-  else
-    "$@"
-  fi
-}
+PLACEHOLDER_TOKENS = {"", "changeme", "your_cloudflare_dns_edit_api_token", "your_api_token_here"}
+PLACEHOLDER_EMAILS = {"", "you@example.com", "admin@example.com", "user@example.com", "changeme"}
 
-require_role() {
-  if ! "$DOTFILES_ROLE_BIN" has ai-server && ! "$DOTFILES_ROLE_BIN" has cluster && ! "$DOTFILES_ROLE_BIN" has dev; then
-    echo "dotfiles-caddy-install: none of ai-server, cluster, or dev roles is enabled." >&2
-    echo "Run: dotfiles-role enable <role>" >&2
-    exit 1
-  fi
-}
 
-create_directories() {
-  run_privileged mkdir -p "$CADDY_ETC_DIR/sites" "$CADDY_ETC_DIR/snippets" "$CADDY_ETC_DIR/env" "$CADDY_LOG_DIR" "$CADDY_VAR_DIR"
-  run_privileged chmod 0750 "$CADDY_ETC_DIR" "$CADDY_LOG_DIR" "$CADDY_VAR_DIR"
-  run_privileged chmod 0700 "$CADDY_ETC_DIR/env"
-}
+def env(name: str, default: str) -> str:
+    return os.environ.get(name, default)
 
-sync_config() {
-  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG --exclude='*.example' "$DOTFILES_CADDY_SRC/sites/" "$CADDY_ETC_DIR/sites/"
-  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG --exclude='*.example' "$DOTFILES_CADDY_SRC/snippets/" "$CADDY_ETC_DIR/snippets/"
-  run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/Caddyfile" "$CADDY_ETC_DIR/Caddyfile"
-}
 
-is_placeholder_token() {
-  case "$1" in
-    ""|"changeme"|"your_cloudflare_dns_edit_api_token"|"your_api_token_here")
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
+@dataclass(frozen=True)
+class Config:
+    sudo: tuple[str, ...]
+    role_bin: str
+    src: Path
+    etc: Path
+    log: Path
+    var: Path
+    install_owner_flags: tuple[str, ...]
+    caddy_version: str
+    caddy_bin: Path
+    libexec: Path
+    launchd_dir: Path
+    launchd_label: str
+    launchctl: str
+    xcaddy: str
+    go: str
+    mise: str
 
-is_placeholder_email() {
-  case "$1" in
-    "") return 0 ;;
-    "you@example.com") return 0 ;;
-    "admin@example.com") return 0 ;;
-    "user@example.com") return 0 ;;
-    "changeme") return 0 ;;
-    *@example.com) return 0 ;;
-    *@example.internal) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+    @classmethod
+    def from_env(cls) -> "Config":
+        home = Path.home()
+        return cls(
+            sudo=tuple(shlex.split(env("SUDO", "sudo"))),
+            role_bin=env("DOTFILES_ROLE_BIN", "dotfiles-role"),
+            src=Path(env("DOTFILES_CADDY_SRC", str(home / ".config/caddy"))),
+            etc=Path(env("CADDY_ETC_DIR", "/usr/local/etc/caddy")),
+            log=Path(env("CADDY_LOG_DIR", "/var/log/caddy")),
+            var=Path(env("CADDY_VAR_DIR", "/var/lib/caddy")),
+            install_owner_flags=tuple(shlex.split(env("INSTALL_OWNER_FLAGS", "-o root -g wheel"))),
+            caddy_version=env("CADDY_VERSION", "v2.9.1"),
+            caddy_bin=Path(env("CADDY_BIN", "/usr/local/bin/caddy")),
+            libexec=Path(env("CADDY_LIBEXEC_DIR", "/usr/local/libexec")),
+            launchd_dir=Path(env("LAUNCHD_DIR", "/Library/LaunchDaemons")),
+            launchd_label=env("LAUNCHD_LABEL", "local.caddy"),
+            launchctl=env("LAUNCHCTL_BIN", "launchctl"),
+            xcaddy=env("XCADDY_BIN", "xcaddy"),
+            go=env("GO_BIN", "go"),
+            mise=env("MISE_BIN", "mise"),
+        )
 
-write_cloudflare_env() {
-  token="$1"
-  acme_email="${2:-}"
-  tmp_env="$(mktemp)"
-  if [ -n "$acme_email" ] && ! is_placeholder_email "$acme_email"; then
-    cat > "$tmp_env" <<EOF
-# Copied to $CADDY_ETC_DIR/env/cloudflare.env by dotfiles-caddy-install
-CF_API_TOKEN=$token
-ACME_EMAIL=$acme_email
-EOF
-  else
-    cat > "$tmp_env" <<EOF
-# Copied to $CADDY_ETC_DIR/env/cloudflare.env by dotfiles-caddy-install
-CF_API_TOKEN=$token
-EOF
-  fi
-  run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$tmp_env" "$CADDY_ETC_DIR/env/cloudflare.env"
-  rm -f "$tmp_env"
-}
 
-discover_acme_email() {
-  if [ -n "${DNS_ACME_EMAIL:-}" ] && ! is_placeholder_email "$DNS_ACME_EMAIL"; then
-    printf '%s' "$DNS_ACME_EMAIL"
-  elif [ -n "${ACME_EMAIL:-}" ] && ! is_placeholder_email "$ACME_EMAIL"; then
-    printf '%s' "$ACME_EMAIL"
-  else
-    git config --get user.email 2>/dev/null | while read -r email; do
-      if [ -n "$email" ] && ! is_placeholder_email "$email"; then
-        printf '%s' "$email"
-        break
-      fi
-    done || true
-  fi
-}
+def run(cmd: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, check=check, text=True, capture_output=capture)
 
-warn_on_placeholder_acme_email() {
-  email="${1:-}"
-  if [ -z "$email" ] || is_placeholder_email "$email"; then
-    echo "dotfiles-caddy-install: WARNING: ACME_EMAIL is not configured. Set DNS_ACME_EMAIL or ACME_EMAIL in your shell environment." >&2
-    echo "Using fallback from git config if available, but this will likely fail for Let's Encrypt verification." >&2
-  fi
-}
 
-bootstrap_cloudflare_env() {
-  env_file="$CADDY_ETC_DIR/env/cloudflare.env"
-  env_token="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-${AI_DEV_CF_API_TOKEN:-${DEVCLUSTER_CF_API_TOKEN:-}}}}"
-  acme_email="$(discover_acme_email)"
+def privileged(cfg: Config, *cmd: str, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return run([*cfg.sudo, *cmd], check=check, capture=capture)
 
-  if ! run_privileged test -f "$env_file"; then
-    if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
-      write_cloudflare_env "$env_token" "$acme_email"
-      echo "dotfiles-caddy-install: populated $env_file with API token and ACME_EMAIL from shell environment." >&2
-    else
-      # Create from example, then update if we have a valid email
-      run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$DOTFILES_CADDY_SRC/env/cloudflare.env.example" "$env_file"
-      echo "dotfiles-caddy-install: created $env_file from the example template." >&2
-      
-      # If we have a valid email, update it in the file
-      if [ -n "$acme_email" ] && ! is_placeholder_email "$acme_email"; then
-        tmp_env="$(mktemp)"
-        cat "$env_file" | sed "s/^ACME_EMAIL=.*/ACME_EMAIL=$acme_email/" > "$tmp_env"
-        run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$tmp_env" "$env_file"
-        rm -f "$tmp_env"
-        echo "dotfiles-caddy-install: updated ACME_EMAIL in $env_file from shell environment." >&2
-      fi
-      
-      echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
-      exit 0
-    fi
-  else
-    file_token="$(run_privileged /bin/sh -c "CF_API_TOKEN=''; . '$env_file' 2>/dev/null || true; printf '%s' \"\$CF_API_TOKEN\"" 2>/dev/null || true)"
-    file_email="$(run_privileged /bin/sh -c "ACME_EMAIL=''; . '$env_file' 2>/dev/null || true; printf '%s' \"\$ACME_EMAIL\"" 2>/dev/null || true)"
-    if is_placeholder_token "$file_token"; then
-      if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
-        write_cloudflare_env "$env_token" "$acme_email"
-        echo "dotfiles-caddy-install: updated placeholder in $env_file with API token and ACME_EMAIL from shell environment." >&2
-      else
-        echo "dotfiles-caddy-install: $env_file contains placeholder token ($file_token)." >&2
-        echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
-        exit 0
-      fi
-    elif is_placeholder_email "$file_email" || [ -z "$file_email" ]; then
-      # Token is valid but email is missing or placeholder - do not update
-      # The user should manually edit the file to add/update email
-      if is_placeholder_email "$file_email"; then
-        echo "dotfiles-caddy-install: $env_file contains placeholder email ($file_email)." >&2
-        echo "Edit it now and set a real ACME_EMAIL before starting Caddy." >&2
-        exit 0
-      fi
-    fi
-    # File has a real token and email - do not modify it
-  fi
-}
 
-find_xcaddy() {
-  if [ -n "${XCADDY_BIN:-}" ] && [ -x "$XCADDY_BIN" ]; then
+def role_enabled(cfg: Config) -> bool:
+    for role in ("ai-server", "cluster", "dev"):
+        result = run([cfg.role_bin, "has", role], check=False)
+        if result.returncode == 0:
+            return True
+    return False
+
+
+def is_placeholder_token(value: str) -> bool:
+    return value.strip() in PLACEHOLDER_TOKENS
+
+
+def is_placeholder_email(value: str) -> bool:
+    value = value.strip()
+    return value in PLACEHOLDER_EMAILS or value.endswith("@example.com") or value.endswith("@example.internal")
+
+
+def discover_acme_email() -> str:
+    for name in ("DNS_ACME_EMAIL", "ACME_EMAIL"):
+        value = os.environ.get(name, "")
+        if not is_placeholder_email(value):
+            return value
+    result = run(["git", "config", "--get", "user.email"], check=False, capture=True)
+    value = result.stdout.strip() if result.returncode == 0 else ""
+    return value if not is_placeholder_email(value) else ""
+
+
+def create_directories(cfg: Config) -> None:
+    privileged(cfg, "mkdir", "-p", str(cfg.etc / "sites"), str(cfg.etc / "snippets"), str(cfg.etc / "env"), str(cfg.log), str(cfg.var))
+    privileged(cfg, "chmod", "0750", str(cfg.etc), str(cfg.log), str(cfg.var))
+    privileged(cfg, "chmod", "0700", str(cfg.etc / "env"))
+
+
+def sync_dir(cfg: Config, source: Path, destination: Path) -> None:
+    privileged(cfg, "rm", "-rf", str(destination))
+    privileged(cfg, "mkdir", "-p", str(destination))
+    for item in source.iterdir():
+        if item.name.endswith(".example"):
+            continue
+        target = destination / item.name
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(item), str(target))
+
+
+def sync_config(cfg: Config) -> None:
+    sync_dir(cfg, cfg.src / "sites", cfg.etc / "sites")
+    sync_dir(cfg, cfg.src / "snippets", cfg.etc / "snippets")
+    privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(cfg.src / "Caddyfile"), str(cfg.etc / "Caddyfile"))
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"').strip("'")
+    except (FileNotFoundError, PermissionError):
+        pass
+    return values
+
+
+def write_cloudflare_env(cfg: Config, token: str, email: str) -> None:
+    lines = [f"# Copied to {cfg.etc}/env/cloudflare.env by dotfiles-caddy-install", f"CF_API_TOKEN={token}"]
+    if not is_placeholder_email(email):
+        lines.append(f"ACME_EMAIL={email}")
+    with tempfile.NamedTemporaryFile("w", delete=False) as handle:
+        handle.write("\n".join(lines) + "\n")
+        tmp = handle.name
+    try:
+        privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0600", tmp, str(cfg.etc / "env/cloudflare.env"))
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
+def bootstrap_cloudflare_env(cfg: Config) -> bool:
+    path = cfg.etc / "env/cloudflare.env"
+    token = next((os.environ.get(name, "") for name in ("CF_API_TOKEN", "CLOUDFLARE_API_TOKEN", "AI_DEV_CF_API_TOKEN", "DEVCLUSTER_CF_API_TOKEN") if os.environ.get(name)), "")
+    email = discover_acme_email()
+
+    if not path.exists():
+        if not is_placeholder_token(token):
+            write_cloudflare_env(cfg, token, email)
+            print(f"dotfiles-caddy-install: populated {path} from shell environment.", file=sys.stderr)
+            return True
+        privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0600", str(cfg.src / "env/cloudflare.env.example"), str(path))
+        print(f"dotfiles-caddy-install: created {path} from the example template.", file=sys.stderr)
+        print("Edit it now and set a real CF_API_TOKEN before starting Caddy.", file=sys.stderr)
+        return False
+
+    values = read_env_file(path)
+    file_token = values.get("CF_API_TOKEN", "")
+    file_email = values.get("ACME_EMAIL", "")
+    if is_placeholder_token(file_token):
+        if not is_placeholder_token(token):
+            write_cloudflare_env(cfg, token, email)
+            return True
+        print(f"dotfiles-caddy-install: {path} contains a placeholder token.", file=sys.stderr)
+        return False
+    if is_placeholder_email(file_email):
+        print(f"dotfiles-caddy-install: {path} is missing a real ACME_EMAIL.", file=sys.stderr)
+        return False
+    return True
+
+
+def find_xcaddy(cfg: Config) -> str | None:
+    candidates = [cfg.xcaddy, str(Path.home() / ".local/share/mise/shims/xcaddy"), str(Path.home() / "go/bin/xcaddy"), str(Path.home() / ".local/bin/xcaddy"), "/usr/local/bin/xcaddy"]
+    for candidate in candidates:
+        resolved = shutil.which(candidate) if "/" not in candidate else candidate
+        if resolved and os.access(resolved, os.X_OK):
+            return resolved
+    return None
+
+
+def ensure_xcaddy(cfg: Config) -> str:
+    found = find_xcaddy(cfg)
+    if found:
+        return found
+    if shutil.which(cfg.mise):
+        run([cfg.mise, "use", "--global", "go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest"], check=False)
+        found = find_xcaddy(cfg)
+        if found:
+            return found
+    if shutil.which(cfg.go):
+        run([cfg.go, "install", "github.com/caddyserver/xcaddy/cmd/xcaddy@latest"], check=False)
+        found = find_xcaddy(cfg)
+        if found:
+            return found
+    raise RuntimeError("Neither mise nor go could provide xcaddy")
+
+
+def build_caddy(cfg: Config) -> None:
+    if cfg.caddy_bin.exists():
+        result = run([str(cfg.caddy_bin), "version"], check=False, capture=True)
+        if cfg.caddy_version in result.stdout:
+            return
+    xcaddy = ensure_xcaddy(cfg)
+    with tempfile.TemporaryDirectory() as tmp:
+        built = Path(tmp) / "caddy"
+        run([xcaddy, "build", cfg.caddy_version, "--with", "github.com/caddy-dns/cloudflare", "--output", str(built)])
+        privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0755", str(built), str(cfg.caddy_bin))
+
+
+def validate_config(cfg: Config) -> None:
+    values = read_env_file(cfg.etc / "env/cloudflare.env")
+    child_env = os.environ.copy()
+    child_env.update(values)
+    child_env.setdefault("CF_API_TOKEN", "placeholder-for-validation")
+    child_env.setdefault("ACME_EMAIL", "admin@example.internal")
+    subprocess.run([str(cfg.caddy_bin), "validate", "--config", str(cfg.etc / "Caddyfile"), "--adapter", "caddyfile"], check=True, env=child_env)
+
+
+def deploy_daemon(cfg: Config) -> None:
+    privileged(cfg, "mkdir", "-p", str(cfg.libexec), str(cfg.launchd_dir))
+    privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0755", str(cfg.src / "caddy-start"), str(cfg.libexec / "caddy-start"))
+    plist = cfg.launchd_dir / f"{cfg.launchd_label}.plist"
+    privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(cfg.src / "local.caddy.plist"), str(plist))
+    loaded = run([cfg.launchctl, "list", cfg.launchd_label], check=False).returncode == 0
+    if loaded:
+        privileged(cfg, cfg.launchctl, "kickstart", "-k", f"system/{cfg.launchd_label}")
+    else:
+        privileged(cfg, cfg.launchctl, "bootstrap", "system", str(plist))
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="dotfiles-caddy-install")
+    parser.add_argument("--clean", action="store_true", help="wipe sites/snippets before syncing")
+    parser.add_argument("--reinstall", action="store_true", help="alias for --clean")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    cfg = Config.from_env()
+    if not role_enabled(cfg):
+        print("dotfiles-caddy-install: none of ai-server, cluster, or dev roles is enabled.", file=sys.stderr)
+        return 1
+    create_directories(cfg)
+    if args.clean or args.reinstall:
+        privileged(cfg, "rm", "-rf", str(cfg.etc / "sites"), str(cfg.etc / "snippets"))
+        create_directories(cfg)
+    sync_config(cfg)
+    if not bootstrap_cloudflare_env(cfg):
+        return 0
+    build_caddy(cfg)
+    validate_config(cfg)
+    deploy_daemon(cfg)
     return 0
-  fi
-  if [ -n "${XCADDY_BIN:-}" ] && command -v "$XCADDY_BIN" >/dev/null 2>&1; then
-    XCADDY_BIN="$(command -v "$XCADDY_BIN")"
-    return 0
-  fi
-  if command -v xcaddy >/dev/null 2>&1; then
-    XCADDY_BIN="$(command -v xcaddy)"
-    return 0
-  fi
 
-  if [ -x "$HOME/.local/share/mise/shims/xcaddy" ]; then
-    XCADDY_BIN="$HOME/.local/share/mise/shims/xcaddy"
-    return 0
-  fi
 
-  for candidate in "$HOME"/.local/share/mise/installs/go/*/bin/xcaddy; do
-    if [ -x "$candidate" ]; then
-      XCADDY_BIN="$candidate"
-      return 0
-    fi
-  done
-
-  if command -v "$GO_BIN" >/dev/null 2>&1; then
-    _gobin="$("$GO_BIN" env GOBIN 2>/dev/null || true)"
-    if [ -n "$_gobin" ] && [ -x "$_gobin/xcaddy" ]; then
-      XCADDY_BIN="$_gobin/xcaddy"
-      return 0
-    fi
-    _gopath="$("$GO_BIN" env GOPATH 2>/dev/null || true)"
-    if [ -n "$_gopath" ] && [ -x "$_gopath/bin/xcaddy" ]; then
-      XCADDY_BIN="$_gopath/bin/xcaddy"
-      return 0
-    fi
-  fi
-
-  if [ -n "${GOPATH:-}" ] && [ -x "$GOPATH/bin/xcaddy" ]; then
-    XCADDY_BIN="$GOPATH/bin/xcaddy"
-    return 0
-  fi
-
-  for candidate in \
-    "$HOME/go/bin/xcaddy" \
-    "$HOME/.local/bin/xcaddy" \
-    /usr/local/bin/xcaddy
-  do
-    if [ -x "$candidate" ]; then
-      XCADDY_BIN="$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-ensure_xcaddy() {
-  if find_xcaddy; then
-    return 0
-  fi
-
-  if command -v "$MISE_BIN" >/dev/null 2>&1; then
-    echo "dotfiles-caddy-install: installing xcaddy via mise..." >&2
-    "$MISE_BIN" use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
-    if find_xcaddy; then
-      return 0
-    fi
-  fi
-
-  if command -v "$GO_BIN" >/dev/null 2>&1; then
-    echo "dotfiles-caddy-install: installing xcaddy via go install..." >&2
-    "$GO_BIN" install github.com/caddyserver/xcaddy/cmd/xcaddy@latest || true
-    if find_xcaddy; then
-      return 0
-    fi
-  fi
-
-  echo "dotfiles-caddy-install: Neither 'mise' nor 'go' is available to install xcaddy. Run: mise use --global go:github.com/caddyserver/xcaddy/cmd/xcaddy@latest or go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest" >&2
-  exit 1
-}
-
-usage() {
-  echo "Usage: dotfiles-caddy-install [OPTIONS]" >&2
-  echo "  --clean     Wipe sites/ and snippets/ before syncing" >&2
-  echo "  --reinstall Wipe sites/ and snippets/ before syncing (alias for --clean)" >&2
-  echo "  --help      Show this help message" >&2
-}
-
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --clean|--reinstall)
-      CLEAN_MODE="1"
-      REINSTALL_MODE="1"
-      shift
-      ;;
-    --help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "dotfiles-caddy-install: unknown option $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
-done
-
-build_caddy() {
-  if [ -x "$CADDY_BIN" ] && "$CADDY_BIN" version 2>/dev/null | grep -q "$CADDY_VERSION"; then
-    return 0
-  fi
-  ensure_xcaddy
-  tmp_dir=$(mktemp -d)
-  "$XCADDY_BIN" build "$CADDY_VERSION" --with github.com/caddy-dns/cloudflare --output "$tmp_dir/caddy"
-  run_privileged install $INSTALL_OWNER_FLAGS -m 0755 "$tmp_dir/caddy" "$CADDY_BIN"
-  rm -rf "$tmp_dir"
-}
-
-validate_config() {
-  run_privileged /bin/sh -c "if [ -f \"$CADDY_ETC_DIR/env/cloudflare.env\" ]; then set -a; . \"$CADDY_ETC_DIR/env/cloudflare.env\" 2>/dev/null || true; set +a; fi; CF_API_TOKEN=\"\${CF_API_TOKEN:-placeholder-for-validation}\" ACME_EMAIL=\"\${ACME_EMAIL:-admin@example.internal}\" \"$CADDY_BIN\" validate --config \"$CADDY_ETC_DIR/Caddyfile\" --adapter caddyfile"
-}
-
-deploy_wrapper_and_daemon() {
-  run_privileged mkdir -p "$CADDY_LIBEXEC_DIR" "$LAUNCHD_DIR"
-  run_privileged install $INSTALL_OWNER_FLAGS -m 0755 "$DOTFILES_CADDY_SRC/caddy-start" "$CADDY_LIBEXEC_DIR/caddy-start"
-  run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/local.caddy.plist" "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
-
-  if "$LAUNCHCTL_BIN" list "$LAUNCHD_LABEL" >/dev/null 2>&1; then
-    run_privileged "$LAUNCHCTL_BIN" kickstart -k "system/$LAUNCHD_LABEL"
-  else
-    run_privileged "$LAUNCHCTL_BIN" bootstrap system "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
-  fi
-}
-
-warn_on_placeholder_acme_email "$(discover_acme_email)"
-
-require_role
-create_directories
-if [ "$CLEAN_MODE" = "1" ] || [ "$REINSTALL_MODE" = "1" ]; then
-  run_privileged rm -rf "$CADDY_ETC_DIR/sites" "$CADDY_ETC_DIR/snippets"
-  create_directories
-  echo "dotfiles-caddy-install: cleaned $CADDY_ETC_DIR/sites and $CADDY_ETC_DIR/snippets" >&2
-fi
-sync_config
-bootstrap_cloudflare_env
-build_caddy
-validate_config
-deploy_wrapper_and_daemon
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (subprocess.CalledProcessError, RuntimeError) as exc:
+        print(f"dotfiles-caddy-install: {exc}", file=sys.stderr)
+        raise SystemExit(1)
