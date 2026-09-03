@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: '3.13'
           working-directory: .config/dotfiles
@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: '3.13'
           working-directory: .config/dotfiles
