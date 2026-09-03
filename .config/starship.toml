@@ -18,25 +18,3 @@ vimcmd_symbol = "[❮](bold cyan)"
 [git_branch]
 format = "[git:$branch]($style) "
 style = "bold magenta"
-
-[custom.git_status_compact]
-command = '''
-  count=$(git status --porcelain 2>/dev/null | wc -l | tr -d " \t")
-  sync=""
-  if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
-    ahead=$(git rev-list --count @{u}..HEAD 2>/dev/null)
-    behind=$(git rev-list --count HEAD..@{u} 2>/dev/null)
-    if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
-      sync=" ⇕⇡${ahead}⇣${behind}"
-    elif [ "$ahead" -gt 0 ]; then
-      sync=" ⇡${ahead}"
-    elif [ "$behind" -gt 0 ]; then
-      sync=" ⇣${behind}"
-    fi
-  fi
-  echo "[ ±${count}${sync} ]"
-'''
-when = 'git rev-parse --is-inside-work-tree > /dev/null 2>&1'
-require_repo = true
-format = '[$output]($style) '
-style = 'bold yellow'

@@ -1,6 +1,0 @@
-# Example site configuration using internal TLS for local development.
-# Copy to sites/<name>.local.caddy (or sites/<name>.caddy) and adapt host and port.
-app.local.test {
-	import local_tls
-	reverse_proxy localhost:3000
-}
