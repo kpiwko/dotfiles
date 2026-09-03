@@ -35,7 +35,9 @@ def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str,
     )
     make_executable(
         stubs / "devcluster-kubectl",
-        'echo "kubectl $*"\nif [ "$1" = create ]; then echo "kind: Secret"; fi\nif [ "$1" = apply ] && [ "$2" = -f ]; then cat >/dev/null; fi\n',
+        'echo "kubectl $*"\n'
+        'if [ "$1" = create ]; then echo "kind: Secret"; fi\n'
+        'if [ "$1" = apply ] && [ "$2" = -f ]; then cat; fi\n',
     )
     env = clean_env | {
         "K8S_DIR": str(k8s),
@@ -61,7 +63,7 @@ def test_create_requires_cluster_role(devcluster_env: tuple[dict[str, str], Path
 
 
 def test_create_uses_kind_config(devcluster_env: tuple[dict[str, str], Path]) -> None:
-    env, tmp = devcluster_env
+    env, _ = devcluster_env
     Path(env["DOTFILES_ROLES_FILE"]).write_text("cluster\n")
     config = Path(env["K8S_DIR"]) / "kind-config.yaml"
     config.write_text("kind: Cluster\n")
