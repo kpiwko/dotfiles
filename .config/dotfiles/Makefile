@@ -1,8 +1,9 @@
 # Makefile for dotfiles cluster management
 
 SHELL := /bin/sh
+PYTEST ?= uv run --group test pytest
 
-.PHONY: all test cluster-create cluster-up cluster-status cluster-logs cluster-down cluster-delete
+.PHONY: all test test-binary cluster-create cluster-up cluster-status cluster-logs cluster-down cluster-delete
 
 all: help
 
@@ -10,18 +11,22 @@ help:
 	@echo "Dotfiles Cluster Management"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make test               Run all tests"
-	@echo "  make cluster-create     Create Kind cluster"
-	@echo "  make cluster-up         Deploy kustomize manifests"
-	@echo "  make cluster-status     Show cluster status"
-	@echo "  make cluster-logs       Show logs (use LOGS_POD=<pod>)"
-	@echo "  make cluster-down       Stop cluster"
-	@echo "  make cluster-delete     Delete cluster"
+	@echo "  make test                       Run all pytest tests via uv"
+	@echo "  make test-binary BINARY=<name>  Run tests for one .local/bin executable"
+	@echo "  make cluster-create             Create Kind cluster"
+	@echo "  make cluster-up                 Deploy kustomize manifests"
+	@echo "  make cluster-status             Show cluster status"
+	@echo "  make cluster-logs               Show logs (use LOGS_POD=<pod>)"
+	@echo "  make cluster-down               Stop cluster"
+	@echo "  make cluster-delete             Delete cluster"
 	@echo ""
 
 test:
-	@echo "Running tests..."
-	@bats tests/*.bats
+	@$(PYTEST)
+
+test-binary:
+	@if [ -z "$(BINARY)" ]; then echo "Usage: make test-binary BINARY=<.local/bin name>" >&2; exit 2; fi
+	@$(PYTEST) --binary "$(BINARY)"
 
 cluster-create:
 	@echo "Creating Kind cluster..."
