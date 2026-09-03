@@ -1,8 +1,7 @@
 # Makefile for dotfiles cluster management
 
 SHELL := /bin/sh
-PYTHON ?= python3
-PYTEST ?= $(PYTHON) -m pytest
+PYTEST ?= uv run --group test pytest
 
 .PHONY: all test test-binary cluster-create cluster-up cluster-status cluster-logs cluster-down cluster-delete
 
@@ -12,7 +11,7 @@ help:
 	@echo "Dotfiles Cluster Management"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make test                       Run all pytest tests"
+	@echo "  make test                       Run all pytest tests via uv"
 	@echo "  make test-binary BINARY=<name>  Run tests for one .local/bin executable"
 	@echo "  make cluster-create             Create Kind cluster"
 	@echo "  make cluster-up                 Deploy kustomize manifests"
