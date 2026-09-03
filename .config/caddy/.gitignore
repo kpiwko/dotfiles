@@ -1,2 +1,4 @@
 *.local.caddy
 sites/*.local.caddy
+*.example
+sites/*.example

@@ -1,5 +1,5 @@
 {
-	email you@example.com
+	email {$ACME_EMAIL}
 }
 
 import snippets/*.caddy

@@ -120,7 +120,8 @@ ACME challenges.
   - `snippets/local-tls.caddy` (`(local_tls)`): Internal TLS using Caddy's built-in root CA for local development (`tls internal`).
   - `snippets/cloudflare-tls.caddy` (`(cloudflare_tls)`): Cloudflare DNS-01 ACME challenge for public/internal domain resolution.
 - Host-specific local site configs matching `*.local.caddy` (such as `sites/my-app.local.caddy`) are ignored in Git, allowing per-host site configuration without dirtying repository state.
-- Fronting `devcluster` services: Caddy can reverse proxy local cluster services exposed via NodePort / HostPort, such as Langfuse Web (`127.0.0.1:17900`), Workspace MCP (`127.0.0.1:17981`), NotebookLM MCP (`127.0.0.1:17980`), and NotebookLM noVNC (`127.0.0.1:17982`). See `sites/tracing.caddy`, `sites/mcp.caddy.example`, and `sites/local-dev.caddy.example`.
+- Fronting `devcluster` services: Caddy can reverse proxy local cluster services exposed via NodePort / HostPort, such as Langfuse Web (`127.0.0.1:17900`), Workspace MCP (`127.0.0.1:17981`), NotebookLM MCP (`127.0.0.1:17980`), and NotebookLM noVNC (`127.0.0.1:17982`). See `sites/tracing.caddy.example`, `sites/mcp.caddy.example`, and `sites/app.local.caddy`.
+- **ACME Email Configuration**: Let's Encrypt notifications use the first defined in this hierarchy: `DNS_ACME_EMAIL` > `ACME_EMAIL` > `git config --get user.email`. Set `DNS_ACME_EMAIL` (or `ACME_EMAIL`) in your shell environment (e.g. `~/.config/zsh/10-env.zsh`). The `dotfiles-caddy-install` script warns if no email is configured.
 - The Cloudflare API token is never in the plist. `caddy-start` sources it
   from `/usr/local/etc/caddy/env/cloudflare.env` into its own process
   environment right before `exec`ing `caddy run`.
@@ -184,9 +185,10 @@ Two flavors of "never commit this" exist in this repo:
 
 ## Adding another Caddy site
 
-1. Add a new file under `.config/caddy/sites/`, e.g. `sites/notes.caddy` or `sites/app.local.caddy`. See `sites/local-dev.caddy.example` for a local dev template.
-2. Commit tracked site definitions as usual.
-3. Rerun `dotfiles-caddy-install` — it syncs `sites/` with `rsync --delete`, validates, and reloads.
+1. Add a new file under `.config/caddy/sites/`, e.g. `sites/notes.caddy` or `sites/app.local.caddy`. See `sites/app.local.caddy` for a working example or rename one of the `.example` templates.
+2. Templates ending in `.example` are not imported by the `import sites/*.caddy` directive — rename them to remove the `.example` suffix to enable.
+3. Commit tracked site definitions as usual.
+4. Rerun `dotfiles-caddy-install` — it syncs `sites/` with `rsync --delete`, validates, and reloads.
 
 # Kubernetes (Kind) Cluster Role
 

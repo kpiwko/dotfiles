@@ -19,6 +19,9 @@ XCADDY_BIN="${XCADDY_BIN:-xcaddy}"
 GO_BIN="${GO_BIN:-go}"
 MISE_BIN="${MISE_BIN:-mise}"
 
+CLEAN_MODE="${CLEAN_MODE:-0}"
+REINSTALL_MODE="${REINSTALL_MODE:-0}"
+
 run_privileged() {
   if [ -n "$SUDO" ]; then
     "$SUDO" "$@"
@@ -42,8 +45,8 @@ create_directories() {
 }
 
 sync_config() {
-  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG "$DOTFILES_CADDY_SRC/sites/" "$CADDY_ETC_DIR/sites/"
-  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG "$DOTFILES_CADDY_SRC/snippets/" "$CADDY_ETC_DIR/snippets/"
+  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG --exclude='*.example' "$DOTFILES_CADDY_SRC/sites/" "$CADDY_ETC_DIR/sites/"
+  run_privileged rsync -a --delete $RSYNC_CHOWN_FLAG --exclude='*.example' "$DOTFILES_CADDY_SRC/snippets/" "$CADDY_ETC_DIR/snippets/"
   run_privileged install $INSTALL_OWNER_FLAGS -m 0644 "$DOTFILES_CADDY_SRC/Caddyfile" "$CADDY_ETC_DIR/Caddyfile"
 }
 
@@ -58,43 +61,110 @@ is_placeholder_token() {
   esac
 }
 
+is_placeholder_email() {
+  case "$1" in
+    "") return 0 ;;
+    "you@example.com") return 0 ;;
+    "admin@example.com") return 0 ;;
+    "user@example.com") return 0 ;;
+    "changeme") return 0 ;;
+    *@example.com) return 0 ;;
+    *@example.internal) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 write_cloudflare_env() {
   token="$1"
+  acme_email="${2:-}"
   tmp_env="$(mktemp)"
-  cat > "$tmp_env" <<EOF
+  if [ -n "$acme_email" ] && ! is_placeholder_email "$acme_email"; then
+    cat > "$tmp_env" <<EOF
+# Copied to $CADDY_ETC_DIR/env/cloudflare.env by dotfiles-caddy-install
+CF_API_TOKEN=$token
+ACME_EMAIL=$acme_email
+EOF
+  else
+    cat > "$tmp_env" <<EOF
 # Copied to $CADDY_ETC_DIR/env/cloudflare.env by dotfiles-caddy-install
 CF_API_TOKEN=$token
 EOF
+  fi
   run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$tmp_env" "$CADDY_ETC_DIR/env/cloudflare.env"
   rm -f "$tmp_env"
+}
+
+discover_acme_email() {
+  if [ -n "${DNS_ACME_EMAIL:-}" ] && ! is_placeholder_email "$DNS_ACME_EMAIL"; then
+    printf '%s' "$DNS_ACME_EMAIL"
+  elif [ -n "${ACME_EMAIL:-}" ] && ! is_placeholder_email "$ACME_EMAIL"; then
+    printf '%s' "$ACME_EMAIL"
+  else
+    git config --get user.email 2>/dev/null | while read -r email; do
+      if [ -n "$email" ] && ! is_placeholder_email "$email"; then
+        printf '%s' "$email"
+        break
+      fi
+    done || true
+  fi
+}
+
+warn_on_placeholder_acme_email() {
+  email="${1:-}"
+  if [ -z "$email" ] || is_placeholder_email "$email"; then
+    echo "dotfiles-caddy-install: WARNING: ACME_EMAIL is not configured. Set DNS_ACME_EMAIL or ACME_EMAIL in your shell environment." >&2
+    echo "Using fallback from git config if available, but this will likely fail for Let's Encrypt verification." >&2
+  fi
 }
 
 bootstrap_cloudflare_env() {
   env_file="$CADDY_ETC_DIR/env/cloudflare.env"
   env_token="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-${AI_DEV_CF_API_TOKEN:-${DEVCLUSTER_CF_API_TOKEN:-}}}}"
+  acme_email="$(discover_acme_email)"
 
   if ! run_privileged test -f "$env_file"; then
     if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
-      write_cloudflare_env "$env_token"
-      echo "dotfiles-caddy-install: populated $env_file with API token from shell environment." >&2
+      write_cloudflare_env "$env_token" "$acme_email"
+      echo "dotfiles-caddy-install: populated $env_file with API token and ACME_EMAIL from shell environment." >&2
     else
+      # Create from example, then update if we have a valid email
       run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$DOTFILES_CADDY_SRC/env/cloudflare.env.example" "$env_file"
       echo "dotfiles-caddy-install: created $env_file from the example template." >&2
+      
+      # If we have a valid email, update it in the file
+      if [ -n "$acme_email" ] && ! is_placeholder_email "$acme_email"; then
+        tmp_env="$(mktemp)"
+        cat "$env_file" | sed "s/^ACME_EMAIL=.*/ACME_EMAIL=$acme_email/" > "$tmp_env"
+        run_privileged install $INSTALL_OWNER_FLAGS -m 0600 "$tmp_env" "$env_file"
+        rm -f "$tmp_env"
+        echo "dotfiles-caddy-install: updated ACME_EMAIL in $env_file from shell environment." >&2
+      fi
+      
       echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
       exit 0
     fi
   else
     file_token="$(run_privileged /bin/sh -c "CF_API_TOKEN=''; . '$env_file' 2>/dev/null || true; printf '%s' \"\$CF_API_TOKEN\"" 2>/dev/null || true)"
+    file_email="$(run_privileged /bin/sh -c "ACME_EMAIL=''; . '$env_file' 2>/dev/null || true; printf '%s' \"\$ACME_EMAIL\"" 2>/dev/null || true)"
     if is_placeholder_token "$file_token"; then
       if [ -n "$env_token" ] && ! is_placeholder_token "$env_token"; then
-        write_cloudflare_env "$env_token"
-        echo "dotfiles-caddy-install: updated placeholder in $env_file with API token from shell environment." >&2
+        write_cloudflare_env "$env_token" "$acme_email"
+        echo "dotfiles-caddy-install: updated placeholder in $env_file with API token and ACME_EMAIL from shell environment." >&2
       else
         echo "dotfiles-caddy-install: $env_file contains placeholder token ($file_token)." >&2
         echo "Edit it now and set a real CF_API_TOKEN before starting Caddy." >&2
         exit 0
       fi
+    elif is_placeholder_email "$file_email" || [ -z "$file_email" ]; then
+      # Token is valid but email is missing or placeholder - do not update
+      # The user should manually edit the file to add/update email
+      if is_placeholder_email "$file_email"; then
+        echo "dotfiles-caddy-install: $env_file contains placeholder email ($file_email)." >&2
+        echo "Edit it now and set a real ACME_EMAIL before starting Caddy." >&2
+        exit 0
+      fi
     fi
+    # File has a real token and email - do not modify it
   fi
 }
 
@@ -180,6 +250,32 @@ ensure_xcaddy() {
   exit 1
 }
 
+usage() {
+  echo "Usage: dotfiles-caddy-install [OPTIONS]" >&2
+  echo "  --clean     Wipe sites/ and snippets/ before syncing" >&2
+  echo "  --reinstall Wipe sites/ and snippets/ before syncing (alias for --clean)" >&2
+  echo "  --help      Show this help message" >&2
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --clean|--reinstall)
+      CLEAN_MODE="1"
+      REINSTALL_MODE="1"
+      shift
+      ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "dotfiles-caddy-install: unknown option $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
 build_caddy() {
   if [ -x "$CADDY_BIN" ] && "$CADDY_BIN" version 2>/dev/null | grep -q "$CADDY_VERSION"; then
     return 0
@@ -192,7 +288,7 @@ build_caddy() {
 }
 
 validate_config() {
-  run_privileged /bin/sh -c "if [ -f \"$CADDY_ETC_DIR/env/cloudflare.env\" ]; then set -a; . \"$CADDY_ETC_DIR/env/cloudflare.env\" 2>/dev/null || true; set +a; fi; CF_API_TOKEN=\"\${CF_API_TOKEN:-placeholder-for-validation}\" \"$CADDY_BIN\" validate --config \"$CADDY_ETC_DIR/Caddyfile\" --adapter caddyfile"
+  run_privileged /bin/sh -c "if [ -f \"$CADDY_ETC_DIR/env/cloudflare.env\" ]; then set -a; . \"$CADDY_ETC_DIR/env/cloudflare.env\" 2>/dev/null || true; set +a; fi; CF_API_TOKEN=\"\${CF_API_TOKEN:-placeholder-for-validation}\" ACME_EMAIL=\"\${ACME_EMAIL:-admin@example.internal}\" \"$CADDY_BIN\" validate --config \"$CADDY_ETC_DIR/Caddyfile\" --adapter caddyfile"
 }
 
 deploy_wrapper_and_daemon() {
@@ -207,8 +303,15 @@ deploy_wrapper_and_daemon() {
   fi
 }
 
+warn_on_placeholder_acme_email "$(discover_acme_email)"
+
 require_role
 create_directories
+if [ "$CLEAN_MODE" = "1" ] || [ "$REINSTALL_MODE" = "1" ]; then
+  run_privileged rm -rf "$CADDY_ETC_DIR/sites" "$CADDY_ETC_DIR/snippets"
+  create_directories
+  echo "dotfiles-caddy-install: cleaned $CADDY_ETC_DIR/sites and $CADDY_ETC_DIR/snippets" >&2
+fi
 sync_config
 bootstrap_cloudflare_env
 build_caddy
