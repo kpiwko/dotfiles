@@ -170,7 +170,7 @@ To change the pinned Caddy version or add another `xcaddy` module, edit the
 - `caddy validate --config /usr/local/etc/caddy/Caddyfile --adapter caddyfile`
   — check the deployed config directly.
 - `sudo launchctl print system/local.caddy` — confirm the daemon is loaded and see its last exit status.
-- `sudo launchctl kickstart -k system/local.caddy` — force a clean restart.
+- `sudo launchctl bootout system/local.caddy && sudo launchctl bootstrap system /Library/LaunchDaemons/local.caddy.plist` — force a clean restart (reloads plist if changed).
 
 ## Certificates
 
