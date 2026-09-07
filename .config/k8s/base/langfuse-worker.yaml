@@ -16,9 +16,20 @@ spec:
       labels:
         app: langfuse-worker
     spec:
+      initContainers:
+        - name: wait-for-langfuse-web
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -O /dev/null http://langfuse-web:3000/api/public/health; do
+                echo "Waiting for Langfuse web migrations/readiness..."
+                sleep 2
+              done
       containers:
         - name: langfuse-worker
-          image: langfuse/langfuse-worker:3
+          image: docker.langfuse.com/langfuse/langfuse-worker:4.30.0
           envFrom:
             - configMapRef:
                 name: langfuse-config
