@@ -2,6 +2,19 @@
 
 This directory contains Kubernetes manifests for the AI development infrastructure managed by devcluster.
 
+## NotebookLM MCP Authentication Guide
+
+NotebookLM uses session-based authentication rather than standard OAuth tokens. To authenticate:
+
+1. Open the noVNC interface in your browser:
+   `http://localhost:17982/vnc.html` (click **Connect**)
+2. In your host terminal, run:
+   ```bash
+   KUBECONFIG=~/.kube/opencode-devcluster kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
+   ```
+3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account (`kpiwko@redhat.com`).
+4. Once logged in, session tokens are saved to the container volume and the MCP endpoint at `http://localhost:17980/mcp` is live.
+
 ## Stack Overview
 
 The stack includes:

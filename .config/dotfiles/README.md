@@ -2,6 +2,19 @@
 
 See [The best way to store your dotfiles: A bare Git repository](https://www.ackama.com/articles/the-best-way-to-store-your-dotfiles-a-bare-git-repository-explained/)
 
+# NotebookLM MCP Authentication Guide
+
+NotebookLM uses session-based authentication rather than standard OAuth tokens. To authenticate:
+
+1. Open the noVNC interface in your browser:
+   `http://localhost:17982/vnc.html` (click **Connect**)
+2. In your host terminal, run:
+   ```bash
+   KUBECONFIG=~/.kube/opencode-devcluster kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
+   ```
+3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account (`kpiwko@redhat.com`).
+4. Once logged in, session tokens are saved to the container volume and the MCP endpoint at `http://localhost:17980/mcp` is live.
+
 # Initialize the repository
 
 ```zsh
