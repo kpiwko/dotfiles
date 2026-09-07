@@ -71,6 +71,26 @@ def privileged(cfg: Config, *cmd: str, check: bool = True, capture: bool = False
     return run([*cfg.sudo, *cmd], check=check, capture=capture)
 
 
+def privileged_exists(cfg: Config, path: Path) -> bool:
+    return privileged(cfg, "test", "-e", str(path), check=False).returncode == 0
+
+
+def read_env_file(cfg: Config, path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        result = privileged(cfg, "cat", str(path), capture=True, check=False)
+        if result.returncode == 0:
+            for raw in result.stdout.splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    except (FileNotFoundError, PermissionError):
+        pass
+    return values
+
+
 def role_enabled(cfg: Config) -> bool:
     for role in ("ai-server", "cluster", "dev"):
         result = run([cfg.role_bin, "has", role], check=False)
@@ -123,20 +143,6 @@ def sync_config(cfg: Config) -> None:
     privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(cfg.src / "Caddyfile"), str(cfg.etc / "Caddyfile"))
 
 
-def read_env_file(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    try:
-        for raw in path.read_text().splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            values[key.strip()] = value.strip().strip('"').strip("'")
-    except (FileNotFoundError, PermissionError):
-        pass
-    return values
-
-
 def write_cloudflare_env(cfg: Config, token: str, email: str) -> None:
     lines = [f"# Copied to {cfg.etc}/env/cloudflare.env by dotfiles-caddy-install", f"CF_API_TOKEN={token}"]
     if not is_placeholder_email(email):
@@ -155,7 +161,7 @@ def bootstrap_cloudflare_env(cfg: Config) -> bool:
     token = next((os.environ.get(name, "") for name in ("CF_API_TOKEN", "CLOUDFLARE_API_TOKEN", "AI_DEV_CF_API_TOKEN", "DEVCLUSTER_CF_API_TOKEN") if os.environ.get(name)), "")
     email = discover_acme_email()
 
-    if not path.exists():
+    if not privileged_exists(cfg, path):
         if not is_placeholder_token(token):
             write_cloudflare_env(cfg, token, email)
             print(f"dotfiles-caddy-install: populated {path} from shell environment.", file=sys.stderr)
@@ -165,7 +171,7 @@ def bootstrap_cloudflare_env(cfg: Config) -> bool:
         print("Edit it now and set a real CF_API_TOKEN before starting Caddy.", file=sys.stderr)
         return False
 
-    values = read_env_file(path)
+    values = read_env_file(cfg, path)
     file_token = values.get("CF_API_TOKEN", "")
     file_email = values.get("ACME_EMAIL", "")
     if is_placeholder_token(file_token):
@@ -219,7 +225,7 @@ def build_caddy(cfg: Config) -> None:
 
 
 def validate_config(cfg: Config) -> None:
-    values = read_env_file(cfg.etc / "env/cloudflare.env")
+    values = read_env_file(cfg, cfg.etc / "env/cloudflare.env")
     child_env = os.environ.copy()
     child_env.update(values)
     child_env.setdefault("CF_API_TOKEN", "placeholder-for-validation")
