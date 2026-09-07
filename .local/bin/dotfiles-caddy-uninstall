@@ -1,41 +1,87 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env python3
+"""Uninstall the dotfiles-managed Caddy service."""
 
-SUDO="${SUDO-sudo}"
-DOTFILES_ROLE_BIN="${DOTFILES_ROLE_BIN:-dotfiles-role}"
-CADDY_BIN="${CADDY_BIN:-/usr/local/bin/caddy}"
-CADDY_LIBEXEC_DIR="${CADDY_LIBEXEC_DIR:-/usr/local/libexec}"
-LAUNCHD_DIR="${LAUNCHD_DIR:-/Library/LaunchDaemons}"
-LAUNCHD_LABEL="${LAUNCHD_LABEL:-local.caddy}"
-LAUNCHCTL_BIN="${LAUNCHCTL_BIN:-launchctl}"
+from __future__ import annotations
 
-run_privileged() {
-  if [ -n "$SUDO" ]; then
-    "$SUDO" "$@"
-  else
-    "$@"
-  fi
-}
+import os
+import shlex
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
 
-require_role() {
-  if ! "$DOTFILES_ROLE_BIN" has ai-server && ! "$DOTFILES_ROLE_BIN" has cluster && ! "$DOTFILES_ROLE_BIN" has dev; then
-    echo "dotfiles-caddy-uninstall: none of ai-server, cluster, or dev roles is enabled." >&2
-    exit 1
-  fi
-}
 
-stop_daemon() {
-  if "$LAUNCHCTL_BIN" print "system/$LAUNCHD_LABEL" >/dev/null 2>&1; then
-    run_privileged "$LAUNCHCTL_BIN" bootout "system/$LAUNCHD_LABEL" || true
-  fi
-}
+def env(name: str, default: str) -> str:
+    return os.environ.get(name, default)
 
-remove_files() {
-  run_privileged rm -f "$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
-  run_privileged rm -f "$CADDY_LIBEXEC_DIR/caddy-start"
-  run_privileged rm -f "$CADDY_BIN"
-}
 
-require_role
-stop_daemon
-remove_files
+@dataclass(frozen=True)
+class Config:
+    sudo: tuple[str, ...]
+    role_bin: str
+    caddy_bin: Path
+    libexec: Path
+    launchd_dir: Path
+    launchd_label: str
+    launchctl: str
+
+    @classmethod
+    def from_env(cls) -> "Config":
+        return cls(
+            sudo=tuple(shlex.split(env("SUDO", "sudo"))),
+            role_bin=env("DOTFILES_ROLE_BIN", "dotfiles-role"),
+            caddy_bin=Path(env("CADDY_BIN", "/usr/local/bin/caddy")),
+            libexec=Path(env("CADDY_LIBEXEC_DIR", "/usr/local/libexec")),
+            launchd_dir=Path(env("LAUNCHD_DIR", "/Library/LaunchDaemons")),
+            launchd_label=env("LAUNCHD_LABEL", "local.caddy"),
+            launchctl=env("LAUNCHCTL_BIN", "launchctl"),
+        )
+
+
+def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, check=check, text=True)
+
+
+def privileged(cfg: Config, *cmd: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return run([*cfg.sudo, *cmd], check=check)
+
+
+def role_enabled(cfg: Config) -> bool:
+    return any(
+        run([cfg.role_bin, "has", role], check=False).returncode == 0
+        for role in ("ai-server", "cluster", "dev")
+    )
+
+
+def stop_daemon(cfg: Config) -> None:
+    target = f"system/{cfg.launchd_label}"
+    if run([cfg.launchctl, "print", target], check=False).returncode == 0:
+        privileged(cfg, cfg.launchctl, "bootout", target, check=False)
+
+
+def remove_files(cfg: Config) -> None:
+    privileged(cfg, "rm", "-f", str(cfg.launchd_dir / f"{cfg.launchd_label}.plist"))
+    privileged(cfg, "rm", "-f", str(cfg.libexec / "caddy-start"))
+    privileged(cfg, "rm", "-f", str(cfg.caddy_bin))
+
+
+def main() -> int:
+    cfg = Config.from_env()
+    if not role_enabled(cfg):
+        print(
+            "dotfiles-caddy-uninstall: none of ai-server, cluster, or dev roles is enabled.",
+            file=sys.stderr,
+        )
+        return 1
+
+    stop_daemon(cfg)
+    remove_files(cfg)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"dotfiles-caddy-uninstall: {exc}", file=sys.stderr)
+        raise SystemExit(1)

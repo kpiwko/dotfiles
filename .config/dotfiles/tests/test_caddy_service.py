@@ -37,7 +37,7 @@ def test_caddy_uninstall_removes_installed_files(tmp_path: Path, clean_env: dict
     role = fake / "dotfiles-role"
     make_executable(role, '[ "$1" = has ] && [ "$2" = dev ]\n')
     launchctl = fake / "launchctl"
-    make_executable(launchctl, '[ "$1" = list ] && exit 1\nexit 0\n')
+    make_executable(launchctl, '[ "$1" = print ] && exit 1\nexit 0\n')
     caddy = fake / "caddy"
     caddy.write_text("x")
     libexec = tmp_path / "libexec"
@@ -58,3 +58,8 @@ def test_caddy_uninstall_removes_installed_files(tmp_path: Path, clean_env: dict
     assert not caddy.exists()
     assert not (libexec / "caddy-start").exists()
     assert not (launchd / "local.caddy.plist").exists()
+
+
+@pytest.mark.binary("dotfiles-caddy-uninstall")
+def test_caddy_uninstall_is_python() -> None:
+    assert (BIN / "dotfiles-caddy-uninstall").read_text().startswith("#!/usr/bin/env python3\n")
