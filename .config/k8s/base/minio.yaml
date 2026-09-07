@@ -101,6 +101,20 @@ spec:
     - port: 9000
       targetPort: 9000
       name: api
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-console
+  namespace: ai-dev
+  labels:
+    app.kubernetes.io/name: minio-console
+    app.kubernetes.io/part-of: ai-infrastructure
+spec:
+  selector:
+    app: minio
+  ports:
     - port: 9001
       targetPort: 9001
       nodePort: 17901

@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: langfuse-web
-          image: langfuse/langfuse:3
+          image: docker.langfuse.com/langfuse/langfuse:4.30.0
           ports:
             - containerPort: 3000
               name: http
