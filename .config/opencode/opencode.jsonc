@@ -1,7 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    "superpowers@git+https://github.com/obra/superpowers.git"
+    "superpowers@git+https://github.com/obra/superpowers.git",
+    "@langfuse/opencode-observability-plugin@latest"
   ],
   "mcp": {
     "Atlassian": {
@@ -13,128 +14,73 @@
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
-      },
+      "headers": {"Authorization": "Bearer {env:CONTEXT7_API_KEY}"},
       "enabled": true
     },
-    "notebooklm": {
-      "type": "remote",
-      "url": "{env:NOTEBOOKLM_MCP_URL}",
-      "enabled": true
-    },
-    "workspace": {
-      "type": "remote",
-      "url": "{env:WORKSPACE_MCP_URL}",
-      "enabled": true
-    }
+    "notebooklm": {"type": "remote", "url": "{env:NOTEBOOKLM_MCP_URL}", "enabled": true},
+    "workspace": {"type": "remote", "url": "{env:WORKSPACE_MCP_URL}", "enabled": true}
   },
-  "tools": {
-    "Atlassian*": false,
-    "context7*": false
-  },
+  "tools": {"Atlassian*": false, "context7*": false},
   "compaction": {
     "auto": true,
     "prune": true,
     "preserve_recent_tokens": 8000,
-    "reserved": 40000
+    "reserved": 16000
   },
   "provider": {
-    "openai": { 
-      "options": {
-        "apiKey": "{env:OPENAI_API_KEY}"
-      },
+    "openai": {
+      "name": "OpenAI",
+      "options": {"apiKey": "{env:OPENAI_API_KEY}"},
       "models": {
-        "gpt-5.6-terra": {
-          "name": "GPT-5.6 Terra"
-        }
+        "gpt-5.6-luna": {"name": "GPT-5.6 Luna"},
+        "gpt-5.6-terra": {"name": "GPT-5.6 Terra"}
       }
     },
     "omlx": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "omlx",
-      "options": {
-        "baseURL": "{env:OMLX_BASE_URL}",
-        "apiKey": "{env:OMLX_API_KEY}"
-      },
+      "options": {"baseURL": "{env:OMLX_BASE_URL}", "apiKey": "{env:OMLX_API_KEY}"},
       "models": {
         "Qwen3-Coder-Next-6bit": {
           "modelID": "Qwen3-Coder-Next-6bit",
           "name": "Qwen3 Coder",
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "limit": {
-            "context": 150000,
-            "output": 16000
-          },
-          "options": {
-            "extraBody": {
-              "chat_template_kwargs": {
-                "enable_thinking": false,
-                "preserve_thinking": false
-              }
-            }
-          }
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 60000, "output": 16000},
+          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
         },
         "Qwen3.8-27B-bf16": {
           "modelID": "Qwen3.8-27B-bf16",
           "name": "Qwen3.8 Full",
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "limit": {
-            "context": 250000,
-            "output": 16000
-          },
-          "options": {
-            "extraBody": {
-              "chat_template_kwargs": {
-                "enable_thinking": false,
-                "preserve_thinking": false
-              }
-            }
-          }
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000},
+          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
         },
         "Qwen3.8-27B-8bit": {
           "modelID": "Qwen3.8-27B-8bit",
           "name": "Qwen3.8",
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          },
-          "options": {
-            "extraBody": {
-              "chat_template_kwargs": {
-                "enable_thinking": false,
-                "preserve_thinking": false
-              }
-            }
-          }
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
+        }
+      }
+    },
+    "litemaas": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteMaaS",
+      "options": {
+        "baseURL": "{env:LITEMAAS_BASE_URL}",
+        "apiKey": "{env:LITEMAAS_API_KEY}"
+      },
+      "models": {
+        "Qwen3.8-27B-NT": {
+          "modelID": "Qwen3.8-27B-NT",
+          "name": "Qwen3.8 27B NT",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 60000, "output": 16000}
         }
       }
     }
   },
   "default_agent": "orchestrator",
-  "model": "google-vertex/gemini-3.7-flash",
-  "experimental": {
-    "openTelemetry": true
-  }
+  "model": "openai/gpt-5.6-luna",
+  "experimental": {"openTelemetry": true}
 }
