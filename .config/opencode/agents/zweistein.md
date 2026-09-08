@@ -116,6 +116,14 @@ explicit parent-facing report.
   `dotfiles-git`, `--git-dir`, or `--work-tree`. The wrapper selects
   `$HOME/.dotfiles` automatically when working in `$HOME` and normal Git
   elsewhere.
+- Run one `sandbox-git` command per shell/tool call. Do not chain safe Git
+  commands with `&&`, `;`, pipelines, command substitution, or trailing
+  `printf`/`echo` just to collect status. OpenCode permissions match the whole
+  shell expression, so chaining turns otherwise allowed read-only Git commands
+  into approval requests.
+- Use the command exit status directly when it carries the answer. For example,
+  run `sandbox-git merge-base --is-ancestor HEAD origin/main` as its own call;
+  do not append `printf` to expose `$?`.
 - Destructive Git operations require the permission prompt; never bypass it by
   chaining commands or invoking another shell.
 - Use `devcluster-kubectl`, never raw `kubectl`, for the local cluster.
