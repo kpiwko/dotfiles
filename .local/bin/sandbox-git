@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  printf 'sandbox-git: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ $# -gt 0 ]] || fail "missing git subcommand"
+
+if [[ "$PWD" == "$HOME" ]]; then
+  [[ -d "$HOME/.dotfiles" ]] || fail "dotfiles repository '$HOME/.dotfiles' does not exist"
+  GIT=(git --git-dir="$HOME/.dotfiles" --work-tree="$HOME")
+else
+  GIT=(git)
+fi
+
+subcommand="$1"
+shift
+
+if [[ "$subcommand" == "push" ]]; then
+  "${GIT[@]}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a Git repository"
+
+  branch="$("${GIT[@]}" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  [[ -n "$branch" ]] || fail "detached HEAD; refusing to push"
+
+  default_branch=""
+  default_ref="$("${GIT[@]}" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  if [[ -n "$default_ref" ]]; then
+    default_branch="${default_ref#origin/}"
+  fi
+  if [[ -z "$default_branch" ]]; then
+    default_branch="$("${GIT[@]}" remote show origin 2>/dev/null | sed -n 's/^[[:space:]]*HEAD branch: //p' | head -n1 || true)"
+  fi
+
+  case "$branch" in
+    "$default_branch"|main|master|trunk|develop|development|stable|production|prod|release|release/*|hotfix|hotfix/*)
+      fail "refusing to push protected/significant branch '$branch'"
+      ;;
+  esac
+
+  upstream="$("${GIT[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  if [[ -n "$upstream" ]]; then
+    upstream_remote="${upstream%%/*}"
+    upstream_branch="${upstream#*/}"
+    [[ "$upstream_remote" == "origin" ]] || fail "upstream '$upstream' is not on origin"
+    [[ "$upstream_branch" == "$branch" ]] || fail "upstream branch '$upstream_branch' differs from '$branch'"
+  fi
+
+  if [[ $# -eq 0 ]]; then
+    if [[ -z "$upstream" ]]; then
+      exec "${GIT[@]}" push --set-upstream origin "HEAD:refs/heads/$branch"
+    fi
+    exec "${GIT[@]}" push origin "HEAD:refs/heads/$branch"
+  fi
+fi
+
+exec "${GIT[@]}" "$subcommand" "$@"

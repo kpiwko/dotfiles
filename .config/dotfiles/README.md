@@ -12,18 +12,17 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
    ```bash
    KUBECONFIG=~/.kube/opencode-devcluster kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
    ```
-3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account (`kpiwko@redhat.com`).
+3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account.
 4. Once logged in, session tokens are saved to the container volume and the MCP endpoint at `http://localhost:17980/mcp` is live.
 
 # Initialize the repository
 
 ```zsh
 git init --bare "$HOME/.dotfiles"
-alias dotfiles-git='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
-dotfiles-git remote add origin git@github.com:kpiwko/dotfiles.git
-dotfiles-git fetch origin
-dotfiles-git branch --set-upstream-to=origin/main main
-dotfiles-git config --local status.showUntrackedFiles no
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" remote add origin git@github.com:kpiwko/dotfiles.git
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" fetch origin
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" branch --set-upstream-to=origin/main main
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" config --local status.showUntrackedFiles no
 ```
 
 Install the repository on a different machine:
@@ -32,10 +31,11 @@ Install the repository on a different machine:
 cd $HOME
 echo ".dotfiles" >> .gitignore
 git clone --bare git@github.com:kpiwko/dotfiles.git "$HOME/.dotfiles"
-alias dotfiles-git='git --git-dir=$HOME/.dotfiles --work-tree=$HOME'
-dotfiles-git config --local status.showUntrackedFiles no
-dotfiles-git checkout
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" config --local status.showUntrackedFiles no
+git --git-dir="$HOME/.dotfiles" --work-tree="$HOME" checkout
 ```
+
+After checkout, `sandbox-git` is the normal Git entry point for agents. From exactly `$HOME` it automatically uses `git --git-dir="$HOME/.dotfiles" --work-tree="$HOME"`; from other repositories it uses normal Git.
 
 # Machine-specific git config
 
@@ -94,20 +94,21 @@ file (never committed — see [Local secrets](#local-secrets)).
 
 # OpenCode & AI Agent Configuration
 
-OpenCode configuration is stored under `~/.config/opencode/`.
+OpenCode configuration is stored under `~/.config/opencode/`. See `~/.config/opencode/README.md` for provider, LiteMaaS, Langfuse, context-budget, and verification instructions.
 
 - **Configuration:** `~/.config/opencode/opencode.jsonc`
 - **Markdown Agents:** `~/.config/opencode/agents/`
-  - `orchestrator.md`: User-facing primary agent (Gemini Flash), orchestrating task delegation.
-  - `implement.md`: Default implementation specialist (Qwen3 Coder Next, thinking disabled).
-  - `implement-deep.md`: Stronger local implementation fallback (Qwen3.8 27B, thinking disabled).
-  - `plan.md`: Planning specialist for complex sequencing/multi-component tasks.
-  - `architect.md`: Architecture specialist that persists durable decisions in ADR directories under `docs/`.
-  - `review.md`: Read-only reviewer leveraging Qodo.
+  - `orchestrator.md`: user-facing primary agent and task router.
+  - `implement-local.md`: default local oMLX implementation specialist.
+  - `implement-maas.md`: explicitly selected LiteMaaS implementation specialist with matching capabilities.
+  - `plan.md`: planning specialist for complex sequencing/multi-component tasks.
+  - `architect.md`: architecture specialist that persists durable decisions in ADR directories under `docs/`.
+  - `review.md`: read-only reviewer leveraging Qodo.
+  - `zweistein.md`: explicitly selected premium autonomous engineering path.
 - **Implementation skills:** `~/.config/opencode/skills/`
-  - `init-change`: selects normal vs dotfiles Git, synchronizes the intended base, and establishes a feature branch.
-  - `publish-change`: creates logical commits and publishes validated work while treating push and PR/MR target remotes independently.
-- **Sandbox commands:** constrained wrappers such as `sandbox-find` and `sandbox-git-push` reduce the operations available to implementation agents. `sandbox-git-push` permits ordinary feature-branch pushes to `origin` while refusing significant branches, detached HEAD, mismatched tracking, and force-push behavior.
+  - `init-change`: synchronizes the intended base and establishes a feature branch through `sandbox-git`.
+  - `publish-change`: creates logical commits and publishes validated work through `sandbox-git` while treating push and PR/MR target remotes independently.
+- **Sandbox commands:** `sandbox-find` and `sandbox-git` reduce the operations available to implementation agents. `sandbox-git` selects the bare `$HOME/.dotfiles` repository only when working from exactly `$HOME`; raw Git is denied to implementation agents and destructive Git forms require approval.
 - **Architecture Decision Records (ADRs):** Template at `~/.config/opencode/ADR-TEMPLATE.md`.
 
 # Reverse Proxy: Caddy
