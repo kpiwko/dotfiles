@@ -1,7 +1,7 @@
 ---
 description: Implementation planning specialist. Use only for genuinely non-trivial sequencing, multi-component work, migrations, or repository analysis before implementation.
 mode: subagent
-model: google-vertex/gemini-3.7-flash
+model: google-vertex/gemini-3.8-flash
 temperature: 0.1
 permission:
   edit: deny

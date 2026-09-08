@@ -1,7 +1,7 @@
 ---
 description: Architecture specialist. Use only for significant durable technical decisions, ADR conflicts, system boundaries, APIs, data/storage, security, or infrastructure choices.
 mode: subagent
-model: google-vertex/gemini-3.7-flash
+model: google-vertex/gemini-3.8-flash
 temperature: 0.1
 permission:
   edit:
