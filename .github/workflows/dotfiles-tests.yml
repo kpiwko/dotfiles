@@ -31,12 +31,13 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t binaries < <(
-            git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
+            git diff --name-only --diff-filter=ACMRT \
+              "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
               | sed -n 's#^\.local/bin/##p' \
               | sort -u
           )
           if (( ${#binaries[@]} == 0 )); then
-            echo "No .local/bin executables changed."
+            echo "No added or modified .local/bin executables."
             exit 0
           fi
           for binary in "${binaries[@]}"; do
