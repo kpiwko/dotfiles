@@ -41,8 +41,9 @@ if [[ "$subcommand" == "push" ]]; then
 
   upstream="$("${GIT[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
   if [[ -n "$upstream" ]]; then
-    upstream_remote="${upstream%%/*}"
-    upstream_branch="${upstream#*/}"
+    normalized_upstream="${upstream#remotes/}"
+    upstream_remote="${normalized_upstream%%/*}"
+    upstream_branch="${normalized_upstream#*/}"
     [[ "$upstream_remote" == "origin" ]] || fail "upstream '$upstream' is not on origin"
     [[ "$upstream_branch" == "$branch" ]] || fail "upstream branch '$upstream_branch' differs from '$branch'"
   fi
