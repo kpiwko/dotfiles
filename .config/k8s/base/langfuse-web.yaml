@@ -16,6 +16,43 @@ spec:
       labels:
         app: langfuse-web
     spec:
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              for target in postgres:5432 clickhouse:8123 redis:6379 minio:9000; do
+                host="${target%:*}"
+                port="${target#*:}"
+                until nc -z "$host" "$port"; do
+                  echo "Waiting for $host:$port..."
+                  sleep 2
+                done
+              done
+        - name: wait-for-event-bucket
+          image: minio/mc:latest
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ai-dev-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-dev-secrets
+                  key: MINIO_ROOT_PASSWORD
+          command:
+            - sh
+            - -c
+            - |
+              until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 && \
+                    mc stat local/langfuse-events >/dev/null 2>&1; do
+                echo "Waiting for langfuse-events bucket..."
+                sleep 2
+              done
       containers:
         - name: langfuse-web
           image: docker.langfuse.com/langfuse/langfuse:4.30.0
@@ -34,11 +71,17 @@ spec:
             limits:
               memory: "1.5Gi"
               cpu: "1000m"
+          startupProbe:
+            httpGet:
+              path: /api/public/health
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
           livenessProbe:
             httpGet:
               path: /api/public/health
               port: 3000
-            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -46,7 +89,6 @@ spec:
             httpGet:
               path: /api/public/health
               port: 3000
-            initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
