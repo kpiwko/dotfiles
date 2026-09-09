@@ -8,6 +8,7 @@ resources:
   - base/clickhouse.yaml
   - base/redis.yaml
   - base/minio.yaml
+  - base/langfuse-init.yaml
   - base/langfuse-web.yaml
   - base/langfuse-worker.yaml
   - base/mcp-servers.yaml
