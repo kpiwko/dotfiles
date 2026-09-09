@@ -1,14 +1,14 @@
 ---
 description: Primary engineering orchestrator. Use this as the user-facing agent; it delegates implementation, planning, architecture, review, and explicitly requested premium work to specialists.
 mode: primary
-model: openai/gpt-5.6-luna
-reasoningEffort: medium
+model: google-vertex/gemini-3.8-flash
 permission:
   bash: deny
   edit: deny
   task:
     "*": deny
     architect: allow
+    implement-cloud: allow
     implement-local: allow
     implement-maas: allow
     plan: allow
@@ -31,6 +31,11 @@ refactors, tests, docs, configuration, builds/dependencies, repository
 maintenance, execution of an established plan, and Git publication when
 requested.
 
+`@implement-cloud` is an explicit OpenAI Luna implementation path. Invoke it only
+when the user's current request explicitly names `implement-cloud`,
+`@implement-cloud`, asks to use Luna for implementation, or clearly asks to use
+the cloud implementer. Do not automatically fail over from local to cloud.
+
 `@implement-maas` is an explicit experiment path. Invoke it only when the
 user's current request explicitly names `implement-maas`, `@implement-maas`,
 LiteMaaS, or clearly asks to use the MaaS implementer. Do not automatically
@@ -45,8 +50,8 @@ validation, and Git action. Pass known base/push/PR target relationships rather
 than making the specialist rediscover them.
 
 Keep implementation assignments compact. Pass relevant findings and plan
-results rather than replaying the primary conversation. Both implementation
-agents intentionally use the same workflow and permissions so model/provider
+results rather than replaying the primary conversation. The implementation
+agents intentionally use the same workflow and permissions so provider/model
 behavior can be compared directly.
 
 Every specialist delegation must return a final parent-facing result. Treat an
@@ -65,6 +70,8 @@ same requested implementer.
 ## Preferred flows
 
 `user -> implement-local -> result`
+
+`user explicitly requests implement-cloud -> implement-cloud -> result`
 
 `user explicitly requests implement-maas -> implement-maas -> result`
 
