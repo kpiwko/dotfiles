@@ -149,6 +149,8 @@ cmd_up() {
     --from-literal=CLICKHOUSE_MIGRATION_URL="$clickhouse_migration_url" \
     --from-literal=MINIO_ROOT_USER="$minio_root_user" \
     --from-literal=MINIO_ROOT_PASSWORD="$minio_root_password" \
+    --from-literal=LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID="$minio_root_user" \
+    --from-literal=LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY="$minio_root_password" \
     --from-literal=REDIS_PASSWORD="$redis_password" \
     --from-literal=REDIS_AUTH="$redis_password" \
     --from-literal=LANGFUSE_SECRET_KEY="$langfuse_secret_key" \
@@ -187,7 +189,6 @@ cmd_status() {
   kind get clusters 2>/dev/null || true
   echo ""
   $KUBECTL_BIN get nodes
-  
   echo ""
   echo "=== Pods (ai-dev namespace) ==="
   $KUBECTL_BIN get pods -n ai-dev
@@ -195,15 +196,12 @@ cmd_status() {
 
 cmd_logs() {
   check_kubectl
-  
   if [ $# -lt 1 ]; then
     echo "Usage: devcluster logs <pod> [container]" >&2
     exit 1
   fi
-  
   pod="$1"
   container="${2:-}"
-  
   if [ -n "$container" ]; then
     $KUBECTL_BIN logs -n ai-dev "$pod" -c "$container" --tail=100 --follow
   else
@@ -214,23 +212,19 @@ cmd_logs() {
 cmd_down() {
   check_kind
   check_kubectl
-  
   echo "Stopping cluster: $CLUSTER_NAME"
   export_kubeconfig
-  # Scale down deployments
   $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
 }
 
 cmd_delete() {
   check_kind
-  
   echo "Deleting cluster: $CLUSTER_NAME"
   export KIND_EXPERIMENTAL_PROVIDER=podman
   kind delete cluster --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG" 2>/dev/null || kind delete cluster --name "$CLUSTER_NAME"
   rm -f "$DEVCLUSTER_KUBECONFIG"
 }
 
-# Main
 [ $# -ge 1 ] || usage
 
 action="$1"; shift || true
@@ -239,7 +233,7 @@ case "$action" in
   create) cmd_create ;;
   up) cmd_up ;;
   status) cmd_status ;;
-   logs) cmd_logs "$@" ;;
+  logs) cmd_logs "$@" ;;
   down) cmd_down ;;
   delete) cmd_delete ;;
   *) usage ;;
