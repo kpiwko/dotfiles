@@ -81,6 +81,6 @@
     }
   },
   "default_agent": "orchestrator",
-  "model": "openai/gpt-5.6-luna",
+  "model": "google-vertex/gemini-3.8-flash",
   "experimental": {"openTelemetry": true}
 }
