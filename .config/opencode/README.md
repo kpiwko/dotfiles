@@ -65,7 +65,8 @@ pair separately through `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (or
 
 1. Start a new OpenCode session.
 2. Run a small request that produces at least one model generation and tool call.
-3. Run a request that delegates to `implement-local` or `implement-maas`.
+3. Run a request that delegates to `implement-local`, `implement-cloud`, or
+   `implement-maas`.
 4. In Langfuse, verify a turn trace with model generations and nested tool spans.
 5. For a sufficiently long local session, verify compaction events appear as
    well. Failed steps/retries should also be visible when they occur.
@@ -138,11 +139,15 @@ than an OpenCode tracing issue.
 ## Implementation agents
 
 - `implement-local`: default implementation agent using local oMLX.
-- `implement-maas`: explicitly selected LiteMaaS implementation agent.
-- Both intentionally use the same workflow, skills, Git policy, and roughly the
-  same advertised context budget so their behavior can be compared.
-- `implement-maas` is only used when explicitly requested; there is no automatic
-  remote fallback.
+- `implement-cloud`: explicit OpenAI Luna implementation agent.
+- `implement-maas`: explicit LiteMaaS implementation agent.
+- The implementation agents intentionally use the same workflow, skills, and
+  Git policy so provider/model behavior can be compared.
+- `implement-cloud` and `implement-maas` are only used when explicitly
+  requested; there is no automatic remote fallback.
+
+The primary orchestrator and default root model use
+`google-vertex/gemini-3.8-flash`.
 
 ## Git safety
 
