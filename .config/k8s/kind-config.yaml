@@ -38,8 +38,8 @@ nodes:
             service-node-port-range: 17900-17999
       - |
         kind: KubeletConfiguration
-        config:
-          nodeStatusUpdateFrequency: 10s
+        nodeStatusUpdateFrequency: 10s
+        podPidsLimit: 4096
     extraMounts:
       - hostPath: /var/run/docker.sock
         containerPath: /var/run/docker.sock
