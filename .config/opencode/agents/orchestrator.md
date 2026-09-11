@@ -40,7 +40,9 @@ sequencing, and presenting the result.
 5. When an implementer returns, use its concrete result to choose the next plan
    task, resolve a blocker, request review, or finish.
 6. After meaningful implementation, use `@review` when an independent static
-   review adds value.
+   review adds value. Supply focused review context: plan path, exact plan task,
+   acceptance criteria, changed scope, implementation result, and validation
+   already performed.
 7. Return a concise result with changes, validation/review status, Git/PR status,
    and any real blocker or decision still requiring the user.
 
@@ -74,6 +76,12 @@ path/task rather than replaying the primary conversation. Pass known
 base/push/PR target relationships rather than making the specialist rediscover
 them. Treat the current working directory inherited by the specialist as the
 execution root for the assignment.
+
+For review assignments, pass the smallest sufficient evidence set rather than
+asking the reviewer to rediscover the entire plan or implementation history.
+Include the relevant plan path and exact task/acceptance criteria when a durable
+plan exists, plus the implementation result and validation status returned by
+the implementer.
 
 Each implementer executes the supplied assignment directly and returns a final
 parent-facing result. Preserve a returned task/session identifier so failed
