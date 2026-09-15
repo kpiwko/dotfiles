@@ -35,7 +35,16 @@ def caddy_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str, str]
     role = fake_bin / "dotfiles-role"
     make_executable(role, '[ "$1" = has ] && [ "$2" = ai-server ] && exit 0\nexit 1\n')
     launchctl = fake_bin / "launchctl"
-    make_executable(launchctl, f'echo "$*" >> "{tmp_path / "launchctl.log"}"\n[ "$1" = list ] && exit 1\nexit 0\n')
+    # Nothing is loaded in a fresh environment, so `list` and `bootout` both fail
+    # the way launchd reports an unknown label ("No such process"). Install has to
+    # tolerate that and go on to bootstrap.
+    make_executable(
+        launchctl,
+        f'echo "$*" >> "{tmp_path / "launchctl.log"}"\n'
+        '[ "$1" = list ] && exit 1\n'
+        '[ "$1" = bootout ] && exit 3\n'
+        'exit 0\n',
+    )
     xcaddy = fake_bin / "xcaddy"
     make_executable(
         xcaddy,
@@ -111,6 +120,27 @@ def test_builds_validates_and_bootstraps_launchd(caddy_env: tuple[dict[str, str]
     assert (tmp / "libexec/caddy-start").exists()
     assert (tmp / "launchd/local.caddy.plist").exists()
     assert "bootstrap system" in (tmp / "launchctl.log").read_text()
+
+
+def test_failed_bootout_still_bootstraps(caddy_env: tuple[dict[str, str], Path]) -> None:
+    """A first install has nothing to boot out; that failure must not abort the install."""
+    env, tmp = caddy_env
+    env["CF_API_TOKEN"] = "real-secret"
+    result = run_script(SCRIPT, env=env)
+    assert result.returncode == 0, result.stderr
+    log = (tmp / "launchctl.log").read_text()
+    assert "bootout system/local.caddy" in log
+    assert "bootstrap system" in log
+    assert "kickstart -k system/local.caddy" in log
+
+
+def test_honours_launchctl_bin_override(caddy_env: tuple[dict[str, str], Path]) -> None:
+    """Every launchctl call must route through LAUNCHCTL_BIN, never the real binary."""
+    env, tmp = caddy_env
+    env["CF_API_TOKEN"] = "real-secret"
+    assert run_script(SCRIPT, env=env).returncode == 0
+    logged = (tmp / "launchctl.log").read_text().splitlines()
+    assert [line.split()[0] for line in logged if line] == ["bootout", "bootstrap", "kickstart"]
 
 
 def test_clean_is_supported(caddy_env: tuple[dict[str, str], Path]) -> None:
