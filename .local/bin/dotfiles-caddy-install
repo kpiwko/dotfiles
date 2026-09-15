@@ -117,6 +117,14 @@ def discover_acme_email() -> str:
     value = result.stdout.strip() if result.returncode == 0 else ""
     return value if not is_placeholder_email(value) else ""
 
+def discover_token() -> str:
+    for name in ("CF_API_TOKEN", "CLOUDFLARE_API_TOKEN", "AI_DEV_CF_API_TOKEN", "DEVCLUSTER_CF_API_TOKEN"):
+        value = os.environ.get(name, "")
+        if not is_placeholder_email(value):
+            return value
+    return ""
+
+
 
 def create_directories(cfg: Config) -> None:
     privileged(cfg, "mkdir", "-p", str(cfg.etc / "sites"), str(cfg.etc / "snippets"), str(cfg.etc / "env"), str(cfg.log), str(cfg.var))
@@ -158,32 +166,32 @@ def write_cloudflare_env(cfg: Config, token: str, email: str) -> None:
 
 def bootstrap_cloudflare_env(cfg: Config) -> bool:
     path = cfg.etc / "env/cloudflare.env"
-    token = next((os.environ.get(name, "") for name in ("CF_API_TOKEN", "CLOUDFLARE_API_TOKEN", "AI_DEV_CF_API_TOKEN", "DEVCLUSTER_CF_API_TOKEN") if os.environ.get(name)), "")
+    token = discover_token()
     email = discover_acme_email()
 
     if not privileged_exists(cfg, path):
-        if not is_placeholder_token(token):
+        if not is_placeholder_token(token) and not is_placeholder_email(email):
             write_cloudflare_env(cfg, token, email)
             print(f"dotfiles-caddy-install: populated {path} from shell environment.", file=sys.stderr)
             return True
         privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0600", str(cfg.src / "env/cloudflare.env.example"), str(path))
         print(f"dotfiles-caddy-install: created {path} from the example template.", file=sys.stderr)
-        print("Edit it now and set a real CF_API_TOKEN before starting Caddy.", file=sys.stderr)
+        print("Edit it now and set a real CF_API_TOKEN and ACME_EMAIL before starting Caddy.", file=sys.stderr)
         return False
 
     values = read_env_file(cfg, path)
-    file_token = values.get("CF_API_TOKEN", "")
-    file_email = values.get("ACME_EMAIL", "")
-    if is_placeholder_token(file_token):
-        if not is_placeholder_token(token):
+    token = values.get("CF_API_TOKEN", token)
+    email = values.get("ACME_EMAIL", email)
+    if not is_placeholder_token(token) and not is_placeholder_email(email):
+        # Only rewrite when the file is missing a value we can supply; an
+        # already-complete file is left byte-for-byte alone so user comments
+        # and any extra keys survive.
+        if values.get("CF_API_TOKEN") != token or values.get("ACME_EMAIL") != email:
             write_cloudflare_env(cfg, token, email)
-            return True
-        print(f"dotfiles-caddy-install: {path} contains a placeholder token.", file=sys.stderr)
-        return False
-    if is_placeholder_email(file_email):
-        print(f"dotfiles-caddy-install: {path} is missing a real ACME_EMAIL.", file=sys.stderr)
-        return False
-    return True
+        return True
+    
+    print(f"dotfiles-caddy-install: {path} contains a placeholder email or token.", file=sys.stderr)
+    return False
 
 
 def find_xcaddy(cfg: Config) -> str | None:
@@ -230,7 +238,8 @@ def validate_config(cfg: Config) -> None:
     child_env.update(values)
     child_env.setdefault("CF_API_TOKEN", "placeholder-for-validation")
     child_env.setdefault("ACME_EMAIL", "admin@example.internal")
-    subprocess.run([str(cfg.caddy_bin), "validate", "--config", str(cfg.etc / "Caddyfile"), "--adapter", "caddyfile"], check=True, env=child_env)
+    privileged(cfg, str(cfg.caddy_bin), "validate", "--config", str(cfg.etc / "Caddyfile"), "--adapter", 
+               "caddyfile", "--envfile", str(cfg.etc / "env/cloudflare.env"), check=True)
 
 
 def deploy_daemon(cfg: Config) -> None:
@@ -238,11 +247,11 @@ def deploy_daemon(cfg: Config) -> None:
     privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0755", str(cfg.src / "caddy-start"), str(cfg.libexec / "caddy-start"))
     plist = cfg.launchd_dir / f"{cfg.launchd_label}.plist"
     privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(cfg.src / "local.caddy.plist"), str(plist))
-    loaded = run([cfg.launchctl, "list", cfg.launchd_label], check=False).returncode == 0
-    if loaded:
-        privileged(cfg, cfg.launchctl, "kickstart", "-k", f"system/{cfg.launchd_label}")
-    else:
-        privileged(cfg, cfg.launchctl, "bootstrap", "system", str(plist))
+    # Fails when the daemon was never loaded, which is the normal first-install
+    # case; bootstrap below is what actually matters.
+    privileged(cfg, cfg.launchctl, "bootout", f"system/{cfg.launchd_label}", check=False)
+    privileged(cfg, cfg.launchctl, "bootstrap", "system", str(plist))
+    privileged(cfg, cfg.launchctl, "kickstart", "-k", f"system/{cfg.launchd_label}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
