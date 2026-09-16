@@ -1,59 +1,245 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3
+from __future__ import annotations
 
-fail() {
-  printf 'sandbox-git: %s\n' "$*" >&2
-  exit 1
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import NoReturn
+
+
+PROTECTED_BRANCHES = {
+    "main",
+    "master",
+    "trunk",
+    "develop",
+    "development",
+    "stable",
+    "production",
+    "prod",
+    "release",
+    "hotfix",
 }
 
-[[ $# -gt 0 ]] || fail "missing git subcommand"
 
-if [[ "$PWD" == "$HOME" ]]; then
-  [[ -d "$HOME/.dotfiles" ]] || fail "dotfiles repository '$HOME/.dotfiles' does not exist"
-  GIT=(git --git-dir="$HOME/.dotfiles" --work-tree="$HOME")
-else
-  GIT=(git)
-fi
+class SandboxGitError(RuntimeError):
+    pass
 
-subcommand="$1"
-shift
 
-if [[ "$subcommand" == "push" ]]; then
-  "${GIT[@]}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a Git repository"
+def fail(message: str) -> NoReturn:
+    print(f"sandbox-git: {message}", file=sys.stderr)
+    raise SystemExit(1)
 
-  branch="$("${GIT[@]}" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
-  [[ -n "$branch" ]] || fail "detached HEAD; refusing to push"
 
-  default_branch=""
-  default_ref="$("${GIT[@]}" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-  if [[ -n "$default_ref" ]]; then
-    default_branch="${default_ref#origin/}"
-  fi
-  if [[ -z "$default_branch" ]]; then
-    default_branch="$("${GIT[@]}" remote show origin 2>/dev/null | sed -n 's/^[[:space:]]*HEAD branch: //p' | head -n1 || true)"
-  fi
+def git_base() -> list[str]:
+    home = Path.home()
 
-  case "$branch" in
-    "$default_branch"|main|master|trunk|develop|development|stable|production|prod|release|release/*|hotfix|hotfix/*)
-      fail "refusing to push protected/significant branch '$branch'"
-      ;;
-  esac
+    if Path.cwd() == home:
+        dotfiles = home / ".dotfiles"
+        if not dotfiles.is_dir():
+            fail(f"dotfiles repository '{dotfiles}' does not exist")
+        return ["git", f"--git-dir={dotfiles}", f"--work-tree={home}"]
 
-  upstream="$("${GIT[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
-  if [[ -n "$upstream" ]]; then
-    normalized_upstream="${upstream#remotes/}"
-    upstream_remote="${normalized_upstream%%/*}"
-    upstream_branch="${normalized_upstream#*/}"
-    [[ "$upstream_remote" == "origin" ]] || fail "upstream '$upstream' is not on origin"
-    [[ "$upstream_branch" == "$branch" ]] || fail "upstream branch '$upstream_branch' differs from '$branch'"
-  fi
+    return ["git"]
 
-  if [[ $# -eq 0 ]]; then
-    if [[ -z "$upstream" ]]; then
-      exec "${GIT[@]}" push --set-upstream origin "HEAD:refs/heads/$branch"
-    fi
-    exec "${GIT[@]}" push origin "HEAD:refs/heads/$branch"
-  fi
-fi
 
-exec "${GIT[@]}" "$subcommand" "$@"
+def git_output(git: list[str], *args: str) -> str:
+    result = subprocess.run(
+        [*git, *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def ensure_repo(git: list[str]) -> None:
+    result = subprocess.run(
+        [*git, "rev-parse", "--is-inside-work-tree"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail("not inside a Git repository")
+
+
+def current_branch(git: list[str]) -> str:
+    branch = git_output(git, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if not branch:
+        fail("detached HEAD; refusing to push")
+    return branch
+
+
+def default_branch(git: list[str]) -> str | None:
+    ref = git_output(
+        git,
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "refs/remotes/origin/HEAD",
+    )
+    if ref.startswith("origin/"):
+        return ref.removeprefix("origin/")
+
+    remote_show = git_output(git, "remote", "show", "origin")
+    for line in remote_show.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("HEAD branch: "):
+            return stripped.removeprefix("HEAD branch: ")
+
+    return None
+
+
+def normalize_branch(ref: str) -> str:
+    return ref.removeprefix("refs/heads/")
+
+
+def is_protected(branch: str, default: str | None) -> bool:
+    branch = normalize_branch(branch)
+    if default and branch == default:
+        return True
+    if branch in PROTECTED_BRANCHES:
+        return True
+    return branch.startswith(("release/", "hotfix/"))
+
+
+def destination_branch(refspec: str, current: str) -> str | None:
+    refspec = refspec.removeprefix("+")
+
+    if ":" in refspec:
+        _, destination = refspec.split(":", 1)
+        if not destination:
+            return None
+        return normalize_branch(destination)
+
+    if refspec == "HEAD":
+        return current
+
+    return normalize_branch(refspec)
+
+
+def validate_refspec(refspec: str, current: str, default: str | None) -> None:
+    destination = destination_branch(refspec, current)
+    if destination and is_protected(destination, default):
+        fail(f"refusing to push protected/significant branch '{destination}'")
+
+
+def upstream_for_current_branch(git: list[str]) -> tuple[str, str] | None:
+    upstream = git_output(
+        git,
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{upstream}",
+    )
+    if not upstream:
+        return None
+
+    normalized = upstream.removeprefix("remotes/")
+    if "/" not in normalized:
+        fail(f"invalid upstream '{upstream}'")
+
+    remote, branch = normalized.split("/", 1)
+    return remote, branch
+
+
+def split_push_args(args: list[str]) -> tuple[str | None, list[str]]:
+    """Return the repository and explicit refspecs from git push arguments.
+
+    This intentionally handles only argument forms needed by sandbox-git's policy.
+    Git itself remains authoritative for full push argument validation.
+    """
+    options_with_values = {
+        "--repo",
+        "--receive-pack",
+        "--exec",
+        "-o",
+        "--push-option",
+    }
+
+    repository: str | None = None
+    refspecs: list[str] = []
+    skip_next = False
+
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+
+        if repository is None:
+            if arg in options_with_values:
+                skip_next = True
+                continue
+            if any(
+                arg.startswith(f"{option}=")
+                for option in ("--repo", "--receive-pack", "--exec", "--push-option")
+            ):
+                continue
+            if arg.startswith("-"):
+                continue
+            repository = arg
+            continue
+
+        if arg in options_with_values:
+            skip_next = True
+            continue
+        if arg.startswith("-"):
+            continue
+        refspecs.append(arg)
+
+    return repository, refspecs
+
+
+def validate_push(git: list[str], args: list[str]) -> tuple[bool, str]:
+    ensure_repo(git)
+    current = current_branch(git)
+    default = default_branch(git)
+    upstream = upstream_for_current_branch(git)
+
+    if upstream is not None:
+        upstream_remote, upstream_branch = upstream
+        if upstream_remote != "origin":
+            fail(f"upstream '{upstream_remote}/{upstream_branch}' is not on origin")
+        if upstream_branch != current:
+            fail(f"upstream branch '{upstream_branch}' differs from '{current}'")
+
+    if not args:
+        if is_protected(current, default):
+            fail(f"refusing to push protected/significant branch '{current}'")
+        return upstream is None, current
+
+    _, refspecs = split_push_args(args)
+    for refspec in refspecs:
+        validate_refspec(refspec, current, default)
+
+    return False, current
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        fail("missing git subcommand")
+
+    git = git_base()
+    subcommand = sys.argv[1]
+    args = sys.argv[2:]
+
+    if subcommand == "push":
+        set_upstream, branch = validate_push(git, args)
+
+        if not args:
+            if set_upstream:
+                os.execvp(
+                    git[0],
+                    [*git, "push", "--set-upstream", "origin", f"HEAD:refs/heads/{branch}"],
+                )
+            os.execvp(git[0], [*git, "push", "origin", f"HEAD:refs/heads/{branch}"])
+
+    os.execvp(git[0], [*git, subcommand, *args])
+
+
+if __name__ == "__main__":
+    main()
