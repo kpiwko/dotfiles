@@ -2,24 +2,20 @@ alias ll='ls -la -h --color'
 alias pass="gopass"
 alias maskenv='env | sort | sed -E "/(KEY|TOKEN|PASSWORD)/I s/^([^=]+)=([^=]{4,5}).*/\1=\2.../"'
 alias vim="nvim"
-
-
-claude-ccr() {
-  (
-    pgrep -f claude-code-router >/dev/null || ccr start >/dev/null 2>&1
-
-    unset GOOGLE_API_KEY GEMINI_API_KEY GOOGLE_APPLICATION_CREDENTIALS
-    unset GOOGLE_CLOUD_PROJECT VERTEXAI_PROJECT VERTEXAI_LOCATION
-    unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
-
-    eval "$(ccr activate)"
-
-    claude "$@"
-  )
-}
+alias sgit="sandbox-git"
 
 # Zellij aliases
 alias zc="zellij --layout claude"
 alias zo="zellij --layout opencode"
 alias zs="zellij --session"
 alias za="zellij attach"
+
+# enable MarkEdit from command line
+markedit() {
+  open -a MarkEdit "$@"
+}
+
+
+
+
+
