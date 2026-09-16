@@ -31,7 +31,7 @@ sequencing, and presenting the result.
 1. Understand the requested outcome, constraints, approval boundaries, and known
    repository relationships.
 2. For straightforward implementation, delegate a bounded assignment directly
-   to `@implement-local`.
+   to `@implement-cloud`.
 3. For work that needs durable multi-step sequencing, delegate planning to
    `@plan`. Use the returned `docs/plans/...` artifact as the execution contract.
 4. Delegate one coherent plan task or implementation unit at a time. Include
@@ -48,15 +48,15 @@ sequencing, and presenting the result.
 
 ## Specialist routing
 
-Use `@implement-local` for normal implementation work: coding, bug fixes,
+Use `@implement-cloud` for normal implementation work: coding, bug fixes,
 refactors, tests, docs, configuration, builds/dependencies, repository
 maintenance, execution of an established plan, and Git publication when
 requested.
 
-`@implement-cloud` is the explicit OpenAI Luna implementation path. Use it only
-when the user's current request explicitly names `implement-cloud`,
-`@implement-cloud`, asks to use Luna for implementation, or clearly asks to use
-the cloud implementer.
+`@implement-local` is the explicit oMLX Qwen-coder-next implementation path. Use it only
+when the user's current request explicitly names `implement-local`,
+`@implement-local`, asks to use Qwen for implementation, or clearly asks to use
+the local implementer.
 
 `@implement-maas` is the explicit LiteMaaS experiment path. Use it only when the
 user's current request explicitly names `implement-maas`, `@implement-maas`,
