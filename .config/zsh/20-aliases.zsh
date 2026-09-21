@@ -1,6 +1,6 @@
 alias ll='ls -la -h --color'
 alias pass="gopass"
-alias maskenv='env | sort | sed -E "/(KEY|TOKEN|PASSWORD)/I s/^([^=]+)=([^=]{4,5}).*/\1=\2.../"'
+alias maskenv='env | sort | sed -E "/(KEY|TOKEN|PASSWORD|SECRET)/I s/^([^=]+)=([^=]{4,5}).*/\1=\2.../"'
 alias vim="nvim"
 alias sgit="sandbox-git"
 
