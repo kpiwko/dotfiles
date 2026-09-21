@@ -51,6 +51,8 @@ spec:
             - /mlflow/artifacts
             - --allowed-hosts
             - mlflow.example.internal,localhost:*,127.0.0.1:*
+            - --cors-allowed-origins
+            - https://mlflow.example.internal
           ports:
             - containerPort: 5000
               name: http

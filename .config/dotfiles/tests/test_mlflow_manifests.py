@@ -28,6 +28,15 @@ def test_mlflow_accepts_exported_and_local_hosts() -> None:
     assert "value: localhost:5000" in manifest
 
 
+def test_mlflow_accepts_caddy_mapped_origin() -> None:
+    manifest = (K8S_BASE / "mlflow.yaml").read_text()
+    caddy_example = (ROOT / ".config" / "caddy" / "sites" / "mlflow.caddy.example").read_text()
+
+    assert '- --cors-allowed-origins\n            - https://mlflow.example.internal' in manifest
+    assert "header_up Host mlflow.example.internal" in caddy_example
+    assert "header_up Origin https://mlflow.example.internal" in caddy_example
+
+
 def test_mlflow_nodeport_is_mapped_and_exported() -> None:
     manifest = (K8S_BASE / "mlflow.yaml").read_text()
     kind_config = (K8S_DIR / "kind-config.yaml").read_text()
