@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: minio
-          image: minio/minio:latest
+          image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
           ports:
             - containerPort: 9000
               name: api
