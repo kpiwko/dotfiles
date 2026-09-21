@@ -15,6 +15,8 @@ def test_mlflow_manifest_provides_persistent_tracking_service() -> None:
     assert "image: ghcr.io/mlflow/mlflow:v3.16.1" in manifest
     assert "sqlite:////mlflow/mlflow.db" in manifest
     assert "/mlflow/artifacts" in manifest
+    assert '- --workers\n            - "1"' in manifest
+    assert 'memory: "2Gi"' in manifest
 
 
 def test_mlflow_accepts_exported_and_local_hosts() -> None:
