@@ -50,9 +50,9 @@ def test_minio_images_are_pinned_to_available_quay_releases() -> None:
     init = read("langfuse-init.yaml")
     web = read("langfuse-web.yaml")
 
-    assert "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z" in minio
-    assert "quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z" in init
-    assert "quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z" in web
+    assert "quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z" in minio
+    assert "quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z" in init
+    assert "quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z" in web
     assert "minio/minio:latest" not in minio
     assert "minio/mc:latest" not in init
     assert "minio/mc:latest" not in web
