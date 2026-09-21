@@ -43,3 +43,16 @@ def test_minio_api_stays_internal_and_console_has_fixed_nodeport() -> None:
     assert "name: minio-console" in minio
     assert "nodePort: 17901" in minio
     assert "nodePort: 17982" not in minio
+
+
+def test_minio_images_are_pinned_to_available_quay_releases() -> None:
+    minio = read("minio.yaml")
+    init = read("langfuse-init.yaml")
+    web = read("langfuse-web.yaml")
+
+    assert "quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z" in minio
+    assert "quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z" in init
+    assert "quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z" in web
+    assert "minio/minio:latest" not in minio
+    assert "minio/mc:latest" not in init
+    assert "minio/mc:latest" not in web
