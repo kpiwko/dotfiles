@@ -32,7 +32,7 @@ spec:
                 done
               done
         - name: wait-for-event-bucket
-          image: quay.io/minio/mc:RELEASE.2024-11-05T11-29-45Z
+          image: quay.io/minio/mc:RELEASE.2025-07-21T05-28-08Z
           env:
             - name: MINIO_ROOT_USER
               valueFrom:
