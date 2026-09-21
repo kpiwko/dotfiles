@@ -32,8 +32,11 @@ def test_mlflow_nodeport_is_mapped_and_exported() -> None:
     manifest = (K8S_BASE / "mlflow.yaml").read_text()
     kind_config = (K8S_DIR / "kind-config.yaml").read_text()
     caddy_example = (ROOT / ".config" / "caddy" / "sites" / "mlflow.caddy.example").read_text()
+    readme = (K8S_DIR / "README.md").read_text()
 
     assert "nodePort: 17902" in manifest
     assert "containerPort: 17902" in kind_config
     assert "hostPort: 17902" in kind_config
     assert "reverse_proxy 127.0.0.1:17902" in caddy_example
+    assert "http://127.0.0.1:17902" in readme
+    assert "kubectl port-forward svc/mlflow 15000:5000 -n ai-dev" in readme
