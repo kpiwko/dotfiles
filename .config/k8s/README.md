@@ -70,6 +70,11 @@ The stack includes:
 - NodePort: 17902 (`https://mlflow.example.internal` through Caddy)
 - Reasoning: Single-replica local tracking server; the persistent volume retains experiments and artifacts.
 
+Access MLflow directly at `http://127.0.0.1:17902`. Do not use host port
+5000: macOS AirPlay may reserve it. If a Kubernetes port-forward is required
+for debugging, use `kubectl port-forward svc/mlflow 15000:5000 -n ai-dev` and
+connect to `http://127.0.0.1:15000`.
+
 ### MCP Servers
 - Requests: 100m CPU, 256Mi memory each
 - Limits: 500m CPU, 512Mi memory each
@@ -143,7 +148,7 @@ kubectl get services -n ai-dev
 
 # Port-forward for debugging
 kubectl port-forward svc/langfuse-web 3000:3000 -n ai-dev
-kubectl port-forward svc/mlflow 5000:5000 -n ai-dev
+kubectl port-forward svc/mlflow 15000:5000 -n ai-dev
 
 # View logs
 kubectl logs -n ai-dev -l app=langfuse-web --follow
