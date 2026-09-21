@@ -1,0 +1,5 @@
+# MLflow GenAI Tracking UI
+mlflow.example.internal {
+    import cloudflare_tls
+    reverse_proxy 127.0.0.1:17902
+}

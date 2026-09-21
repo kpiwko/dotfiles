@@ -19,6 +19,7 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
 
 The stack includes:
 - **Langfuse** - Observation & analytics platform (Web UI + Worker)
+- **MLflow** - GenAI tracking server for OpenCode traces
 - **PostgreSQL** - Primary database (v16)
 - **ClickHouse** - Analytics database (v24.3)
 - **Redis** - Caching layer (v7)
@@ -62,6 +63,13 @@ The stack includes:
 - Limits: 1000m CPU, 1.5Gi memory
 - Reasoning: Background job processing; same sizing as web server
 
+### MLflow
+- Requests: 200m CPU, 512Mi memory
+- Limits: 1000m CPU, 1Gi memory
+- PVC: 10Gi (SQLite backend and file artifacts)
+- NodePort: 17902 (`https://mlflow.example.internal` through Caddy)
+- Reasoning: Single-replica local tracking server; the persistent volume retains experiments and artifacts.
+
 ### MCP Servers
 - Requests: 100m CPU, 256Mi memory each
 - Limits: 500m CPU, 512Mi memory each
@@ -76,6 +84,7 @@ The stack includes:
 | 443 | 17943 | Ingress HTTPS | HTTPS ingress traffic |
 | 3000 | 17900 | Langfuse Web | Web UI access |
 | 9001 | 17901 | MinIO Console | Storage console |
+| 5000 | 17902 | MLflow | GenAI tracking UI and API |
 | 17200 | 17980 | MCP NotebookLM | NotebookLM MCP server |
 | 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
@@ -134,6 +143,7 @@ kubectl get services -n ai-dev
 
 # Port-forward for debugging
 kubectl port-forward svc/langfuse-web 3000:3000 -n ai-dev
+kubectl port-forward svc/mlflow 5000:5000 -n ai-dev
 
 # View logs
 kubectl logs -n ai-dev -l app=langfuse-web --follow
