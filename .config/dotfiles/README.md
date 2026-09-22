@@ -291,13 +291,13 @@ forwarded for additional local NodePort services. All forwards bind only to
 
 ## Sizing and lifecycle
 
-The template defaults to 8 CPUs, 16 GiB RAM, and 100 GiB disk—sized for the
-Langfuse-style stateful stack (PostgreSQL, ClickHouse, Redis, MinIO) as well as
-the current MLflow and MCP workloads. On the first `devcluster create`, these
+The template defaults to 4 CPUs, 8 GiB RAM, and 100 GiB disk—a practical
+baseline for the current MLflow and MCP workloads. On the first `devcluster create`, these
 can be overridden with `DEVCLUSTER_CPUS`, `DEVCLUSTER_MEMORY_GIB`, and
-`DEVCLUSTER_DISK_GIB`. Lima stores CPU and memory choices with the VM, so use
-`devcluster delete` and recreate to change them later (or manage an existing
-VM with `limactl` deliberately).
+`DEVCLUSTER_DISK_GIB`. To resize CPU or memory in place, stop the VM and run
+`limactl edit devcluster --cpus N --memory N`; this preserves its disk, k3s
+state, and local-path PVCs. Do not use `devcluster delete` merely to resize,
+because deletion removes the VM disk and its local storage.
 
 - `devcluster create` is idempotent: it creates or starts the VM, waits for
   systemd-managed k3s, and rewrites the guest-only API endpoint to

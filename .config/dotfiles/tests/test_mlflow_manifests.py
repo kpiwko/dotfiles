@@ -12,7 +12,8 @@ def test_lima_template_uses_centos_k3s_without_a_second_runtime() -> None:
     assert "templates/_images/centos-stream-9.yaml" in template
     assert "arch: aarch64" in template
     assert "legacyBIOS: true" not in template
-    assert 'memory: "16GiB"' in template
+    assert "cpus: 4" in template
+    assert 'memory: "8GiB"' in template
     assert 'disk: "100GiB"' in template
     assert "system: false" in template
     assert "user: false" in template

@@ -23,8 +23,8 @@ LIMA_CONFIG = Path(
     os.environ.get("DEVCLUSTER_LIMA_CONFIG", Path.home() / ".config" / "lima" / "devcluster.yaml")
 )
 API_PORT = os.environ.get("DEVCLUSTER_API_PORT", "17964")
-CPUS = os.environ.get("DEVCLUSTER_CPUS", "8")
-MEMORY_GIB = os.environ.get("DEVCLUSTER_MEMORY_GIB", "16")
+CPUS = os.environ.get("DEVCLUSTER_CPUS", "4")
+MEMORY_GIB = os.environ.get("DEVCLUSTER_MEMORY_GIB", "8")
 DISK_GIB = os.environ.get("DEVCLUSTER_DISK_GIB", "100")
 K3S_WAIT_SECONDS = int(os.environ.get("DEVCLUSTER_K3S_WAIT_SECONDS", "120"))
 K3S_KUBECONFIG_PATH = "/etc/rancher/k3s/k3s.yaml"
@@ -54,7 +54,7 @@ Commands:
 Environment:
   K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)
   DEVCLUSTER_CPUS / DEVCLUSTER_MEMORY_GIB / DEVCLUSTER_DISK_GIB
-                    VM sizing on first create (defaults: 8 / 16 / 100)
+                    VM sizing on first create (defaults: 4 / 8 / 100)
   DEVCLUSTER_LIMA_CONFIG  Lima template (default: ~/.config/lima/devcluster.yaml)
   DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)""",
         file=sys.stderr,

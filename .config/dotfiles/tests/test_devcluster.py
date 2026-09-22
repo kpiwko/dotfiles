@@ -26,7 +26,7 @@ def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str,
     k8s = tmp_path / "k8s"
     k8s.mkdir()
     lima_config = tmp_path / "devcluster.yaml"
-    lima_config.write_text("cpus: 8\n")
+    lima_config.write_text("cpus: 4\n")
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     roles = tmp_path / "roles"
@@ -142,7 +142,7 @@ def test_create_creates_vm_waits_for_k3s_and_exports_kubeconfig(
     result = run_script(SCRIPT, "create", env=env)
     assert result.returncode == 0, result.stderr
     log = command_log(root)
-    assert "limactl start --name devcluster --cpus 8 --memory 16 --disk 100" in log
+    assert "limactl start --name devcluster --cpus 4 --memory 8 --disk 100" in log
     assert "limactl shell devcluster sudo systemctl is-active --quiet k3s" in log
     assert "limactl shell devcluster sudo cat /etc/rancher/k3s/k3s.yaml" in log
     assert "config rename-context default devcluster" in log
