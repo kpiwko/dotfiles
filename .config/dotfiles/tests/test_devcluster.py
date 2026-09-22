@@ -73,22 +73,17 @@ def test_create_uses_kind_config(devcluster_env: tuple[dict[str, str], Path]) ->
     assert Path(env["DEVCLUSTER_KUBECONFIG"]).exists()
 
 
-def test_ai_dev_environment_has_highest_precedence(devcluster_env: tuple[dict[str, str], Path]) -> None:
+def test_up_provisions_only_workspace_mcp_secrets(devcluster_env: tuple[dict[str, str], Path]) -> None:
     env, _ = devcluster_env
-    env.update({
-        "POSTGRES_PASSWORD": "legacy",
-        "DEVCLUSTER_POSTGRES_PASSWORD": "devcluster",
-        "AI_DEV_POSTGRES_PASSWORD": "aidev",
-    })
     result = run_script(SCRIPT, "up", env=env)
     assert result.returncode == 0, result.stderr
-    assert "POSTGRES_PASSWORD=aidev" in result.stdout
-    assert "DATABASE_URL=postgresql://langfuse:aidev@postgres:5432/langfuse" in result.stdout
+    assert "workspace-mcp-secrets" in result.stdout
+    assert "ai-dev-secrets" not in result.stdout
 
 
-def test_dotenv_is_fallback(devcluster_env: tuple[dict[str, str], Path]) -> None:
+def test_dotenv_is_fallback_for_workspace_oauth(devcluster_env: tuple[dict[str, str], Path]) -> None:
     env, _ = devcluster_env
-    (Path(env["K8S_DIR"]) / ".env").write_text("AI_DEV_POSTGRES_PASSWORD=from-file\n")
+    (Path(env["K8S_DIR"]) / ".env").write_text("AI_DEV_GOOGLE_OAUTH_CLIENT_ID=from-file\n")
     result = run_script(SCRIPT, "up", env=env)
     assert result.returncode == 0, result.stderr
-    assert "POSTGRES_PASSWORD=from-file" in result.stdout
+    assert "GOOGLE_OAUTH_CLIENT_ID=from-file" in result.stdout

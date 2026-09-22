@@ -39,7 +39,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 def clean_env() -> dict[str, str]:
     env = os.environ.copy()
     for key in list(env):
-        if key.startswith(("AI_DEV_", "DEVCLUSTER_", "LANGFUSE_", "CF_", "CLOUDFLARE_")):
+        if key.startswith(("AI_DEV_", "DEVCLUSTER_", "CF_", "CLOUDFLARE_")):
             env.pop(key, None)
     return env
 

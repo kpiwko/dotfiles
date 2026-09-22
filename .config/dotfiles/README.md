@@ -73,7 +73,7 @@ a machine can opt into additional, non-exclusive **roles** that install
 extra software and services. Available roles include:
 - `dev`: Local development workstation (enables local Caddy reverse proxy, local TLS, developer tools).
 - `ai-server`: Dedicated AI server (Caddy reverse proxy with Cloudflare DNS-01 TLS, local LLM/tracing backends).
-- `cluster`: Local Kubernetes development environment (Kind, Podman, Langfuse, MCP servers, databases).
+- `cluster`: Local Kubernetes development environment (Kind, Podman, MLflow, and MCP servers).
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
 already on `PATH` once this repo is checked out):
@@ -94,7 +94,7 @@ file (never committed — see [Local secrets](#local-secrets)).
 
 # OpenCode & AI Agent Configuration
 
-OpenCode configuration is stored under `~/.config/opencode/`. See `~/.config/opencode/README.md` for provider, LiteMaaS, Langfuse, context-budget, and verification instructions.
+OpenCode configuration is stored under `~/.config/opencode/`. See `~/.config/opencode/README.md` for provider, LiteMaaS, context-budget, and verification instructions.
 
 - **Configuration:** `~/.config/opencode/opencode.jsonc`
 - **Markdown Agents:** `~/.config/opencode/agents/`
@@ -134,7 +134,7 @@ ACME challenges.
   - `snippets/local-tls.caddy` (`(local_tls)`): Internal TLS using Caddy's built-in root CA for local development (`tls internal`).
   - `snippets/cloudflare-tls.caddy` (`(cloudflare_tls)`): Cloudflare DNS-01 ACME challenge for public/internal domain resolution.
 - Host-specific local site configs matching `*.local.caddy` (such as `sites/my-app.local.caddy`) are ignored in Git, allowing per-host site configuration without dirtying repository state.
-- Fronting `devcluster` services: Caddy can reverse proxy local cluster services exposed via NodePort / HostPort, such as Langfuse Web (`127.0.0.1:17900`), Workspace MCP (`127.0.0.1:17981`), NotebookLM MCP (`127.0.0.1:17980`), and NotebookLM noVNC (`127.0.0.1:17982`). See `sites/tracing.caddy.example`, `sites/mcp.caddy.example`, and `sites/app.local.caddy`.
+- Fronting `devcluster` services: Caddy can reverse proxy local cluster services exposed via NodePort / HostPort, such as MLflow (`127.0.0.1:17902`), Workspace MCP (`127.0.0.1:17981`), NotebookLM MCP (`127.0.0.1:17980`), and NotebookLM noVNC (`127.0.0.1:17982`). See `sites/mlflow.caddy.example`, `sites/mcp.caddy.example`, and `sites/app.local.caddy`.
 - **ACME Email Configuration**: Let's Encrypt notifications use the first defined in this hierarchy: `DNS_ACME_EMAIL` > `ACME_EMAIL` > `git config --get user.email`. Set `DNS_ACME_EMAIL` (or `ACME_EMAIL`) in your shell environment (e.g. `~/.config/zsh/10-env.zsh`). The `dotfiles-caddy-install` script warns if no email is configured.
 - The Cloudflare API token is never in the plist. `caddy-start` sources it
   from `/usr/local/etc/caddy/env/cloudflare.env` into its own process
@@ -218,17 +218,12 @@ container runtime.
 ## Services
 
 The cluster includes:
-- **Langfuse** - Observation & analytics (Web UI + Worker)
-- **PostgreSQL** - Primary database (v16)
-- **ClickHouse** - Analytics database (v24.3)
-- **Redis** - Caching layer (v7)
-- **MinIO** - Object storage
+- **MLflow** - GenAI tracking server for OpenCode traces
 - **MCP Servers** - Model Context Protocol (NotebookLM, Workspace)
 
 ## Secret Management & Google Workspace OAuth
 
-- **Zero-Config Dev Defaults**: All internal service secrets (PostgreSQL, ClickHouse, MinIO, Redis, Langfuse) use built-in local development defaults, including headless auto-initialization of Langfuse users, organizations, and project API keys.
-- **Auto-Provisioning**: Running `devcluster up` automatically provisions separated Kubernetes secrets (`ai-dev-secrets` and `workspace-mcp-secrets`) from your active shell environment. To prevent collisions in global shell environments (`~/.config/zsh/`), environment variables support `AI_DEV_*` (highest priority) and `DEVCLUSTER_*` prefixes (e.g. `AI_DEV_POSTGRES_PASSWORD`, `AI_DEV_LANGFUSE_ENCRYPTION_KEY`, `AI_DEV_LANGFUSE_INIT_*`).
+- **Auto-Provisioning**: Running `devcluster up` provisions the `workspace-mcp-secrets` Kubernetes secret from the active shell environment.
 - **Google Workspace OAuth**: To connect the `workspace-mcp` server:
   1. Create a GCP Project and enable APIs (Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Apps Script).
   2. Configure OAuth Consent Screen & Data Access scopes (Add or Remove Scopes).
@@ -263,8 +258,7 @@ make cluster-status
 |----------------|-----------|---------|
 | 80 | 17988 | Ingress HTTP |
 | 443 | 17943 | Ingress HTTPS |
-| 3000 | 17900 | Langfuse Web |
-| 9001 | 17901 | MinIO Console |
+| 5000 | 17902 | MLflow |
 | 17200 | 17980 | MCP NotebookLM |
 | 6080 | 17982 | MCP NotebookLM noVNC |
 | 8000 | 17981 | MCP Workspace |
