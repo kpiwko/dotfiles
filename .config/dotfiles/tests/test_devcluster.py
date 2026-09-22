@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 import pytest
@@ -136,6 +137,7 @@ def test_create_creates_vm_waits_for_k3s_and_exports_kubeconfig(
     assert "config rename-context default devcluster" in log
     assert "config use-context devcluster" in log
     assert "127.0.0.1:17964" in kubeconfig_path(env).read_text()
+    assert stat.S_IMODE(kubeconfig_path(env).stat().st_mode) == 0o600
     assert "context: devcluster" in result.stdout
 
 
