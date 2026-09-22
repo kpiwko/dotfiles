@@ -2,8 +2,7 @@
 #
 # This extends Lima's official CentOS Stream 9 image template:
 # https://github.com/lima-vm/lima/blob/master/templates/_images/centos-stream-9.yaml
-# That template supplies native aarch64 images and the legacyBIOS firmware
-# setting required by CentOS Stream 9.
+# That template supplies the native aarch64 image used on Apple Silicon.
 minimumLimaVersion: 2.0.0
 base:
   - https://raw.githubusercontent.com/lima-vm/lima/master/templates/_images/centos-stream-9.yaml
@@ -11,10 +10,6 @@ base:
 # Apple Silicon hosts use VZ and the native CentOS Stream aarch64 image.
 vmType: vz
 arch: aarch64
-# Retained from the upstream CentOS Stream 9 template. Lima ignores this for
-# VZ/aarch64, but it is required when the image is booted with QEMU on x86_64.
-firmware:
-  legacyBIOS: true
 cpus: 8
 memory: "16GiB"
 disk: "100GiB"
@@ -30,13 +25,23 @@ containerd:
 # services and the current MLflow/MCP ports.
 portForwards:
   - guestPort: 6443
+    # k3s listens on both IPv4 and IPv6. Match only its IPv4 wildcard socket,
+    # so both listeners do not race to bind the same host port.
+    guestIP: "0.0.0.0"
+    guestIPMustBeZero: true
     hostIP: "127.0.0.1"
     hostPort: 17964
     proto: tcp
   - guestPortRange: [17900, 17999]
+    guestIP: "0.0.0.0"
+    guestIPMustBeZero: true
     hostIP: "127.0.0.1"
     hostPortRange: [17900, 17999]
     proto: tcp
+  # Lima otherwise appends a dynamic catch-all localhost forwarding rule. Keep
+  # k3s, rpcbind, and other guest-only listeners off the host network.
+  - guestPortRange: [1, 65535]
+    ignore: true
 
 provision:
   - mode: system
