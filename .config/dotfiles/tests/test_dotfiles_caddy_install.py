@@ -43,6 +43,7 @@ def caddy_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str, str]
         f'echo "$*" >> "{tmp_path / "launchctl.log"}"\n'
         '[ "$1" = list ] && exit 1\n'
         '[ "$1" = bootout ] && exit 3\n'
+        '[ "$1" = bootstrap ] && [ "$BOOTSTRAP_ALREADY_LOADED" = 1 ] && exit 5\n'
         'exit 0\n',
     )
     xcaddy = fake_bin / "xcaddy"
@@ -130,6 +131,18 @@ def test_failed_bootout_still_bootstraps(caddy_env: tuple[dict[str, str], Path])
     assert result.returncode == 0, result.stderr
     log = (tmp / "launchctl.log").read_text()
     assert "bootout system/local.caddy" in log
+    assert "bootstrap system" in log
+    assert "kickstart -k system/local.caddy" in log
+
+
+def test_already_loaded_service_tolerates_bootstrap_status_5(caddy_env: tuple[dict[str, str], Path]) -> None:
+    """An asynchronously completed bootout can leave bootstrap reporting EIO."""
+    env, tmp = caddy_env
+    env["CF_API_TOKEN"] = "real-secret"
+    env["BOOTSTRAP_ALREADY_LOADED"] = "1"
+    result = run_script(SCRIPT, env=env)
+    assert result.returncode == 0, result.stderr
+    log = (tmp / "launchctl.log").read_text()
     assert "bootstrap system" in log
     assert "kickstart -k system/local.caddy" in log
 

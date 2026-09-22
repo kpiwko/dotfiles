@@ -248,9 +248,13 @@ def deploy_daemon(cfg: Config) -> None:
     plist = cfg.launchd_dir / f"{cfg.launchd_label}.plist"
     privileged(cfg, "install", *cfg.install_owner_flags, "-m", "0644", str(cfg.src / "local.caddy.plist"), str(plist))
     # Fails when the daemon was never loaded, which is the normal first-install
-    # case; bootstrap below is what actually matters.
+    # case; bootstrap below is what actually matters. When bootout is
+    # asynchronous, launchd can still have the job registered and report EIO
+    # (status 5) from bootstrap. The existing job can be restarted below.
     privileged(cfg, cfg.launchctl, "bootout", f"system/{cfg.launchd_label}", check=False)
-    privileged(cfg, cfg.launchctl, "bootstrap", "system", str(plist))
+    bootstrap = privileged(cfg, cfg.launchctl, "bootstrap", "system", str(plist), check=False)
+    if bootstrap.returncode not in (0, 5):
+        raise subprocess.CalledProcessError(bootstrap.returncode, bootstrap.args)
     privileged(cfg, cfg.launchctl, "kickstart", "-k", f"system/{cfg.launchd_label}")
 
 
