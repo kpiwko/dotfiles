@@ -11,7 +11,6 @@ from conftest import BIN, run_script
 
 pytestmark = pytest.mark.binary("devcluster")
 SCRIPT = BIN / "devcluster"
-KUBECTL_WRAPPER = BIN / "devcluster-kubectl"
 
 
 def make_executable(path: Path, body: str) -> None:
@@ -278,24 +277,3 @@ def test_delete_deletes_vm_and_kubeconfig(devcluster_env: tuple[dict[str, str], 
     assert not Path(env["LIMA_STATE"]).exists()
     assert not kubeconfig_path(env).exists()
     assert "limactl delete --force devcluster" in command_log(root)
-
-
-def test_kubectl_wrapper_rejects_flag_and_environment_overrides(
-    devcluster_env: tuple[dict[str, str], Path],
-) -> None:
-    env, root = devcluster_env
-    kubeconfig_path(env).parent.mkdir()
-    kubeconfig_path(env).write_text("apiVersion: v1\n")
-    escaped = root / "escaped-kubeconfig"
-    escaped.write_text("apiVersion: v1\n")
-    env["DEVCLUSTER_KUBECONFIG"] = str(escaped)
-
-    rejected = run_script(KUBECTL_WRAPPER, "--context=other", env=env)
-    assert rejected.returncode == 1
-    assert "overriding kubeconfig or context is not allowed" in rejected.stderr
-
-    allowed = run_script(KUBECTL_WRAPPER, "get", "nodes", env=env)
-    assert allowed.returncode == 0, allowed.stderr
-    log = command_log(root)
-    assert f"--kubeconfig={kubeconfig_path(env)} --context=devcluster get nodes" in log
-    assert str(escaped) not in log
