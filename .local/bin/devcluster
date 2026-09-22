@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,8 @@ CPUS = os.environ.get("DEVCLUSTER_CPUS", "8")
 MEMORY_GIB = os.environ.get("DEVCLUSTER_MEMORY_GIB", "16")
 DISK_GIB = os.environ.get("DEVCLUSTER_DISK_GIB", "100")
 K3S_WAIT_SECONDS = int(os.environ.get("DEVCLUSTER_K3S_WAIT_SECONDS", "120"))
+K3S_KUBECONFIG_PATH = "/etc/rancher/k3s/k3s.yaml"
+K3S_SERVER_PATTERN = re.compile(r"(?m)^(\s*server:\s*)https?://\S+:6443\s*$")
 
 
 class DevclusterError(Exception):
@@ -149,13 +152,27 @@ def vm_is_running() -> bool:
     return formatted.returncode == 0 and formatted.stdout.strip() == "Running"
 
 
-def wait_for_k3s() -> None:
+def read_guest_kubeconfig() -> str:
+    result = run(
+        ["limactl", "shell", VM_NAME, "sudo", "cat", K3S_KUBECONFIG_PATH],
+        check=False,
+        capture=True,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def wait_for_k3s() -> str:
     deadline = time.monotonic() + K3S_WAIT_SECONDS
-    while run(
-        ["limactl", "shell", VM_NAME, "sudo", "systemctl", "is-active", "--quiet", "k3s"], check=False
-    ).returncode:
+    while True:
+        service_active = run(
+            ["limactl", "shell", VM_NAME, "sudo", "systemctl", "is-active", "--quiet", "k3s"],
+            check=False,
+        ).returncode == 0
+        guest_config = read_guest_kubeconfig() if service_active else ""
+        if guest_config and K3S_SERVER_PATTERN.search(guest_config):
+            return guest_config
         if time.monotonic() >= deadline:
-            error(f"k3s did not become active within {K3S_WAIT_SECONDS}s")
+            error(f"k3s kubeconfig did not become ready within {K3S_WAIT_SECONDS}s")
             print(
                 f"Inspect: limactl shell {VM_NAME} sudo journalctl -u k3s -b --no-pager",
                 file=sys.stderr,
@@ -164,32 +181,28 @@ def wait_for_k3s() -> None:
         time.sleep(2)
 
 
-def export_kubeconfig() -> None:
+def export_kubeconfig(guest_config: str) -> None:
     KUBECONFIG_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    source_fd, source_name = tempfile.mkstemp(prefix=f"{KUBECONFIG_PATH.name}.", dir=KUBECONFIG_PATH.parent)
-    rewritten_path = Path(f"{source_name}.rewritten")
-    source_path = Path(source_name)
+    rewritten_path: Path | None = None
     try:
-        guest_config = run(
-            ["limactl", "shell", VM_NAME, "sudo", "cat", "/etc/rancher/k3s/k3s.yaml"], capture=True
-        ).stdout
-        with os.fdopen(source_fd, "w") as source_file:
-            source_file.write(guest_config)
-        source_fd = -1
-        rewritten = guest_config.replace("127.0.0.1:6443", f"127.0.0.1:{API_PORT}")
-        if f"127.0.0.1:{API_PORT}" not in rewritten:
-            error("could not rewrite the k3s API endpoint")
+        rewritten, substitutions = K3S_SERVER_PATTERN.subn(
+            rf"\1https://127.0.0.1:{API_PORT}", guest_config, count=1
+        )
+        if substitutions != 1:
+            error("could not find a k3s API server URL ending in :6443")
             raise DevclusterError
-        rewritten_path.write_text(rewritten)
+        with tempfile.NamedTemporaryFile(
+            mode="w", prefix=f"{KUBECONFIG_PATH.name}.", dir=KUBECONFIG_PATH.parent, delete=False
+        ) as rewritten_file:
+            rewritten_file.write(rewritten)
+            rewritten_path = Path(rewritten_file.name)
         run(["kubectl", "--kubeconfig", str(rewritten_path), "config", "rename-context", "default", KUBECONFIG_CONTEXT])
         run(["kubectl", "--kubeconfig", str(rewritten_path), "config", "use-context", KUBECONFIG_CONTEXT])
         os.chmod(rewritten_path, 0o600)
         os.replace(rewritten_path, KUBECONFIG_PATH)
     finally:
-        if source_fd >= 0:
-            os.close(source_fd)
-        source_path.unlink(missing_ok=True)
-        rewritten_path.unlink(missing_ok=True)
+        if rewritten_path:
+            rewritten_path.unlink(missing_ok=True)
 
 
 def ensure_vm_and_k3s() -> None:
@@ -219,8 +232,8 @@ def ensure_vm_and_k3s() -> None:
                 str(LIMA_CONFIG),
             ]
         )
-    wait_for_k3s()
-    export_kubeconfig()
+    guest_config = wait_for_k3s()
+    export_kubeconfig(guest_config)
 
 
 def load_dotenv_fallback(path: Path) -> None:

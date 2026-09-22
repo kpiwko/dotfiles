@@ -58,7 +58,10 @@ def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str,
         "  shell)\n"
         "    printf 'limactl %s\\n' \"$*\" >>\"$log\"\n"
         "    case \"$*\" in\n"
-        "      *'cat /etc/rancher/k3s/k3s.yaml'*) printf '%s\\n' 'apiVersion: v1' 'clusters:' '  - cluster:' '      server: https://127.0.0.1:6443' 'contexts:' '  - name: default' 'current-context: default' ;;\n"
+        "      *'cat /etc/rancher/k3s/k3s.yaml'*)\n"
+        "        [ \"${K3S_KUBECONFIG_READY:-1}\" = 1 ] || exit 1\n"
+        "        printf '%s\\n' 'apiVersion: v1' 'clusters:' '  - cluster:' \"      server: ${K3S_SERVER_URL:-https://127.0.0.1:6443}\" 'contexts:' '  - name: default' 'current-context: default'\n"
+        "        ;;\n"
         "      *) [ -f \"$state\" ] && [ \"$(cat \"$state\")\" = Running ] ;;\n"
         "    esac\n"
         "    ;;\n"
@@ -160,6 +163,28 @@ def test_create_uses_first_creation_sizing_overrides(devcluster_env: tuple[dict[
     result = run_script(SCRIPT, "create", env=env)
     assert result.returncode == 0, result.stderr
     assert "limactl start --name devcluster --cpus 10 --memory 24 --disk 150" in command_log(root)
+
+
+@pytest.mark.parametrize("server_url", ["https://0.0.0.0:6443", "https://localhost:6443", "https://192.168.5.15:6443"])
+def test_create_rewrites_any_k3s_api_endpoint(
+    devcluster_env: tuple[dict[str, str], Path], server_url: str
+) -> None:
+    env, _ = devcluster_env
+    enable_cluster(env)
+    env["K3S_SERVER_URL"] = server_url
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "server: https://127.0.0.1:17964" in kubeconfig_path(env).read_text()
+
+
+def test_create_waits_for_kubeconfig_server_entry(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, _ = devcluster_env
+    enable_cluster(env)
+    env["K3S_KUBECONFIG_READY"] = "0"
+    env["DEVCLUSTER_K3S_WAIT_SECONDS"] = "0"
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 1
+    assert "k3s kubeconfig did not become ready within 0s" in result.stderr
 
 
 def test_create_is_idempotent_for_running_vm(devcluster_env: tuple[dict[str, str], Path]) -> None:

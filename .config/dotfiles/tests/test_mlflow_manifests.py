@@ -24,7 +24,7 @@ def test_lima_template_uses_centos_k3s_without_a_second_runtime() -> None:
     assert "ignore: true" in template
     assert "net.ipv6.conf.all.disable_ipv6 = 1" in template
     assert "net.ipv6.conf.default.disable_ipv6 = 1" in template
-    assert 'bind-address: "0.0.0.0"' in template
+    assert 'bind-address: "0.0.0.0"' not in template
     assert 'tls-san:\n        - "127.0.0.1"\n        - "localhost"' in template
     assert "- traefik" in template
     assert "- servicelb" in template

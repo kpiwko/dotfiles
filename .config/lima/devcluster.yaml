@@ -83,7 +83,6 @@ provision:
         - servicelb
       write-kubeconfig-mode: "0644"
       https-listen-port: 6443
-      bind-address: "0.0.0.0"
       tls-san:
         - "127.0.0.1"
         - "localhost"
