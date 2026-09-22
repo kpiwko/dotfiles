@@ -15,12 +15,6 @@ nodes:
         hostPort: 17943
         listenAddress: "127.0.0.1"
         protocol: TCP
-      - containerPort: 17900
-        hostPort: 17900
-        protocol: TCP
-      - containerPort: 17901
-        hostPort: 17901
-        protocol: TCP
       - containerPort: 17902
         hostPort: 17902
         protocol: TCP

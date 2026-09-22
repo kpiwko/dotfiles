@@ -49,3 +49,14 @@ def test_mlflow_nodeport_is_mapped_and_exported() -> None:
     assert "reverse_proxy 127.0.0.1:17902" in caddy_example
     assert "http://127.0.0.1:17902" in readme
     assert "kubectl port-forward svc/mlflow 15000:5000 -n ai-dev" in readme
+
+
+def test_kustomization_contains_only_mlflow_and_mcp_workloads() -> None:
+    kustomization = (K8S_DIR / "kustomization.yaml").read_text()
+
+    assert "base/mlflow.yaml" in kustomization
+    assert "base/mcp-servers.yaml" in kustomization
+    assert "postgres" not in kustomization
+    assert "clickhouse" not in kustomization
+    assert "redis" not in kustomization
+    assert "minio" not in kustomization
