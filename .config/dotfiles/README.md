@@ -10,7 +10,7 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
    `http://localhost:17982/vnc.html` (click **Connect**)
 2. In your host terminal, run:
    ```bash
-   KUBECONFIG=~/.kube/opencode-devcluster kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
+   devcluster-kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
    ```
 3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account.
 4. Once logged in, session tokens are saved to the container volume and the MCP endpoint at `http://localhost:17980/mcp` is live.
@@ -73,7 +73,8 @@ a machine can opt into additional, non-exclusive **roles** that install
 extra software and services. Available roles include:
 - `dev`: Local development workstation (enables local Caddy reverse proxy, local TLS, developer tools).
 - `ai-server`: Dedicated AI server (Caddy reverse proxy with Cloudflare DNS-01 TLS, local LLM/tracing backends).
-- `cluster`: Local Kubernetes development environment (Kind, Podman, MLflow, and MCP servers).
+- `cluster`: Local Kubernetes development environment (Lima, CentOS Stream 10,
+  k3s, MLflow, and MCP servers).
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
 already on `PATH` once this repo is checked out):
@@ -204,16 +205,33 @@ Two flavors of "never commit this" exist in this repo:
 3. Commit tracked site definitions as usual.
 4. Rerun `dotfiles-caddy-install` — it syncs `sites/` with `rsync --delete`, validates, and reloads.
 
-# Kubernetes (Kind) Cluster Role
+# Kubernetes (Lima + k3s) Cluster Role
 
-The `cluster` role sets up a local Kubernetes development environment using
-[Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) with Podman as the
-container runtime.
+The `cluster` role runs a dedicated, single-node Kubernetes VM rather than a
+Kind cluster. The host architecture is:
+
+```text
+macOS -> Lima VM (devcluster) -> CentOS Stream 10 -> k3s -> embedded containerd
+```
+
+The repository-owned template is
+`~/.config/lima/devcluster.yaml`. It extends Lima's official CentOS Stream 10
+template, uses the native aarch64 image on Apple Silicon, and intentionally
+disables Lima-managed containerd. Do not install Podman or another container
+runtime in this VM: k3s manages its supported embedded containerd itself.
 
 ## Architecture
 
-- Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests for all services).
-- `devcluster` CLI manages the cluster lifecycle: create, up, status, logs, down, delete.
+- Source of truth lives in this repo under `.config/k8s/` (Kustomize manifests
+  for all services), and `.config/lima/devcluster.yaml` (the VM and k3s
+  provisioning).
+- `devcluster` manages VM and workload lifecycle: `create`, `up`, `status`,
+  `logs`, `down`, and `delete`.
+- k3s keeps CoreDNS and its `local-path` provisioner, and disables Traefik and
+  ServiceLB because host Caddy reaches explicitly forwarded NodePorts.
+- The host kubeconfig is always `~/.kube/opencode-devcluster` with context
+  `devcluster`. Use `devcluster-kubectl` when you want a wrapper that refuses
+  caller-selected kubeconfigs and contexts.
 
 ## Services
 
@@ -240,7 +258,7 @@ The cluster includes:
 
 ```zsh
 dotfiles-role enable cluster
-devcluster create          # Create Kind cluster
+devcluster create          # Create/start the Lima VM and export kubeconfig
 devcluster up              # Deploy kustomize manifests
 devcluster status          # Check cluster status
 ```
@@ -254,15 +272,57 @@ make cluster-status
 
 ## Port Mapping
 
-| Container Port | Host Port | Service |
-|----------------|-----------|---------|
-| 80 | 17988 | Ingress HTTP |
-| 443 | 17943 | Ingress HTTPS |
+Lima forwards the k3s API from guest `6443` to host `127.0.0.1:17964`, and
+forwards the complete k3s NodePort range `17900-17999` one-to-one on host
+loopback. Caddy examples already proxy to the stable host ports below; no VM IP
+lookup or `kubectl port-forward` is needed for normal use.
+
+| k3s Service Port | NodePort / Host Port | Service |
+|------------------|----------------------|---------|
 | 5000 | 17902 | MLflow |
 | 17200 | 17980 | MCP NotebookLM |
 | 6080 | 17982 | MCP NotebookLM noVNC |
 | 8000 | 17981 | MCP Workspace |
 | 6443 | 17964 | Kubernetes API |
+
+Ports `17900`, `17901`, and the rest of `17900-17999` are reserved and
+forwarded for additional local NodePort services. All forwards bind only to
+`127.0.0.1`.
+
+## Sizing and lifecycle
+
+The template defaults to 8 CPUs, 16 GiB RAM, and 100 GiB disk—sized for the
+Langfuse-style stateful stack (PostgreSQL, ClickHouse, Redis, MinIO) as well as
+the current MLflow and MCP workloads. On the first `devcluster create`, these
+can be overridden with `DEVCLUSTER_CPUS`, `DEVCLUSTER_MEMORY_GIB`, and
+`DEVCLUSTER_DISK_GIB`. Lima stores CPU and memory choices with the VM, so use
+`devcluster delete` and recreate to change them later (or manage an existing
+VM with `limactl` deliberately).
+
+- `devcluster create` is idempotent: it creates or starts the VM, waits for
+  systemd-managed k3s, and rewrites the guest-only API endpoint to
+  `127.0.0.1:17964` in the host kubeconfig.
+- `devcluster up` performs the same readiness work, reconciles OAuth secrets,
+  and applies Kustomize manifests.
+- `devcluster down` stops the VM and preserves disks, k3s state, and PVCs.
+- `devcluster delete` force-deletes the VM and removes only the generated host
+  kubeconfig.
+
+## Troubleshooting
+
+```zsh
+# VM state and k3s journal
+limactl list devcluster
+limactl shell devcluster sudo systemctl status k3s
+limactl shell devcluster sudo journalctl -u k3s -b --no-pager
+
+# Confirm SELinux stays enforcing, firewall rules, nodes, storage, and services
+limactl shell devcluster getenforce
+limactl shell devcluster sudo firewall-cmd --list-ports
+devcluster-kubectl get nodes
+devcluster-kubectl get storageclass
+devcluster-kubectl get services -n ai-dev
+```
 
 ## Documentation
 
