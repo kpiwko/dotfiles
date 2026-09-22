@@ -13,7 +13,7 @@ help:
 	@echo "Commands:"
 	@echo "  make test                       Run all pytest tests via uv"
 	@echo "  make test-binary BINARY=<name>  Run tests for one .local/bin executable"
-	@echo "  make cluster-create             Create Kind cluster"
+	@echo "  make cluster-create             Create Lima VM and k3s cluster"
 	@echo "  make cluster-up                 Deploy kustomize manifests"
 	@echo "  make cluster-status             Show cluster status"
 	@echo "  make cluster-logs               Show logs (use LOGS_POD=<pod>)"
@@ -29,7 +29,7 @@ test-binary:
 	@$(PYTEST) --binary "$(BINARY)"
 
 cluster-create:
-	@echo "Creating Kind cluster..."
+	@echo "Creating Lima VM and k3s cluster..."
 	@devcluster create
 
 cluster-up:

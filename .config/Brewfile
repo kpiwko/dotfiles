@@ -58,8 +58,8 @@ brew "just"
 brew "kubelogin"
 # Postgres C API library
 brew "libpq"
-# Kubernetes cluster for local development
-brew "kind"
+# Linux virtual machines for the local k3s development cluster
+brew "lima"
 # Kubernetes command-line tool
 brew "kubernetes-cli"
 # LLM inference in C/C++

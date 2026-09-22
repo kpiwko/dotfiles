@@ -1,189 +1,382 @@
-#!/bin/sh
-# devcluster - Kubernetes (Kind) AI infrastructure management
-# Supports roles: cluster
+#!/usr/bin/env python3
+"""Manage the Lima-backed local k3s development cluster."""
 
-set -eu
+from __future__ import annotations
 
-K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
-CLUSTER_NAME="kind-ai-dev"
-KIND_CONFIG="$K8S_DIR/kind-config.yaml"
-KUSTOMIZE_DIR="$K8S_DIR"
-DEVCLUSTER_KUBECONFIG="${DEVCLUSTER_KUBECONFIG:-$HOME/.kube/opencode-devcluster}"
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Sequence
 
-usage() {
-  echo "Usage: devcluster <command> [options]" >&2
-  echo "" >&2
-  echo "Commands:" >&2
-  echo "  create    Create Kind cluster with AI infrastructure configuration" >&2
-  echo "  up        Deploy kustomize manifests to cluster" >&2
-  echo "  status    Show cluster and pod status" >&2
-  echo "  logs      Show logs for a pod (use: logs <pod> [container])" >&2
-  echo "  down      Stop cluster (preserve state)" >&2
-  echo "  delete    Delete cluster completely" >&2
-  echo "" >&2
-  echo "Environment:" >&2
-  echo "  K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)" >&2
-  echo "  DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)" >&2
-  exit 1
-}
 
-check_cluster_role() {
-  if ! command -v dotfiles-role >/dev/null 2>&1; then
-    echo "devcluster: error: dotfiles-role not found" >&2
-    exit 1
-  fi
-  dotfiles-role has cluster || {
-    echo "devcluster: error: cluster role not enabled" >&2
-    echo "Run: dotfiles-role enable cluster" >&2
-    exit 1
-  }
-}
+VM_NAME = "devcluster"
+KUBECONFIG_CONTEXT = "devcluster"
+KUBECONFIG_PATH = Path.home() / ".kube" / "opencode-devcluster"
+K8S_DIR = Path(os.environ.get("K8S_DIR", Path.home() / ".config" / "k8s"))
+LIMA_CONFIG = Path(
+    os.environ.get("DEVCLUSTER_LIMA_CONFIG", Path.home() / ".config" / "lima" / "devcluster.yaml")
+)
+API_PORT = os.environ.get("DEVCLUSTER_API_PORT", "17964")
+CPUS = os.environ.get("DEVCLUSTER_CPUS", "4")
+MEMORY_GIB = os.environ.get("DEVCLUSTER_MEMORY_GIB", "8")
+DISK_GIB = os.environ.get("DEVCLUSTER_DISK_GIB", "100")
+K3S_WAIT_SECONDS = int(os.environ.get("DEVCLUSTER_K3S_WAIT_SECONDS", "120"))
+K3S_KUBECONFIG_PATH = "/etc/rancher/k3s/k3s.yaml"
+K3S_SERVER_PATTERN = re.compile(r"(?m)^(\s*server:\s*)https?://\S+:6443\s*$")
 
-check_kind() {
-  if ! command -v kind >/dev/null 2>&1; then
-    echo "devcluster: error: kind not found" >&2
-    echo "Install with: brew install kind" >&2
-    exit 1
-  fi
-}
 
-check_kubectl() {
-  if command -v devcluster-kubectl >/dev/null 2>&1; then
-    KUBECTL_BIN="devcluster-kubectl"
-  elif command -v kubectl >/dev/null 2>&1; then
-    KUBECTL_BIN="kubectl"
-  else
-    echo "devcluster: error: kubectl not found" >&2
-    echo "Install with: brew install kubernetes-cli" >&2
-    exit 1
-  fi
-}
+class DevclusterError(Exception):
+    """An expected, user-facing command failure."""
 
-export_kubeconfig() {
-  check_kind
-  mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind export kubeconfig --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
-}
 
-cmd_create() {
-  check_cluster_role
-  check_kind
-  
-  echo "Creating Kind cluster: $CLUSTER_NAME"
-  
-  if [ -f "$KIND_CONFIG" ]; then
-    mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-    export KIND_EXPERIMENTAL_PROVIDER=podman
-    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
-    export_kubeconfig
-  else
-    echo "devcluster: error: kind config not found at $KIND_CONFIG" >&2
-    exit 1
-  fi
-}
+def error(message: str) -> None:
+    print(f"devcluster: error: {message}", file=sys.stderr)
 
-cmd_up() {
-  if [ ! -f "$DEVCLUSTER_KUBECONFIG" ]; then
-    if command -v kind >/dev/null 2>&1; then
-      echo "Exporting kubeconfig to $DEVCLUSTER_KUBECONFIG..."
-      export_kubeconfig || true
-    fi
-  fi
 
-  check_kubectl
-  
-  if [ -f "$K8S_DIR/.env" ]; then
-    # Load .env as fallback for any variable not already set in shell environment
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "$line" in
-        \#*|"") continue ;;
-        *=*)
-          key="${line%%=*}"
-          val="${line#*=}"
-          key=$(echo "$key" | tr -d '[:space:]')
-          val=$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
-          if [ -n "$key" ]; then
-            eval ": \${$key:=\$val}"
-          fi
-          ;;
-      esac
-    done < "$K8S_DIR/.env"
-  fi
+def usage() -> int:
+    print(
+        """Usage: devcluster <command> [options]
 
-  echo "Provisioning secrets for namespace ai-dev..."
-  $KUBECTL_BIN create namespace ai-dev --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+Commands:
+  create    Create/start the Lima VM and export its k3s kubeconfig
+  up        Ensure k3s is running and deploy kustomize manifests
+  status    Show cluster and pod status
+  logs      Show logs for a pod (use: logs <pod> [container])
+  down      Stop cluster (preserve state)
+  delete    Delete cluster completely
 
-  $KUBECTL_BIN create secret generic workspace-mcp-secrets \
-    --namespace ai-dev \
-    --from-literal=GOOGLE_OAUTH_CLIENT_ID="${AI_DEV_GOOGLE_OAUTH_CLIENT_ID:-${AI_DEV_GOOGLE_AUTH_CLIENT_ID:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID:-${GOOGLE_OAUTH_CLIENT_ID:-}}}}" \
-    --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET:-${AI_DEV_GOOGLE_AUTH_CLIENT_SECRET:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET:-${GOOGLE_OAUTH_CLIENT_SECRET:-}}}}" \
-    --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+Environment:
+  K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)
+  DEVCLUSTER_CPUS / DEVCLUSTER_MEMORY_GIB / DEVCLUSTER_DISK_GIB
+                    VM sizing on first create (defaults: 4 / 8 / 100)
+  DEVCLUSTER_LIMA_CONFIG  Lima template (default: ~/.config/lima/devcluster.yaml)
+  DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)""",
+        file=sys.stderr,
+    )
+    return 1
 
-  echo "Deploying kustomize manifests..."
-  
-  if [ -d "$KUSTOMIZE_DIR" ]; then
-    $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
-  else
-    echo "devcluster: error: kustomize dir not found at $KUSTOMIZE_DIR" >&2
-    exit 1
-  fi
-}
 
-cmd_status() {
-  check_kubectl
-  check_kind
-  
-  echo "=== Cluster Nodes ==="
-  kind get clusters 2>/dev/null || true
-  echo ""
-  $KUBECTL_BIN get nodes
-  echo ""
-  echo "=== Pods (ai-dev namespace) ==="
-  $KUBECTL_BIN get pods -n ai-dev
-}
+def require_command(name: str, install_hint: str | None = None) -> None:
+    if shutil.which(name):
+        return
+    error(f"{name} not found")
+    if install_hint:
+        print(f"Install with: {install_hint}", file=sys.stderr)
+    raise DevclusterError
 
-cmd_logs() {
-  check_kubectl
-  if [ $# -lt 1 ]; then
-    echo "Usage: devcluster logs <pod> [container]" >&2
-    exit 1
-  fi
-  pod="$1"
-  container="${2:-}"
-  if [ -n "$container" ]; then
-    $KUBECTL_BIN logs -n ai-dev "$pod" -c "$container" --tail=100 --follow
-  else
-    $KUBECTL_BIN logs -n ai-dev "$pod" --tail=100 --follow
-  fi
-}
 
-cmd_down() {
-  check_kind
-  check_kubectl
-  echo "Stopping cluster: $CLUSTER_NAME"
-  export_kubeconfig
-  $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
-}
+def run(
+    args: Sequence[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            list(args),
+            check=False,
+            text=True,
+            input=input_text,
+            capture_output=capture,
+        )
+    except FileNotFoundError:
+        error(f"command not found: {args[0]}")
+        raise DevclusterError from None
+    if check and result.returncode:
+        if capture and result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        raise DevclusterError
+    return result
 
-cmd_delete() {
-  check_kind
-  echo "Deleting cluster: $CLUSTER_NAME"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind delete cluster --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG" 2>/dev/null || kind delete cluster --name "$CLUSTER_NAME"
-  rm -f "$DEVCLUSTER_KUBECONFIG"
-}
 
-[ $# -ge 1 ] || usage
+def check_cluster_role() -> None:
+    require_command("dotfiles-role")
+    if run(["dotfiles-role", "has", "cluster"], check=False).returncode == 0:
+        return
+    error("cluster role not enabled")
+    print("Run: dotfiles-role enable cluster", file=sys.stderr)
+    raise DevclusterError
 
-action="$1"; shift || true
 
-case "$action" in
-  create) cmd_create ;;
-  up) cmd_up ;;
-  status) cmd_status ;;
-  logs) cmd_logs "$@" ;;
-  down) cmd_down ;;
-  delete) cmd_delete ;;
-  *) usage ;;
-esac
+def check_lima() -> None:
+    require_command("limactl", "brew install lima")
+
+
+def check_kubectl() -> None:
+    require_command("kubectl", "brew install kubernetes-cli")
+
+
+def kubectl_args(args: Sequence[str]) -> list[str]:
+    if shutil.which("devcluster-kubectl"):
+        return ["devcluster-kubectl", *args]
+    return [
+        "kubectl",
+        f"--kubeconfig={KUBECONFIG_PATH}",
+        f"--context={KUBECONFIG_CONTEXT}",
+        *args,
+    ]
+
+
+def kube(args: Sequence[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    return run(kubectl_args(args), input_text=input_text)
+
+
+def lima_names_from_json(output: str) -> set[str]:
+    try:
+        decoded = json.loads(output)
+    except json.JSONDecodeError:
+        return set()
+    records = decoded if isinstance(decoded, list) else decoded.get("instances", []) if isinstance(decoded, dict) else []
+    return {record.get("name", "") for record in records if isinstance(record, dict)}
+
+
+def vm_exists() -> bool:
+    formatted = run(["limactl", "list", "--format", "{{.Name}}"], check=False, capture=True)
+    if formatted.returncode == 0 and VM_NAME in formatted.stdout.splitlines():
+        return True
+    listing = run(["limactl", "list", "--json"], check=False, capture=True)
+    return listing.returncode == 0 and VM_NAME in lima_names_from_json(listing.stdout)
+
+
+def vm_is_running() -> bool:
+    formatted = run(
+        ["limactl", "list", VM_NAME, "--format", "{{.Status}}"], check=False, capture=True
+    )
+    return formatted.returncode == 0 and formatted.stdout.strip() == "Running"
+
+
+def read_guest_kubeconfig() -> str:
+    result = run(
+        ["limactl", "shell", VM_NAME, "sudo", "cat", K3S_KUBECONFIG_PATH],
+        check=False,
+        capture=True,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def wait_for_k3s() -> str:
+    deadline = time.monotonic() + K3S_WAIT_SECONDS
+    while True:
+        service_active = run(
+            ["limactl", "shell", VM_NAME, "sudo", "systemctl", "is-active", "--quiet", "k3s"],
+            check=False,
+        ).returncode == 0
+        guest_config = read_guest_kubeconfig() if service_active else ""
+        if guest_config and K3S_SERVER_PATTERN.search(guest_config):
+            return guest_config
+        if time.monotonic() >= deadline:
+            error(f"k3s kubeconfig did not become ready within {K3S_WAIT_SECONDS}s")
+            print(
+                f"Inspect: limactl shell {VM_NAME} sudo journalctl -u k3s -b --no-pager",
+                file=sys.stderr,
+            )
+            raise DevclusterError
+        time.sleep(2)
+
+
+def export_kubeconfig(guest_config: str) -> None:
+    KUBECONFIG_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    rewritten_path: Path | None = None
+    try:
+        rewritten, substitutions = K3S_SERVER_PATTERN.subn(
+            rf"\1https://127.0.0.1:{API_PORT}", guest_config, count=1
+        )
+        if substitutions != 1:
+            error("could not find a k3s API server URL ending in :6443")
+            raise DevclusterError
+        with tempfile.NamedTemporaryFile(
+            mode="w", prefix=f"{KUBECONFIG_PATH.name}.", dir=KUBECONFIG_PATH.parent, delete=False
+        ) as rewritten_file:
+            rewritten_file.write(rewritten)
+            rewritten_path = Path(rewritten_file.name)
+        run(["kubectl", "--kubeconfig", str(rewritten_path), "config", "rename-context", "default", KUBECONFIG_CONTEXT])
+        run(["kubectl", "--kubeconfig", str(rewritten_path), "config", "use-context", KUBECONFIG_CONTEXT])
+        os.chmod(rewritten_path, 0o600)
+        os.replace(rewritten_path, KUBECONFIG_PATH)
+    finally:
+        if rewritten_path:
+            rewritten_path.unlink(missing_ok=True)
+
+
+def ensure_vm_and_k3s() -> None:
+    check_lima()
+    check_kubectl()
+    if vm_exists():
+        if not vm_is_running():
+            print(f"Starting Lima VM: {VM_NAME}")
+            run(["limactl", "start", VM_NAME])
+    else:
+        if not LIMA_CONFIG.is_file():
+            error(f"Lima config not found at {LIMA_CONFIG}")
+            raise DevclusterError
+        print(f"Creating Lima VM: {VM_NAME}")
+        run(
+            [
+                "limactl",
+                "start",
+                "--name",
+                VM_NAME,
+                "--cpus",
+                CPUS,
+                "--memory",
+                MEMORY_GIB,
+                "--disk",
+                DISK_GIB,
+                str(LIMA_CONFIG),
+            ]
+        )
+    guest_config = wait_for_k3s()
+    export_kubeconfig(guest_config)
+
+
+def load_dotenv_fallback(path: Path) -> None:
+    if not path.is_file():
+        return
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        if key and not os.environ.get(key):
+            os.environ[key] = value
+
+
+def first_environment(*names: str) -> str:
+    return next((os.environ[name] for name in names if os.environ.get(name)), "")
+
+
+def cmd_create() -> None:
+    check_cluster_role()
+    ensure_vm_and_k3s()
+    print(f"k3s kubeconfig exported to {KUBECONFIG_PATH} (context: {KUBECONFIG_CONTEXT})")
+
+
+def cmd_up() -> None:
+    check_cluster_role()
+    ensure_vm_and_k3s()
+    load_dotenv_fallback(K8S_DIR / ".env")
+
+    print("Provisioning secrets for namespace ai-dev...")
+    namespace = run([*kubectl_args(["create", "namespace", "ai-dev", "--dry-run=client", "-o", "yaml"])], capture=True).stdout
+    kube(["apply", "-f", "-"], input_text=namespace)
+    secret = run(
+        [
+            *kubectl_args(
+                [
+                    "create",
+                    "secret",
+                    "generic",
+                    "workspace-mcp-secrets",
+                    "--namespace",
+                    "ai-dev",
+                    f"--from-literal=GOOGLE_OAUTH_CLIENT_ID={first_environment('AI_DEV_GOOGLE_OAUTH_CLIENT_ID', 'AI_DEV_GOOGLE_AUTH_CLIENT_ID', 'DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_ID')}",
+                    f"--from-literal=GOOGLE_OAUTH_CLIENT_SECRET={first_environment('AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET', 'AI_DEV_GOOGLE_AUTH_CLIENT_SECRET', 'DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_OAUTH_CLIENT_SECRET')}",
+                    "--dry-run=client",
+                    "-o",
+                    "yaml",
+                ]
+            ),
+        ],
+        capture=True,
+    ).stdout
+    kube(["apply", "-f", "-"], input_text=secret)
+
+    print("Deploying kustomize manifests...")
+    if not K8S_DIR.is_dir():
+        error(f"kustomize dir not found at {K8S_DIR}")
+        raise DevclusterError
+    kube(["apply", "-k", str(K8S_DIR)])
+
+
+def cmd_status() -> None:
+    check_lima()
+    check_kubectl()
+    print("=== Lima VM ===")
+    result = run(["limactl", "list", VM_NAME], check=False, capture=True)
+    if result.returncode:
+        print(f"VM '{VM_NAME}' does not exist")
+    else:
+        print(result.stdout, end="")
+    print("\n=== k3s service ===")
+    if vm_is_running():
+        run(["limactl", "shell", VM_NAME, "sudo", "systemctl", "is-active", "k3s"], check=False)
+    else:
+        print("not running")
+    if KUBECONFIG_PATH.is_file():
+        print("\n=== Cluster Nodes ===")
+        kube(["get", "nodes"])
+        print("\n=== Pods (ai-dev namespace) ===")
+        kube(["get", "pods", "-n", "ai-dev"])
+    else:
+        print(f"\nKubeconfig not found: {KUBECONFIG_PATH}")
+
+
+def cmd_logs(args: Sequence[str]) -> None:
+    check_kubectl()
+    if not args:
+        print("Usage: devcluster logs <pod> [container]", file=sys.stderr)
+        raise DevclusterError
+    command = ["logs", "-n", "ai-dev", args[0]]
+    if len(args) > 1:
+        command.extend(["-c", args[1]])
+    command.extend(["--tail=100", "--follow"])
+    kube(command)
+
+
+def cmd_down() -> None:
+    check_cluster_role()
+    check_lima()
+    if vm_exists():
+        print(f"Stopping Lima VM: {VM_NAME}")
+        run(["limactl", "stop", VM_NAME])
+    else:
+        print(f"Lima VM '{VM_NAME}' does not exist")
+
+
+def cmd_delete() -> None:
+    check_cluster_role()
+    check_lima()
+    if vm_exists():
+        print(f"Deleting Lima VM: {VM_NAME}")
+        run(["limactl", "delete", "--force", VM_NAME])
+    else:
+        print(f"Lima VM '{VM_NAME}' does not exist")
+    KUBECONFIG_PATH.unlink(missing_ok=True)
+
+
+def main(argv: Sequence[str]) -> int:
+    if not argv:
+        return usage()
+    command, *args = argv
+    try:
+        if command == "create":
+            cmd_create()
+        elif command == "up":
+            cmd_up()
+        elif command == "status":
+            cmd_status()
+        elif command == "logs":
+            cmd_logs(args)
+        elif command == "down":
+            cmd_down()
+        elif command == "delete":
+            cmd_delete()
+        else:
+            return usage()
+    except (DevclusterError, ValueError):
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

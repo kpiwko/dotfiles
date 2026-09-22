@@ -1,6 +1,9 @@
 # Kubernetes AI Development Stack
 
-This directory contains Kubernetes manifests for the AI development infrastructure managed by devcluster.
+This directory contains Kustomize manifests for the AI development
+infrastructure managed by `devcluster`. The cluster is a dedicated Lima
+`devcluster` VM running CentOS Stream 9 and a systemd-managed single-node k3s
+server with its embedded containerd. It is not a Kind or Podman cluster.
 
 ## NotebookLM MCP Authentication Guide
 
@@ -10,7 +13,7 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
    `http://localhost:17982/vnc.html` (click **Connect**)
 2. In your host terminal, run:
    ```bash
-   KUBECONFIG=~/.kube/opencode-devcluster kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
+   devcluster-kubectl exec -it deployment/notebooklm-mcp -n ai-dev -- nlm login
    ```
 3. In the Chromium window inside the noVNC browser tab, complete the Google login with your account (`kpiwko@redhat.com`).
 4. Once logged in, session tokens are saved to the container volume and the MCP endpoint at `http://localhost:17980/mcp` is live.
@@ -26,7 +29,8 @@ The stack includes:
 ### MLflow
 - Requests: 200m CPU, 512Mi memory
 - Limits: 1000m CPU, 1Gi memory
-- PVC: 10Gi (SQLite backend and file artifacts)
+- PVC: 10Gi (SQLite backend and file artifacts), using k3s' `local-path`
+  storage class
 - NodePort: 17902 (`https://mlflow.example.internal` through Caddy)
 - Reasoning: Single-replica local tracking server; the persistent volume retains experiments and artifacts.
 
@@ -43,15 +47,22 @@ connect to `http://127.0.0.1:15000`.
 
 ## Port Mapping
 
-| Container Port | Host Port | Service | Description |
-|----------------|-----------|---------|-------------|
-| 80 | 17988 | Ingress HTTP | HTTP ingress traffic |
-| 443 | 17943 | Ingress HTTPS | HTTPS ingress traffic |
+Lima forwards guest port `6443` to host `127.0.0.1:17964`, and forwards each
+k3s NodePort in `17900-17999` to the same host-loopback port. k3s is configured
+with this deliberately narrow NodePort range; Traefik and ServiceLB are
+disabled because host Caddy proxies these stable forwards.
+
+| Service Port | NodePort / Host Port | Service | Description |
+|--------------|----------------------|---------|-------------|
 | 5000 | 17902 | MLflow | GenAI tracking UI and API |
 | 17200 | 17980 | MCP NotebookLM | NotebookLM MCP server |
 | 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
 | 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
+
+Ports `17900` and `17901` are ready for future services. The Caddy templates
+under `~/.config/caddy/sites/` already reverse proxy MLflow and MCP traffic to
+the listed loopback ports.
 
 ## Commands Reference
 
@@ -93,18 +104,18 @@ make cluster-delete
 
 ```bash
 # Apply manifests
-kubectl apply -k ~/.config/k8s/
+devcluster-kubectl apply -k ~/.config/k8s/
 
 # View resources
-kubectl get all -n ai-dev
-kubectl get pods -n ai-dev
-kubectl get services -n ai-dev
+devcluster-kubectl get all -n ai-dev
+devcluster-kubectl get pods -n ai-dev
+devcluster-kubectl get services -n ai-dev
 
 # Port-forward MLflow for debugging
-kubectl port-forward svc/mlflow 15000:5000 -n ai-dev
+devcluster-kubectl port-forward svc/mlflow 15000:5000 -n ai-dev
 
 # View MLflow logs
-kubectl logs -n ai-dev -l app=mlflow --follow
+devcluster-kubectl logs -n ai-dev -l app=mlflow --follow
 ```
 
 ### Secret Management & Auto-Provisioning
@@ -115,11 +126,11 @@ active shell environment or an optional `~/.config/k8s/.env` fallback.
 Manual creation (if needed):
 ```bash
 # Provision workspace-mcp-secrets
-kubectl create secret generic workspace-mcp-secrets \
+devcluster-kubectl create secret generic workspace-mcp-secrets \
   --namespace ai-dev \
   --from-literal=GOOGLE_OAUTH_CLIENT_ID="${AI_DEV_GOOGLE_OAUTH_CLIENT_ID:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID:-${GOOGLE_OAUTH_CLIENT_ID:-}}}" \
   --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET:-${GOOGLE_OAUTH_CLIENT_SECRET:-}}}" \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --dry-run=client -o yaml | devcluster-kubectl apply -f -
 ```
 
 ## Secrets Reference
@@ -199,23 +210,23 @@ export AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET="GOCSPX-your-client-secret"
 
 ### Pod CrashLoopBackOff
 ```bash
-kubectl logs <pod-name> -n ai-dev
-kubectl describe pod <pod-name> -n ai-dev
+devcluster-kubectl logs <pod-name> -n ai-dev
+devcluster-kubectl describe pod <pod-name> -n ai-dev
 ```
 
 ### Service Not Accessible
 ```bash
-kubectl get svc -n ai-dev
-kubectl describe service <service-name> -n ai-dev
+devcluster-kubectl get svc -n ai-dev
+devcluster-kubectl describe service <service-name> -n ai-dev
 ```
 
 ### Connection Refused
 ```bash
 # Check if service is running
-kubectl get endpoints <service-name> -n ai-dev
+devcluster-kubectl get endpoints <service-name> -n ai-dev
 
 # Test internal connectivity
-kubectl run -it --rm debug --image=busybox -n ai-dev -- sh
+devcluster-kubectl run -it --rm debug --image=busybox -n ai-dev -- sh
 nslookup <service-name>
 ```
 
@@ -225,5 +236,5 @@ nslookup <service-name>
 ```bash
 # Update image versions in manifests
 # Reapply
-kubectl apply -k ~/.config/k8s/
+devcluster-kubectl apply -k ~/.config/k8s/
 ```

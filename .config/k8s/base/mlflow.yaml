@@ -9,7 +9,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: standard
+  # k3s ships this provisioner by default; Kind's `standard` class does not.
+  storageClassName: local-path
   resources:
     requests:
       storage: 10Gi
@@ -34,7 +35,7 @@ spec:
     spec:
       containers:
         - name: mlflow
-          image: ghcr.io/mlflow/mlflow:v3.16.1
+          image: ghcr.io/mlflow/mlflow:v3.16.1-full
           command:
             - mlflow
           args:

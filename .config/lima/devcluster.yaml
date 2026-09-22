@@ -1,0 +1,118 @@
+# Dedicated single-node Kubernetes VM for the dotfiles `cluster` role.
+#
+# This extends Lima's official CentOS Stream 9 image template:
+# https://github.com/lima-vm/lima/blob/master/templates/_images/centos-stream-9.yaml
+# That template supplies the native aarch64 image used on Apple Silicon.
+minimumLimaVersion: 2.0.0
+base:
+  - https://raw.githubusercontent.com/lima-vm/lima/master/templates/_images/centos-stream-9.yaml
+
+# Apple Silicon hosts use VZ and the native CentOS Stream aarch64 image.
+vmType: vz
+arch: aarch64
+cpus: 4
+memory: "8GiB"
+disk: "100GiB"
+
+# k3s owns its embedded containerd. Do not install Lima's optional containerd
+# or any other container runtime in this VM.
+containerd:
+  system: false
+  user: false
+
+# Keep host access stable: the k3s API is exposed separately and every allowed
+# NodePort is forwarded on loopback. This includes 17900/17901 for future
+# services and the current MLflow/MCP ports.
+portForwards:
+  - guestPort: 6443
+    hostIP: "127.0.0.1"
+    hostPort: 17964
+    proto: tcp
+  - guestPortRange: [17900, 17999]
+    hostIP: "127.0.0.1"
+    hostPortRange: [17900, 17999]
+    proto: tcp
+  # Match Lima's documented catch-all exactly. Rules are evaluated in order,
+  # so the two allowlisted rules above win; all other TCP and UDP listeners
+  # (rpcbind, kubelet, flannel, etc.) stay inside the guest.
+  - guestIP: "0.0.0.0"
+    proto: any
+    ignore: true
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euxo pipefail
+
+      # CentOS Stream 9 may place overlay/vxlan outside the base kernel
+      # package. k3s needs these modules plus bridge netfilter support.
+      dnf install -y curl ca-certificates firewalld kernel-modules-extra \
+        container-selinux selinux-policy-base policycoreutils-python-utils \
+        iptables iptables-nft
+
+      cat >/etc/modules-load.d/k3s.conf <<'EOF'
+      overlay
+      br_netfilter
+      vxlan
+      EOF
+      modprobe overlay
+      modprobe br_netfilter
+      modprobe vxlan
+
+      cat >/etc/sysctl.d/90-k3s.conf <<'EOF'
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+      EOF
+      sysctl --system
+
+      # Retain SELinux enforcing. Rancher publishes this supported EL9 policy
+      # RPM; install it before k3s so the installer detects it as present.
+      if ! rpm -q k3s-selinux >/dev/null 2>&1; then
+        dnf install -y \
+          https://rpm.rancher.io/k3s/latest/common/centos/9/noarch/k3s-selinux-1.6-1.el9.noarch.rpm
+      fi
+
+      mkdir -p /etc/rancher/k3s
+      cat >/etc/rancher/k3s/config.yaml <<'EOF'
+      disable:
+        - traefik
+        - servicelb
+      write-kubeconfig-mode: "0644"
+      https-listen-port: 6443
+      tls-san:
+        - "127.0.0.1"
+        - "localhost"
+      service-node-port-range: "17900-17999"
+      flannel-backend: vxlan
+      EOF
+
+      # Keep the guest firewall enabled. Only the Lima-forwarded API and local
+      # development NodePort range are opened; pod and service CIDRs are trusted
+      # for the single-node flannel network.
+      systemctl enable --now firewalld
+      firewall-cmd --permanent --add-port=6443/tcp
+      firewall-cmd --permanent --add-port=17900-17999/tcp
+      firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16
+      firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16
+      firewall-cmd --reload
+
+      if ! command -v k3s >/dev/null 2>&1; then
+        curl --fail --location --retry 3 https://get.k3s.io | \
+          INSTALL_K3S_EXEC="server" sh -
+      fi
+      systemctl enable --now k3s
+
+probes:
+  - mode: readiness
+    description: k3s API service is active
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      sudo systemctl is-active --quiet k3s
+    hint: |
+      k3s did not become active. Inspect it with:
+        limactl shell devcluster sudo journalctl -u k3s -b --no-pager
