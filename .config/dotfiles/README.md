@@ -73,7 +73,7 @@ a machine can opt into additional, non-exclusive **roles** that install
 extra software and services. Available roles include:
 - `dev`: Local development workstation (enables local Caddy reverse proxy, local TLS, developer tools).
 - `ai-server`: Dedicated AI server (Caddy reverse proxy with Cloudflare DNS-01 TLS, local LLM/tracing backends).
-- `cluster`: Local Kubernetes development environment (Lima, CentOS Stream 10,
+- `cluster`: Local Kubernetes development environment (Lima, CentOS Stream 9,
   k3s, MLflow, and MCP servers).
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
@@ -211,11 +211,11 @@ The `cluster` role runs a dedicated, single-node Kubernetes VM rather than a
 Kind cluster. The host architecture is:
 
 ```text
-macOS -> Lima VM (devcluster) -> CentOS Stream 10 -> k3s -> embedded containerd
+macOS -> Lima VM (devcluster) -> CentOS Stream 9 -> k3s -> embedded containerd
 ```
 
 The repository-owned template is
-`~/.config/lima/devcluster.yaml`. It extends Lima's official CentOS Stream 10
+`~/.config/lima/devcluster.yaml`. It extends Lima's official CentOS Stream 9
 template, uses the native aarch64 image on Apple Silicon, and intentionally
 disables Lima-managed containerd. Do not install Podman or another container
 runtime in this VM: k3s manages its supported embedded containerd itself.

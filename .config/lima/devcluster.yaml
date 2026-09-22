@@ -1,17 +1,17 @@
 # Dedicated single-node Kubernetes VM for the dotfiles `cluster` role.
 #
-# This extends Lima's official CentOS Stream 10 image template:
-# https://github.com/lima-vm/lima/blob/master/templates/_images/centos-stream-10.yaml
+# This extends Lima's official CentOS Stream 9 image template:
+# https://github.com/lima-vm/lima/blob/master/templates/_images/centos-stream-9.yaml
 # That template supplies native aarch64 images and the legacyBIOS firmware
-# setting required by CentOS Stream 10.
+# setting required by CentOS Stream 9.
 minimumLimaVersion: 2.0.0
 base:
-  - https://raw.githubusercontent.com/lima-vm/lima/master/templates/_images/centos-stream-10.yaml
+  - https://raw.githubusercontent.com/lima-vm/lima/master/templates/_images/centos-stream-9.yaml
 
 # Apple Silicon hosts use VZ and the native CentOS Stream aarch64 image.
 vmType: vz
 arch: aarch64
-# Retained from the upstream CentOS Stream 10 template. Lima ignores this for
+# Retained from the upstream CentOS Stream 9 template. Lima ignores this for
 # VZ/aarch64, but it is required when the image is booted with QEMU on x86_64.
 firmware:
   legacyBIOS: true
@@ -44,10 +44,11 @@ provision:
       #!/bin/bash
       set -euxo pipefail
 
-      # CentOS Stream 10 may place overlay/vxlan outside the base kernel
+      # CentOS Stream 9 may place overlay/vxlan outside the base kernel
       # package. k3s needs these modules plus bridge netfilter support.
       dnf install -y curl ca-certificates firewalld kernel-modules-extra \
-        container-selinux selinux-policy-base policycoreutils-python-utils
+        container-selinux selinux-policy-base policycoreutils-python-utils \
+        iptables iptables-nft
 
       cat >/etc/modules-load.d/k3s.conf <<'EOF'
       overlay
@@ -65,14 +66,11 @@ provision:
       EOF
       sysctl --system
 
-      # Retain SELinux enforcing. Install k3s' supported policy before k3s;
-      # the installer is told not to substitute a second policy-install path.
+      # Retain SELinux enforcing. Rancher publishes this supported EL9 policy
+      # RPM; install it before k3s so the installer detects it as present.
       if ! rpm -q k3s-selinux >/dev/null 2>&1; then
-        curl --fail --location --retry 3 \
-          --output /tmp/k3s-selinux.rpm \
-          https://github.com/k3s-io/k3s-selinux/releases/latest/download/k3s-selinux.noarch.rpm
-        dnf install -y /tmp/k3s-selinux.rpm
-        rm -f /tmp/k3s-selinux.rpm
+        dnf install -y \
+          https://rpm.rancher.io/k3s/latest/common/centos/9/noarch/k3s-selinux-1.6-1.el9.noarch.rpm
       fi
 
       mkdir -p /etc/rancher/k3s
@@ -98,7 +96,6 @@ provision:
 
       if ! command -v k3s >/dev/null 2>&1; then
         curl --fail --location --retry 3 https://get.k3s.io | \
-          INSTALL_K3S_SKIP_SELINUX_RPM=true \
           INSTALL_K3S_EXEC="server" sh -
       fi
       systemctl enable --now k3s

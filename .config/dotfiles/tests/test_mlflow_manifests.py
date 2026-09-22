@@ -9,7 +9,7 @@ LIMA_CONFIG = ROOT / ".config" / "lima" / "devcluster.yaml"
 def test_lima_template_uses_centos_k3s_without_a_second_runtime() -> None:
     template = LIMA_CONFIG.read_text()
 
-    assert "templates/_images/centos-stream-10.yaml" in template
+    assert "templates/_images/centos-stream-9.yaml" in template
     assert "arch: aarch64" in template
     assert "legacyBIOS: true" in template
     assert 'memory: "16GiB"' in template
@@ -17,6 +17,8 @@ def test_lima_template_uses_centos_k3s_without_a_second_runtime() -> None:
     assert "system: false" in template
     assert "user: false" in template
     assert "k3s-selinux" in template
+    assert "k3s-selinux-1.6-1.el9.noarch.rpm" in template
+    assert "iptables iptables-nft" in template
     assert "systemctl enable --now firewalld" in template
     assert "- traefik" in template
     assert "- servicelb" in template

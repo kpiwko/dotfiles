@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import stat
+import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -116,7 +118,13 @@ def test_create_requires_cluster_role(devcluster_env: tuple[dict[str, str], Path
 def test_create_requires_limactl(devcluster_env: tuple[dict[str, str], Path]) -> None:
     env, root = devcluster_env
     enable_cluster(env)
-    (root / "stubs" / "limactl").unlink()
+    stubs = root / "stubs"
+    (stubs / "limactl").unlink()
+    make_executable(stubs / "python3", f'exec "{sys.executable}" "$@"\n')
+    grep = shutil.which("grep")
+    assert grep is not None
+    make_executable(stubs / "grep", f'exec "{grep}" "$@"\n')
+    env["PATH"] = str(stubs)
     result = run_script(SCRIPT, "create", env=env)
     assert result.returncode == 1
     assert "limactl not found" in result.stderr

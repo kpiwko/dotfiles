@@ -2,7 +2,7 @@
 
 This directory contains Kustomize manifests for the AI development
 infrastructure managed by `devcluster`. The cluster is a dedicated Lima
-`devcluster` VM running CentOS Stream 10 and a systemd-managed single-node k3s
+`devcluster` VM running CentOS Stream 9 and a systemd-managed single-node k3s
 server with its embedded containerd. It is not a Kind or Podman cluster.
 
 ## NotebookLM MCP Authentication Guide
