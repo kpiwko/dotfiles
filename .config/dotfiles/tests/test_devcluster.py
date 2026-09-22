@@ -8,44 +8,94 @@ from conftest import BIN, run_script
 
 pytestmark = pytest.mark.binary("devcluster")
 SCRIPT = BIN / "devcluster"
+KUBECTL_WRAPPER = BIN / "devcluster-kubectl"
 
 
 def make_executable(path: Path, body: str) -> None:
-    path.write_text("#!/bin/sh\n" + body)
+    path.write_text("#!/bin/sh\nset -eu\n" + body)
     path.chmod(0o755)
 
 
 @pytest.fixture
 def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str, str], Path]:
+    home = tmp_path / "home"
+    home.mkdir()
     k8s = tmp_path / "k8s"
     k8s.mkdir()
+    lima_config = tmp_path / "devcluster.yaml"
+    lima_config.write_text("cpus: 8\n")
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     roles = tmp_path / "roles"
-    kubeconfig = tmp_path / "kubeconfig"
+    state = tmp_path / "lima-state"
+    log = tmp_path / "commands.log"
 
     make_executable(
         stubs / "dotfiles-role",
         f'[ "$1" = has ] && [ "$2" = cluster ] && grep -qx cluster "{roles}" 2>/dev/null\n',
     )
     make_executable(
-        stubs / "kind",
-        'echo "kind $*"\n'
-        'if [ "$1" = export ]; then while [ "$#" -gt 0 ]; do if [ "$1" = --kubeconfig ]; then shift; mkdir -p "$(dirname "$1")"; touch "$1"; fi; shift; done; fi\n',
+        stubs / "limactl",
+        "state=${LIMA_STATE:?}\n"
+        "log=${LIMA_LOG:?}\n"
+        "case \"$1\" in\n"
+        "  list)\n"
+        "    if [ \"${2:-}\" = --format ]; then\n"
+        "      [ -f \"$state\" ] || exit 0\n"
+        "      case \"$3\" in '{{.Name}}') printf '%s\\n' devcluster ;; '{{.Status}}') cat \"$state\" ;; esac\n"
+        "    elif [ \"${3:-}\" = --format ]; then\n"
+        "      [ -f \"$state\" ] || exit 0\n"
+        "      case \"$4\" in '{{.Name}}') printf '%s\\n' devcluster ;; '{{.Status}}') cat \"$state\" ;; esac\n"
+        "    elif [ -f \"$state\" ]; then printf 'devcluster %s\\n' \"$(cat \"$state\")\"; fi\n"
+        "    ;;\n"
+        "  start)\n"
+        "    printf 'limactl %s\\n' \"$*\" >>\"$log\"\n"
+        "    printf '%s\\n' Running >\"$state\"\n"
+        "    ;;\n"
+        "  shell)\n"
+        "    printf 'limactl %s\\n' \"$*\" >>\"$log\"\n"
+        "    case \"$*\" in\n"
+        "      *'cat /etc/rancher/k3s/k3s.yaml'*) printf '%s\\n' 'apiVersion: v1' 'clusters:' '  - cluster:' '      server: https://127.0.0.1:6443' 'contexts:' '  - name: default' 'current-context: default' ;;\n"
+        "      *) [ -f \"$state\" ] && [ \"$(cat \"$state\")\" = Running ] ;;\n"
+        "    esac\n"
+        "    ;;\n"
+        "  stop) printf 'limactl %s\\n' \"$*\" >>\"$log\"; printf '%s\\n' Stopped >\"$state\" ;;\n"
+        "  delete) printf 'limactl %s\\n' \"$*\" >>\"$log\"; rm -f \"$state\" ;;\n"
+        "esac\n",
+    )
+    make_executable(
+        stubs / "kubectl",
+        'printf "kubectl %s\\n" "$*" >>"$LIMA_LOG"\n',
     )
     make_executable(
         stubs / "devcluster-kubectl",
-        'echo "kubectl $*"\n'
-        'if [ "$1" = create ]; then echo "kind: Secret"; fi\n'
-        'if [ "$1" = apply ] && [ "$2" = -f ]; then cat; fi\n',
+        'printf "devcluster-kubectl %s\\n" "$*" >>"$LIMA_LOG"\n'
+        'if [ "${1:-}" = create ]; then printf "%s\\n" "kind: Secret"; fi\n'
+        'if [ "${1:-}" = apply ] && [ "${2:-}" = -f ]; then cat; fi\n',
     )
     env = clean_env | {
+        "HOME": str(home),
         "K8S_DIR": str(k8s),
+        "DEVCLUSTER_LIMA_CONFIG": str(lima_config),
         "DOTFILES_ROLES_FILE": str(roles),
-        "DEVCLUSTER_KUBECONFIG": str(kubeconfig),
+        "LIMA_STATE": str(state),
+        "LIMA_LOG": str(log),
         "PATH": f"{stubs}:{clean_env['PATH']}",
     }
     return env, tmp_path
+
+
+def command_log(root: Path) -> str:
+    log = root / "commands.log"
+    return log.read_text() if log.exists() else ""
+
+
+def kubeconfig_path(env: dict[str, str]) -> Path:
+    return Path(env["HOME"]) / ".kube" / "opencode-devcluster"
+
+
+def enable_cluster(env: dict[str, str]) -> None:
+    Path(env["DOTFILES_ROLES_FILE"]).write_text("cluster\n")
 
 
 def test_usage_without_command(devcluster_env: tuple[dict[str, str], Path]) -> None:
@@ -62,28 +112,155 @@ def test_create_requires_cluster_role(devcluster_env: tuple[dict[str, str], Path
     assert "cluster role not enabled" in result.stderr
 
 
-def test_create_uses_kind_config(devcluster_env: tuple[dict[str, str], Path]) -> None:
-    env, _ = devcluster_env
-    Path(env["DOTFILES_ROLES_FILE"]).write_text("cluster\n")
-    config = Path(env["K8S_DIR"]) / "kind-config.yaml"
-    config.write_text("kind: Cluster\n")
+def test_create_requires_limactl(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    (root / "stubs" / "limactl").unlink()
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 1
+    assert "limactl not found" in result.stderr
+    assert "brew install lima" in result.stderr
+
+
+def test_create_creates_vm_waits_for_k3s_and_exports_kubeconfig(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
     result = run_script(SCRIPT, "create", env=env)
     assert result.returncode == 0, result.stderr
-    assert f"create cluster --name kind-ai-dev --config {config}" in result.stdout
-    assert Path(env["DEVCLUSTER_KUBECONFIG"]).exists()
+    log = command_log(root)
+    assert "limactl start --name devcluster --cpus 8 --memory 16 --disk 100" in log
+    assert "limactl shell devcluster sudo systemctl is-active --quiet k3s" in log
+    assert "limactl shell devcluster sudo cat /etc/rancher/k3s/k3s.yaml" in log
+    assert "config rename-context default devcluster" in log
+    assert "config use-context devcluster" in log
+    assert "127.0.0.1:17964" in kubeconfig_path(env).read_text()
+    assert "context: devcluster" in result.stdout
 
 
-def test_up_provisions_only_workspace_mcp_secrets(devcluster_env: tuple[dict[str, str], Path]) -> None:
-    env, _ = devcluster_env
+def test_create_uses_first_creation_sizing_overrides(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    env |= {
+        "DEVCLUSTER_CPUS": "10",
+        "DEVCLUSTER_MEMORY_GIB": "24",
+        "DEVCLUSTER_DISK_GIB": "150",
+    }
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "limactl start --name devcluster --cpus 10 --memory 24 --disk 150" in command_log(root)
+
+
+def test_create_is_idempotent_for_running_vm(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    Path(env["LIMA_STATE"]).write_text("Running\n")
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "limactl start" not in command_log(root)
+
+
+def test_create_requires_lima_configuration(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    Path(env["DEVCLUSTER_LIMA_CONFIG"]).unlink()
+    result = run_script(SCRIPT, "create", env=env)
+    assert result.returncode == 1
+    assert "Lima config not found" in result.stderr
+    assert not (root / "lima-state").exists()
+
+
+def test_up_starts_stopped_vm_and_provisions_workspace_secret(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    Path(env["LIMA_STATE"]).write_text("Stopped\n")
     result = run_script(SCRIPT, "up", env=env)
     assert result.returncode == 0, result.stderr
-    assert "workspace-mcp-secrets" in result.stdout
-    assert "ai-dev-secrets" not in result.stdout
+    log = command_log(root)
+    assert "limactl start devcluster" in log
+    assert "workspace-mcp-secrets" in log
+    assert "apply -k" in log
+    assert "ai-dev-secrets" not in log
 
 
 def test_dotenv_is_fallback_for_workspace_oauth(devcluster_env: tuple[dict[str, str], Path]) -> None:
-    env, _ = devcluster_env
+    env, root = devcluster_env
+    enable_cluster(env)
     (Path(env["K8S_DIR"]) / ".env").write_text("AI_DEV_GOOGLE_OAUTH_CLIENT_ID=from-file\n")
     result = run_script(SCRIPT, "up", env=env)
     assert result.returncode == 0, result.stderr
-    assert "GOOGLE_OAUTH_CLIENT_ID=from-file" in result.stdout
+    assert "GOOGLE_OAUTH_CLIENT_ID=from-file" in command_log(root)
+
+
+def test_status_reports_lima_k3s_nodes_and_pods(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, _ = devcluster_env
+    Path(env["LIMA_STATE"]).write_text("Running\n")
+    kubeconfig_path(env).parent.mkdir()
+    kubeconfig_path(env).write_text("apiVersion: v1\n")
+    result = run_script(SCRIPT, "status", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "=== Lima VM ===" in result.stdout
+    assert "=== k3s service ===" in result.stdout
+    assert "=== Cluster Nodes ===" in result.stdout
+    assert "=== Pods (ai-dev namespace) ===" in result.stdout
+
+
+def test_logs_delegates_pod_and_container(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    result = run_script(SCRIPT, "logs", "notebooklm-mcp-123", "notebooklm-mcp", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "logs -n ai-dev notebooklm-mcp-123 -c notebooklm-mcp --tail=100 --follow" in command_log(root)
+
+
+def test_logs_requires_a_pod_name(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "logs", env=env)
+    assert result.returncode == 1
+    assert "Usage: devcluster logs <pod> [container]" in result.stderr
+
+
+def test_down_stops_vm_without_destroying_state(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    Path(env["LIMA_STATE"]).write_text("Running\n")
+    result = run_script(SCRIPT, "down", env=env)
+    assert result.returncode == 0, result.stderr
+    assert Path(env["LIMA_STATE"]).read_text() == "Stopped\n"
+    assert "limactl stop devcluster" in command_log(root)
+
+
+def test_delete_deletes_vm_and_kubeconfig(devcluster_env: tuple[dict[str, str], Path]) -> None:
+    env, root = devcluster_env
+    enable_cluster(env)
+    Path(env["LIMA_STATE"]).write_text("Running\n")
+    kubeconfig_path(env).parent.mkdir()
+    kubeconfig_path(env).write_text("apiVersion: v1\n")
+    result = run_script(SCRIPT, "delete", env=env)
+    assert result.returncode == 0, result.stderr
+    assert not Path(env["LIMA_STATE"]).exists()
+    assert not kubeconfig_path(env).exists()
+    assert "limactl delete --force devcluster" in command_log(root)
+
+
+def test_kubectl_wrapper_rejects_flag_and_environment_overrides(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, root = devcluster_env
+    kubeconfig_path(env).parent.mkdir()
+    kubeconfig_path(env).write_text("apiVersion: v1\n")
+    escaped = root / "escaped-kubeconfig"
+    escaped.write_text("apiVersion: v1\n")
+    env["DEVCLUSTER_KUBECONFIG"] = str(escaped)
+
+    rejected = run_script(KUBECTL_WRAPPER, "--context=other", env=env)
+    assert rejected.returncode == 1
+    assert "overriding kubeconfig or context is not allowed" in rejected.stderr
+
+    allowed = run_script(KUBECTL_WRAPPER, "get", "nodes", env=env)
+    assert allowed.returncode == 0, allowed.stderr
+    log = command_log(root)
+    assert f"--kubeconfig={kubeconfig_path(env)} --context=devcluster get nodes" in log
+    assert str(escaped) not in log

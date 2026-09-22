@@ -1,21 +1,27 @@
 #!/bin/sh
-# devcluster - Kubernetes (Kind) AI infrastructure management
+# devcluster - Lima + k3s AI infrastructure management
 # Supports roles: cluster
 
 set -eu
 
 K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
-CLUSTER_NAME="kind-ai-dev"
-KIND_CONFIG="$K8S_DIR/kind-config.yaml"
 KUSTOMIZE_DIR="$K8S_DIR"
-DEVCLUSTER_KUBECONFIG="${DEVCLUSTER_KUBECONFIG:-$HOME/.kube/opencode-devcluster}"
+VM_NAME="devcluster"
+LIMA_CONFIG="${DEVCLUSTER_LIMA_CONFIG:-$HOME/.config/lima/devcluster.yaml}"
+DEVCLUSTER_KUBECONFIG="$HOME/.kube/opencode-devcluster"
+DEVCLUSTER_CONTEXT="devcluster"
+DEVCLUSTER_API_PORT="${DEVCLUSTER_API_PORT:-17964}"
+DEVCLUSTER_CPUS="${DEVCLUSTER_CPUS:-8}"
+DEVCLUSTER_MEMORY_GIB="${DEVCLUSTER_MEMORY_GIB:-16}"
+DEVCLUSTER_DISK_GIB="${DEVCLUSTER_DISK_GIB:-100}"
+DEVCLUSTER_K3S_WAIT_SECONDS="${DEVCLUSTER_K3S_WAIT_SECONDS:-120}"
 
 usage() {
   echo "Usage: devcluster <command> [options]" >&2
   echo "" >&2
   echo "Commands:" >&2
-  echo "  create    Create Kind cluster with AI infrastructure configuration" >&2
-  echo "  up        Deploy kustomize manifests to cluster" >&2
+  echo "  create    Create/start the Lima VM and export its k3s kubeconfig" >&2
+  echo "  up        Ensure k3s is running and deploy kustomize manifests" >&2
   echo "  status    Show cluster and pod status" >&2
   echo "  logs      Show logs for a pod (use: logs <pod> [container])" >&2
   echo "  down      Stop cluster (preserve state)" >&2
@@ -23,6 +29,9 @@ usage() {
   echo "" >&2
   echo "Environment:" >&2
   echo "  K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)" >&2
+  echo "  DEVCLUSTER_CPUS / DEVCLUSTER_MEMORY_GIB / DEVCLUSTER_DISK_GIB" >&2
+  echo "                    VM sizing on first create (defaults: 8 / 16 / 100)" >&2
+  echo "  DEVCLUSTER_LIMA_CONFIG  Lima template (default: ~/.config/lima/devcluster.yaml)" >&2
   echo "  DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)" >&2
   exit 1
 }
@@ -39,59 +48,117 @@ check_cluster_role() {
   }
 }
 
-check_kind() {
-  if ! command -v kind >/dev/null 2>&1; then
-    echo "devcluster: error: kind not found" >&2
-    echo "Install with: brew install kind" >&2
+check_lima() {
+  if ! command -v limactl >/dev/null 2>&1; then
+    echo "devcluster: error: limactl not found" >&2
+    echo "Install with: brew install lima" >&2
     exit 1
   fi
 }
 
 check_kubectl() {
-  if command -v devcluster-kubectl >/dev/null 2>&1; then
-    KUBECTL_BIN="devcluster-kubectl"
-  elif command -v kubectl >/dev/null 2>&1; then
-    KUBECTL_BIN="kubectl"
+  if command -v kubectl >/dev/null 2>&1; then
+    HOST_KUBECTL_BIN="kubectl"
   else
     echo "devcluster: error: kubectl not found" >&2
     echo "Install with: brew install kubernetes-cli" >&2
     exit 1
   fi
+
+  if command -v devcluster-kubectl >/dev/null 2>&1; then
+    KUBECTL_BIN="devcluster-kubectl"
+  else
+    KUBECTL_BIN="kubectl"
+  fi
+}
+
+kube() {
+  if [ "$KUBECTL_BIN" = "devcluster-kubectl" ]; then
+    "$KUBECTL_BIN" "$@"
+  else
+    "$HOST_KUBECTL_BIN" \
+      --kubeconfig "$DEVCLUSTER_KUBECONFIG" \
+      --context "$DEVCLUSTER_CONTEXT" \
+      "$@"
+  fi
+}
+
+vm_exists() {
+  limactl list --format '{{.Name}}' 2>/dev/null | grep -Fx "$VM_NAME" >/dev/null 2>&1
+}
+
+vm_is_running() {
+  [ "$(limactl list "$VM_NAME" --format '{{.Status}}' 2>/dev/null || true)" = "Running" ]
+}
+
+wait_for_k3s() {
+  elapsed=0
+  while ! limactl shell "$VM_NAME" sudo systemctl is-active --quiet k3s; do
+    if [ "$elapsed" -ge "$DEVCLUSTER_K3S_WAIT_SECONDS" ]; then
+      echo "devcluster: error: k3s did not become active within ${DEVCLUSTER_K3S_WAIT_SECONDS}s" >&2
+      echo "Inspect: limactl shell $VM_NAME sudo journalctl -u k3s -b --no-pager" >&2
+      exit 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
 }
 
 export_kubeconfig() {
-  check_kind
+  check_kubectl
   mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind export kubeconfig --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
+
+  tmp_kubeconfig=$(mktemp "${DEVCLUSTER_KUBECONFIG}.XXXXXX")
+  tmp_rewritten="${tmp_kubeconfig}.rewritten"
+  trap 'rm -f "$tmp_kubeconfig" "$tmp_rewritten"' EXIT HUP INT TERM
+  limactl shell "$VM_NAME" sudo cat /etc/rancher/k3s/k3s.yaml >"$tmp_kubeconfig"
+  if ! sed "s#127.0.0.1:6443#127.0.0.1:${DEVCLUSTER_API_PORT}#g" \
+    "$tmp_kubeconfig" >"$tmp_rewritten" || \
+    ! grep -q "127.0.0.1:${DEVCLUSTER_API_PORT}" "$tmp_rewritten"; then
+    echo "devcluster: error: could not rewrite the k3s API endpoint" >&2
+    exit 1
+  fi
+  "$HOST_KUBECTL_BIN" --kubeconfig "$tmp_rewritten" config rename-context default "$DEVCLUSTER_CONTEXT" >/dev/null
+  "$HOST_KUBECTL_BIN" --kubeconfig "$tmp_rewritten" config use-context "$DEVCLUSTER_CONTEXT" >/dev/null
+  chmod 600 "$tmp_rewritten"
+  mv "$tmp_rewritten" "$DEVCLUSTER_KUBECONFIG"
+  rm -f "$tmp_kubeconfig"
+  trap - EXIT HUP INT TERM
+}
+
+ensure_vm_and_k3s() {
+  check_lima
+  check_kubectl
+  if vm_exists; then
+    if ! vm_is_running; then
+      echo "Starting Lima VM: $VM_NAME"
+      limactl start "$VM_NAME"
+    fi
+  else
+    if [ ! -f "$LIMA_CONFIG" ]; then
+      echo "devcluster: error: Lima config not found at $LIMA_CONFIG" >&2
+      exit 1
+    fi
+    echo "Creating Lima VM: $VM_NAME"
+    limactl start --name "$VM_NAME" \
+      --cpus "$DEVCLUSTER_CPUS" \
+      --memory "$DEVCLUSTER_MEMORY_GIB" \
+      --disk "$DEVCLUSTER_DISK_GIB" \
+      "$LIMA_CONFIG"
+  fi
+  wait_for_k3s
+  export_kubeconfig
 }
 
 cmd_create() {
   check_cluster_role
-  check_kind
-  
-  echo "Creating Kind cluster: $CLUSTER_NAME"
-  
-  if [ -f "$KIND_CONFIG" ]; then
-    mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-    export KIND_EXPERIMENTAL_PROVIDER=podman
-    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
-    export_kubeconfig
-  else
-    echo "devcluster: error: kind config not found at $KIND_CONFIG" >&2
-    exit 1
-  fi
+  ensure_vm_and_k3s
+  echo "k3s kubeconfig exported to $DEVCLUSTER_KUBECONFIG (context: $DEVCLUSTER_CONTEXT)"
 }
 
 cmd_up() {
-  if [ ! -f "$DEVCLUSTER_KUBECONFIG" ]; then
-    if command -v kind >/dev/null 2>&1; then
-      echo "Exporting kubeconfig to $DEVCLUSTER_KUBECONFIG..."
-      export_kubeconfig || true
-    fi
-  fi
-
-  check_kubectl
+  check_cluster_role
+  ensure_vm_and_k3s
   
   if [ -f "$K8S_DIR/.env" ]; then
     # Load .env as fallback for any variable not already set in shell environment
@@ -112,18 +179,18 @@ cmd_up() {
   fi
 
   echo "Provisioning secrets for namespace ai-dev..."
-  $KUBECTL_BIN create namespace ai-dev --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+  kube create namespace ai-dev --dry-run=client -o yaml | kube apply -f -
 
-  $KUBECTL_BIN create secret generic workspace-mcp-secrets \
+  kube create secret generic workspace-mcp-secrets \
     --namespace ai-dev \
     --from-literal=GOOGLE_OAUTH_CLIENT_ID="${AI_DEV_GOOGLE_OAUTH_CLIENT_ID:-${AI_DEV_GOOGLE_AUTH_CLIENT_ID:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_ID:-${GOOGLE_OAUTH_CLIENT_ID:-}}}}" \
     --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET:-${AI_DEV_GOOGLE_AUTH_CLIENT_SECRET:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET:-${GOOGLE_OAUTH_CLIENT_SECRET:-}}}}" \
-    --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
+    --dry-run=client -o yaml | kube apply -f -
 
   echo "Deploying kustomize manifests..."
   
   if [ -d "$KUSTOMIZE_DIR" ]; then
-    $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
+    kube apply -k "$KUSTOMIZE_DIR"
   else
     echo "devcluster: error: kustomize dir not found at $KUSTOMIZE_DIR" >&2
     exit 1
@@ -131,16 +198,27 @@ cmd_up() {
 }
 
 cmd_status() {
+  check_lima
   check_kubectl
-  check_kind
-  
-  echo "=== Cluster Nodes ==="
-  kind get clusters 2>/dev/null || true
+  echo "=== Lima VM ==="
+  limactl list "$VM_NAME" 2>/dev/null || echo "VM '$VM_NAME' does not exist"
   echo ""
-  $KUBECTL_BIN get nodes
+  echo "=== k3s service ==="
+  if vm_is_running; then
+    limactl shell "$VM_NAME" sudo systemctl is-active k3s || true
+  else
+    echo "not running"
+  fi
   echo ""
-  echo "=== Pods (ai-dev namespace) ==="
-  $KUBECTL_BIN get pods -n ai-dev
+  if [ -f "$DEVCLUSTER_KUBECONFIG" ]; then
+    echo "=== Cluster Nodes ==="
+    kube get nodes
+    echo ""
+    echo "=== Pods (ai-dev namespace) ==="
+    kube get pods -n ai-dev
+  else
+    echo "Kubeconfig not found: $DEVCLUSTER_KUBECONFIG"
+  fi
 }
 
 cmd_logs() {
@@ -152,25 +230,32 @@ cmd_logs() {
   pod="$1"
   container="${2:-}"
   if [ -n "$container" ]; then
-    $KUBECTL_BIN logs -n ai-dev "$pod" -c "$container" --tail=100 --follow
+    kube logs -n ai-dev "$pod" -c "$container" --tail=100 --follow
   else
-    $KUBECTL_BIN logs -n ai-dev "$pod" --tail=100 --follow
+    kube logs -n ai-dev "$pod" --tail=100 --follow
   fi
 }
 
 cmd_down() {
-  check_kind
-  check_kubectl
-  echo "Stopping cluster: $CLUSTER_NAME"
-  export_kubeconfig
-  $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
+  check_cluster_role
+  check_lima
+  if vm_exists; then
+    echo "Stopping Lima VM: $VM_NAME"
+    limactl stop "$VM_NAME"
+  else
+    echo "Lima VM '$VM_NAME' does not exist"
+  fi
 }
 
 cmd_delete() {
-  check_kind
-  echo "Deleting cluster: $CLUSTER_NAME"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind delete cluster --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG" 2>/dev/null || kind delete cluster --name "$CLUSTER_NAME"
+  check_cluster_role
+  check_lima
+  if vm_exists; then
+    echo "Deleting Lima VM: $VM_NAME"
+    limactl delete --force "$VM_NAME"
+  else
+    echo "Lima VM '$VM_NAME' does not exist"
+  fi
   rm -f "$DEVCLUSTER_KUBECONFIG"
 }
 

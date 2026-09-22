@@ -9,7 +9,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: standard
+  # k3s ships this provisioner by default; Kind's `standard` class does not.
+  storageClassName: local-path
   resources:
     requests:
       storage: 10Gi
