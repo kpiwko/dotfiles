@@ -20,10 +20,12 @@ def test_lima_template_uses_centos_k3s_without_a_second_runtime() -> None:
     assert "k3s-selinux-1.6-1.el9.noarch.rpm" in template
     assert "iptables iptables-nft" in template
     assert "systemctl enable --now firewalld" in template
-    assert 'guestIP: "0.0.0.0"' in template
-    assert "guestIPMustBeZero: true" in template
-    assert "guestPortRange: [1, 65535]" in template
+    assert 'guestIP: "0.0.0.0"\n    proto: any\n    ignore: true' in template
     assert "ignore: true" in template
+    assert "net.ipv6.conf.all.disable_ipv6 = 1" in template
+    assert "net.ipv6.conf.default.disable_ipv6 = 1" in template
+    assert 'bind-address: "0.0.0.0"' in template
+    assert 'tls-san:\n        - "127.0.0.1"\n        - "localhost"' in template
     assert "- traefik" in template
     assert "- servicelb" in template
 

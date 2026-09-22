@@ -25,22 +25,18 @@ containerd:
 # services and the current MLflow/MCP ports.
 portForwards:
   - guestPort: 6443
-    # k3s listens on both IPv4 and IPv6. Match only its IPv4 wildcard socket,
-    # so both listeners do not race to bind the same host port.
-    guestIP: "0.0.0.0"
-    guestIPMustBeZero: true
     hostIP: "127.0.0.1"
     hostPort: 17964
     proto: tcp
   - guestPortRange: [17900, 17999]
-    guestIP: "0.0.0.0"
-    guestIPMustBeZero: true
     hostIP: "127.0.0.1"
     hostPortRange: [17900, 17999]
     proto: tcp
-  # Lima otherwise appends a dynamic catch-all localhost forwarding rule. Keep
-  # k3s, rpcbind, and other guest-only listeners off the host network.
-  - guestPortRange: [1, 65535]
+  # Match Lima's documented catch-all exactly. Rules are evaluated in order,
+  # so the two allowlisted rules above win; all other TCP and UDP listeners
+  # (rpcbind, kubelet, flannel, etc.) stay inside the guest.
+  - guestIP: "0.0.0.0"
+    proto: any
     ignore: true
 
 provision:
@@ -68,6 +64,8 @@ provision:
       net.ipv4.ip_forward = 1
       net.bridge.bridge-nf-call-iptables = 1
       net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
       EOF
       sysctl --system
 
@@ -85,6 +83,10 @@ provision:
         - servicelb
       write-kubeconfig-mode: "0644"
       https-listen-port: 6443
+      bind-address: "0.0.0.0"
+      tls-san:
+        - "127.0.0.1"
+        - "localhost"
       service-node-port-range: "17900-17999"
       flannel-backend: vxlan
       EOF
