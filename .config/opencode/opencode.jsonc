@@ -36,6 +36,16 @@
         "gpt-5.6-terra": {"name": "GPT-5.6 Terra"}
       }
     },
+    "vertex_ai": {
+      "npm": "@ai-sdk/google-vertex",
+      "name": "Vertex AI",
+      "models": {
+        "gemini-3.8-flash": {
+          "name": "Gemini 3.8 Flash",
+          "limit": {"context": 1000000, "output": 65536}
+        }
+      }
+    },
     "omlx": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "omlx",
@@ -81,6 +91,6 @@
     }
   },
   "default_agent": "orchestrator",
-  "model": "google-vertex/gemini-3.8-flash",
+  "model": "vertex_ai/gemini-3.8-flash",
   "experimental": {"openTelemetry": true}
 }
