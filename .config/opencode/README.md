@@ -29,7 +29,7 @@ model is `Qwen3.8-27B-NT`.
   requested; there is no automatic remote fallback.
 
 The primary orchestrator and default root model use
-`google-vertex/gemini-3.8-flash`.
+`vertex_ai/gemini-3.8-flash`.
 
 ## Git safety
 
