@@ -1,7 +1,7 @@
 ---
 description: Primary engineering orchestrator. Use this as the user-facing agent; it owns task sequencing, specialist delegation, review, and explicitly requested premium work.
 mode: primary
-model: google-vertex/gemini-3.8-flash
+model: vertex_ai/gemini-3.8-flash
 permission:
   bash: deny
   edit: deny
