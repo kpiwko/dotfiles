@@ -37,7 +37,7 @@
       }
     },
     "vertex_ai": {
-      "npm": "@opencode/ai/providers/google-vertex",
+      "npm": "@ai-sdk/google-vertex",
       "name": "Vertex AI",
       "options": {
         "project": "{env:GOOGLE_CLOUD_PROJECT}",
