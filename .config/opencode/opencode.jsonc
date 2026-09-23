@@ -37,8 +37,12 @@
       }
     },
     "vertex_ai": {
-      "npm": "@ai-sdk/google-vertex",
+      "npm": "@opencode/ai/providers/google-vertex",
       "name": "Vertex AI",
+      "options": {
+        "project": "{env:GOOGLE_CLOUD_PROJECT}",
+        "location": "{env:VERTEX_LOCATION}"
+      },
       "models": {
         "gemini-3.8-flash": {
           "name": "Gemini 3.8 Flash",
