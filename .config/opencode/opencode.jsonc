@@ -1,9 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "superpowers@git+https://github.com/obra/superpowers.git",
-    "@mlflow/opencode"
-  ],
+  "plugin": [],
   "mcp": {
     "Atlassian": {
       "type": "remote",
@@ -23,7 +20,6 @@
   "tools": {"Atlassian*": false, "context7*": false},
   "compaction": {
     "auto": true,
-    "prune": true,
     "preserve_recent_tokens": 8000,
     "reserved": 8000
   },
