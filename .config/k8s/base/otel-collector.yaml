@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: ai-dev
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ai-infrastructure
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+            include_metadata: true
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch:
+        metadata_keys: ["x-mlflow-experiment-id"]
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      headers_setter/mlflow:
+        headers:
+          - action: upsert
+            key: x-mlflow-experiment-id
+            from_context: x-mlflow-experiment-id
+
+    exporters:
+      otlphttp/mlflow:
+        endpoint: http://mlflow:5000
+        auth:
+          authenticator: headers_setter/mlflow
+      # debug:
+      #   verbosity: detailed
+
+    service:
+      extensions: [health_check, headers_setter/mlflow]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/mlflow]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: ai-dev
+  labels:
+    app: otel-collector
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ai-infrastructure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        app.kubernetes.io/name: otel-collector
+        app.kubernetes.io/part-of: ai-infrastructure
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-k8s:0.123.1
+          command: ["/otelcol-k8s"]
+          args: ["--config=/etc/otelcol/config.yaml"]
+          ports:
+            - containerPort: 4318
+              name: otlp-http
+            - containerPort: 13133
+              name: healthcheck
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: ai-dev
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ai-infrastructure
+spec:
+  type: NodePort
+  selector:
+    app: otel-collector
+  ports:
+    - port: 4318
+      targetPort: 4318
+      nodePort: 17903
+      name: otlp-http
+    - port: 13133
+      targetPort: 13133
+      name: healthcheck
