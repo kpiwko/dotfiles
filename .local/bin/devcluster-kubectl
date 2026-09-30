@@ -1,25 +1,36 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3
+"""Run kubectl only against the isolated devcluster context."""
 
-KUBECONFIG_FILE="${DEVCLUSTER_KUBECONFIG:-${HOME}/.kube/opencode-devcluster}"
-CONTEXT="kind-kind-ai-dev"
+from __future__ import annotations
 
-# Don't allow callers to escape to another kubeconfig/context.
-for arg in "$@"; do
-    case "$arg" in
-        --kubeconfig|--kubeconfig=*|--context|--context=*)
-            echo "error: overriding kubeconfig or context is not allowed" >&2
-            exit 1
-            ;;
-    esac
-done
+import os
+import sys
+from pathlib import Path
 
-if [[ ! -f "$KUBECONFIG_FILE" ]]; then
-    echo "error: kubeconfig not found: $KUBECONFIG_FILE" >&2
-    exit 1
-fi
 
-exec kubectl \
-    --kubeconfig="$KUBECONFIG_FILE" \
-    --context="$CONTEXT" \
-    "$@"
+KUBECONFIG_PATH = Path.home() / ".kube" / "opencode-devcluster"
+CONTEXT = "devcluster"
+
+
+def main(args: list[str]) -> int:
+    if any(
+        arg == "--kubeconfig"
+        or arg.startswith("--kubeconfig=")
+        or arg == "--context"
+        or arg.startswith("--context=")
+        for arg in args
+    ):
+        print("error: overriding kubeconfig or context is not allowed", file=sys.stderr)
+        return 1
+    if not KUBECONFIG_PATH.is_file():
+        print(f"error: kubeconfig not found: {KUBECONFIG_PATH}", file=sys.stderr)
+        return 1
+    os.execvp(
+        "kubectl",
+        ["kubectl", f"--kubeconfig={KUBECONFIG_PATH}", f"--context={CONTEXT}", *args],
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

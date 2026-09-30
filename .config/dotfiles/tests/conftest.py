@@ -26,8 +26,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     keep: list[pytest.Item] = []
     drop: list[pytest.Item] = []
     for item in items:
-        marker = item.get_closest_marker("binary")
-        if marker and marker.args and marker.args[0] in selected:
+        markers = [m.args[0] for m in item.iter_markers("binary") if m.args]
+        if any(m in selected for m in markers):
             keep.append(item)
         else:
             drop.append(item)
