@@ -20,6 +20,7 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
 The stack includes:
 - **MLflow** - GenAI tracking server for OpenCode traces
 - **MCP Servers** - Model Context Protocol servers (NotebookLM, Workspace)
+- **OpenTelemetry Collector** - vendor-neutral telemetry gateway for OpenCode
 
 ## Sizing Rationale
 
@@ -41,6 +42,14 @@ connect to `http://127.0.0.1:15000`.
 - NodePorts: 17980 (NotebookLM MCP), 17981 (Workspace MCP), 17982 (NotebookLM noVNC)
 - Reasoning: Lightweight API servers; minimal resource requirements
 
+### OpenTelemetry Collector
+- Requests: 50m CPU, 64Mi memory
+- Limits: 500m CPU, 512Mi memory
+- NodePort: 17903 (`https://otel.example.internal` through Caddy)
+- Reasoning: Stateless telemetry gateway buffering and batching traces; memory limiter prevents pod memory thrashing.
+
+Access the Collector directly at `http://127.0.0.1:17903`.
+
 ## Port Mapping
 
 | Container Port | Host Port | Service | Description |
@@ -52,6 +61,46 @@ connect to `http://127.0.0.1:15000`.
 | 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
 | 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
+| 4318 | 17903 | OTel Collector | OTLP HTTP receiver |
+
+## Architecture
+
+```text
+OpenCode
+  |
+  | OTLP/HTTP (x-mlflow-experiment-id)
+  v
+Caddy
+  |
+  v
+OTel Collector (k3s / ai-dev)
+  |
+  | x-mlflow-experiment-id preserved
+  v
+MLflow (k3s)
+```
+
+Future telemetry backends (metrics, logs, or alternative trace backends) should
+be attached to the Collector rather than directly to OpenCode.
+
+## OpenCode Project Configuration (.envrc)
+
+Projects can configure OpenCode telemetry in their `.envrc`:
+
+```bash
+export MLFLOW_EXPERIMENT_ID=7
+
+export OPENCODE_ENABLE_TELEMETRY=1
+export OPENCODE_OTLP_ENDPOINT="https://otel.example.internal"  # or real domain e.g. https://otel.fous.ai
+export OPENCODE_OTLP_PROTOCOL="http/protobuf"
+
+export OPENCODE_OTLP_HEADERS="x-mlflow-experiment-id=$MLFLOW_EXPERIMENT_ID"
+
+export OPENCODE_RESOURCE_ATTRIBUTES="service.name=opencode,service.namespace=dotfiles"
+
+# Keep logs/metrics disabled at plugin side until backends are added:
+export OPENCODE_DISABLE_LOGS=1
+```
 
 ## Commands Reference
 
@@ -106,6 +155,19 @@ kubectl port-forward svc/mlflow 15000:5000 -n ai-dev
 # View MLflow logs
 kubectl logs -n ai-dev -l app=mlflow --follow
 ```
+
+### OpenTelemetry Collector Diagnostics
+
+```bash
+devcluster status
+devcluster logs <otel-collector-pod>
+devcluster-kubectl get pods -n ai-dev -l app=otel-collector
+```
+
+For temporary troubleshooting, uncomment the `debug` exporter in
+`.config/k8s/base/otel-collector.yaml` (with `verbosity: detailed`) and include
+it in `traces.exporters`. Do not leave detailed telemetry logging enabled:
+traces may contain prompts or other sensitive information.
 
 ### Secret Management & Auto-Provisioning
 
