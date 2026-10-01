@@ -5,6 +5,7 @@ resources:
   - base/namespace.yaml
   - base/mlflow.yaml
   - base/mcp-servers.yaml
+  - base/otel-collector.yaml
 labels:
   - pairs:
       app.kubernetes.io/managed-by: dotfiles
