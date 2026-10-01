@@ -50,7 +50,7 @@ spec:
             - --artifacts-destination
             - /mlflow/artifacts
             - --allowed-hosts
-            - mlflow.example.internal,localhost:*,127.0.0.1:*
+            - mlflow.example.internal,localhost:*,127.0.0.1:*,mlflow:*
             - --cors-allowed-origins
             - https://mlflow.example.internal
           ports:
