@@ -2,91 +2,254 @@
 description: Explicit cloud implementation specialist using OpenAI Luna for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
 mode: subagent
 model: openai/gpt-5.6-luna
-reasoningEffort: medium
-permission:
-  bash:
-    "*": ask
-    git *: deny
-    cargo build*: allow
-    cargo check*: allow
-    cargo test*: allow
-    cat*: allow
-    devcluster-kubectl*: allow
-    diff*: allow
-    find*: deny
-    gh pr create*: ask
-    gh pr edit*: ask
-    gh pr merge*: ask
-    glab mr create*: ask
-    glab mr diff*: allow
-    glab mr merge*: ask
-    glab mr show*: allow
-    glab mr update*: ask
-    glab mr view*: allow
-    go test*: allow
-    grep*: allow
-    head*: allow
-    just*: allow
-    kubectl*: deny
-    ls*: allow
-    bats*: allow
-    make*: allow
-    npm run*: allow
-    npm test*: allow
-    npx*: allow
-    pnpm test*: allow
-    pwd*: allow
-    pytest*: allow
-    rm -rf*: deny
-    sandbox-find*: allow
-    sandbox-git status*: allow
-    sandbox-git diff*: allow
-    sandbox-git log*: allow
-    sandbox-git show*: allow
-    sandbox-git rev-parse*: allow
-    sandbox-git symbolic-ref*: allow
-    sandbox-git merge-base*: allow
-    sandbox-git for-each-ref*: allow
-    sandbox-git remote*: allow
-    sandbox-git ls-files*: allow
-    sandbox-git ls-remote*: allow
-    sandbox-git ls-tree*: allow
-    sandbox-git config*: allow
-    sandbox-git fetch*: allow
-    sandbox-git add*: allow
-    sandbox-git branch*: allow
-    sandbox-git checkout*: allow
-    sandbox-git commit*: allow
-    sandbox-git pull*: allow
-    sandbox-git rebase*: allow
-    sandbox-git switch*: allow
-    sandbox-git push: allow
-    sandbox-git push *: ask
-    sandbox-git branch -d*: ask
-    sandbox-git branch -D*: ask
-    sandbox-git checkout -f*: ask
-    sandbox-git clean*: ask
-    sandbox-git commit --amend*: ask
-    sandbox-git push --delete*: ask
-    sandbox-git push --force*: ask
-    sandbox-git push -f*: ask
-    sandbox-git reset*: ask
-    sandbox-git restore*: ask
-    sudo*: deny
-    tail*: allow
-    wc*: allow
-    which*: allow
-    yarn test*: allow
-  edit: allow
-  list: allow
-  skill:
-    "*": deny
-    init-change: allow
-    publish-change: allow
-  task: deny
-temperature: 0.2
-tools:
-  todowrite: false
+steps: 24
+permissions:
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: shell
+    resource: "git *"
+    effect: deny
+  - action: shell
+    resource: "find*"
+    effect: deny
+  - action: shell
+    resource: "kubectl*"
+    effect: deny
+  - action: shell
+    resource: "sudo*"
+    effect: deny
+  - action: shell
+    resource: "limactl shell devcluster*"
+    effect: deny
+  - action: shell
+    resource: "k3s*"
+    effect: deny
+  - action: shell
+    resource: "crictl*"
+    effect: deny
+  - action: shell
+    resource: "ctr*"
+    effect: deny
+  - action: shell
+    resource: "nerdctl*"
+    effect: deny
+  - action: shell
+    resource: "cargo build*"
+    effect: allow
+  - action: shell
+    resource: "cargo check*"
+    effect: allow
+  - action: shell
+    resource: "cargo test*"
+    effect: allow
+  - action: shell
+    resource: "cat*"
+    effect: allow
+  - action: shell
+    resource: "devcluster-kubectl*"
+    effect: allow
+  - action: shell
+    resource: "diff*"
+    effect: allow
+  - action: shell
+    resource: "gh pr create*"
+    effect: ask
+  - action: shell
+    resource: "gh pr edit*"
+    effect: ask
+  - action: shell
+    resource: "gh pr merge*"
+    effect: ask
+  - action: shell
+    resource: "glab mr create*"
+    effect: ask
+  - action: shell
+    resource: "glab mr diff*"
+    effect: allow
+  - action: shell
+    resource: "glab mr merge*"
+    effect: ask
+  - action: shell
+    resource: "glab mr show*"
+    effect: allow
+  - action: shell
+    resource: "glab mr update*"
+    effect: ask
+  - action: shell
+    resource: "glab mr view*"
+    effect: allow
+  - action: shell
+    resource: "go test*"
+    effect: allow
+  - action: shell
+    resource: "grep*"
+    effect: allow
+  - action: shell
+    resource: "head*"
+    effect: allow
+  - action: shell
+    resource: "just*"
+    effect: allow
+  - action: shell
+    resource: "ls*"
+    effect: allow
+  - action: shell
+    resource: "bats*"
+    effect: allow
+  - action: shell
+    resource: "make*"
+    effect: allow
+  - action: shell
+    resource: "npm run*"
+    effect: allow
+  - action: shell
+    resource: "npm test*"
+    effect: allow
+  - action: shell
+    resource: "npx*"
+    effect: allow
+  - action: shell
+    resource: "pnpm test*"
+    effect: allow
+  - action: shell
+    resource: "pwd*"
+    effect: allow
+  - action: shell
+    resource: "pytest*"
+    effect: allow
+  - action: shell
+    resource: "rm -rf*"
+    effect: deny
+  - action: shell
+    resource: "sandbox-find*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git status*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git diff*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git log*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git show*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git rev-parse*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git symbolic-ref*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git merge-base*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git for-each-ref*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git remote*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git ls-files*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git ls-remote*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git ls-tree*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git config*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git fetch*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git add*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git branch*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git checkout*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git commit*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git pull*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git rebase*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git switch*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git push"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git push *"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git branch -d*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git branch -D*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git checkout -f*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git clean*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git commit --amend*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git push --delete*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git push --force*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git push -f*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git reset*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git restore*"
+    effect: ask
+  - action: shell
+    resource: "tail*"
+    effect: allow
+  - action: shell
+    resource: "wc*"
+    effect: allow
+  - action: shell
+    resource: "which*"
+    effect: allow
+  - action: shell
+    resource: "yarn test*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "init-change"
+    effect: allow
+  - action: skill
+    resource: "publish-change"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 
 You are the implementation specialist. Execute the supplied assignment directly.
@@ -122,7 +285,19 @@ If the current working directory is not suitable for the assignment, return
 
 Work directly in the current checkout and preserve existing user work. Invoke
 binaries from `PATH`. Use `sandbox-find` for file discovery, `sandbox-git` for
-Git operations, and `devcluster-kubectl` for the local development cluster.
+Git operations, and `devcluster-kubectl` as the only interface to the local
+development cluster. Never use raw `kubectl`, `limactl shell devcluster`, `k3s`,
+`crictl`, `ctr`, `nerdctl`, or `sudo` to bypass that wrapper.
+
+## Shell discipline
+
+Run one logical operation per shell tool call. Do not chain independent commands
+with `&&`, `||`, or `;` merely to reduce tool calls. Never use `cd DIR && CMD`;
+keep the execution root unchanged and pass paths directly. Pipelines are fine
+only when the pipeline itself is necessary to the operation.
+
+Run one `sandbox-git` command per shell call. Do not append `echo`, `printf`, or
+another command just to expose an exit status; use the command result directly.
 Destructive Git actions use the configured approval boundary.
 
 Report validation as successful only when you ran it and observed success.

@@ -27,11 +27,14 @@
     "notebooklm": {"type": "remote", "url": "{env:NOTEBOOKLM_MCP_URL}", "enabled": true},
     "workspace": {"type": "remote", "url": "{env:WORKSPACE_MCP_URL}", "enabled": true}
   },
-  "tools": {"Atlassian*": false, "context7*": false},
+  "permissions": [
+    {"action": "Atlassian_*", "resource": "*", "effect": "deny"},
+    {"action": "context7_*", "resource": "*", "effect": "deny"}
+  ],
   "compaction": {
     "auto": true,
-    "preserve_recent_tokens": 8000,
-    "reserved": 8000
+    "keep": {"tokens": 8000},
+    "buffer": 8000
   },
   "provider": {
     "openai": {
@@ -87,6 +90,5 @@
     }
   },
   "default_agent": "orchestrator",
-  "model": "google-vertex/gemini-3.8-flash",
-  "experimental": {"openTelemetry": true}
+  "model": "google-vertex/gemini-3.8-flash"
 }
