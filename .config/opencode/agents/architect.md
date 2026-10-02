@@ -2,15 +2,26 @@
 description: Architecture specialist. Use only for significant durable technical decisions, ADR conflicts, system boundaries, APIs, data/storage, security, or infrastructure choices.
 mode: subagent
 model: google-vertex/gemini-3.8-flash
-temperature: 0.1
-permission:
-  edit:
-    "*": deny
-    "docs/*/adr/*": allow
-  bash: deny
-tools:
-  "Atlassian*": true
-  "context7*": true
+steps: 16
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "docs/*/adr/**"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: "Atlassian_*"
+    resource: "*"
+    effect: allow
+  - action: "context7_*"
+    resource: "*"
+    effect: allow
 ---
 
 You are the architecture and deep-reasoning specialist. Resolve significant
@@ -67,5 +78,5 @@ When an ADR is warranted:
 
 `ADR REQUIRED: YES`
 
-Do not modify files outside ADR directories matching `docs/*/adr/*`, and do
-not switch into implementation.
+Do not modify files outside established ADR directories and do not switch into
+implementation.
