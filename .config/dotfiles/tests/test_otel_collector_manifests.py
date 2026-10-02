@@ -11,7 +11,7 @@ def test_otel_collector_manifest_exists_and_uses_pinned_image() -> None:
     manifest = OTEL_MANIFEST.read_text()
 
     assert "kind: Deployment" in manifest
-    assert "image: otel/opentelemetry-collector-k8s:0.123.1" in manifest
+    assert "image: otel/opentelemetry-collector-k8s:0.123.0" in manifest
 
 
 def test_otel_collector_resource_sizing() -> None:
