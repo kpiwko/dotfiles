@@ -2,20 +2,35 @@
 description: Implementation planning specialist. Use for genuinely non-trivial sequencing, multi-component work, migrations, or repository analysis before implementation.
 mode: subagent
 model: google-vertex/gemini-3.8-flash
-temperature: 0.1
-permission:
-  bash: deny
-  edit:
-    "*": deny
-    "docs/plans/*": allow
-  skill:
-    "*": deny
-    brainstorming: allow
-    writing-plans: allow
-tools:
-  "Atlassian*": true
-  "context7*": true
-  todowrite: false
+steps: 16
+permissions:
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: edit
+    resource: "docs/plans/**"
+    effect: allow
+  - action: skill
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "brainstorming"
+    effect: allow
+  - action: skill
+    resource: "writing-plans"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: "Atlassian_*"
+    resource: "*"
+    effect: allow
+  - action: "context7_*"
+    resource: "*"
+    effect: allow
 ---
 
 You are the implementation planning specialist. Produce an executable plan for
@@ -41,8 +56,10 @@ non-trivial work and save it as durable repository state.
 Make each task a coherent implementation unit that an implementer can execute
 without replanning. Include concrete affected files and symbols, required
 behavior, relevant interfaces, validation, and observable acceptance criteria.
-Prefer task boundaries that produce independently testable results over
-micro-tasks for individual shell commands or edits.
+Prefer bounded task boundaries that produce independently testable results over
+micro-tasks for individual shell commands or one oversized task spanning
+startup diagnosis, implementation, deployment, end-to-end validation, and
+publication.
 
 Separate required work from optional improvements and follow established
 repository structure rather than introducing speculative refactors.
