@@ -71,7 +71,7 @@ spec:
     spec:
       containers:
         - name: otel-collector
-          image: otel/opentelemetry-collector-k8s:0.123.1
+          image: otel/opentelemetry-collector-k8s:0.123.0
           command: ["/otelcol-k8s"]
           args: ["--config=/etc/otelcol/config.yaml"]
           ports:
