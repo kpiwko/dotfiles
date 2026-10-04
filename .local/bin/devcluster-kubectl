@@ -2,7 +2,7 @@
 set -euo pipefail
 
 KUBECONFIG_FILE="${DEVCLUSTER_KUBECONFIG:-${HOME}/.kube/opencode-devcluster}"
-CONTEXT="kind-kind-ai-dev"
+CONTEXT="devcluster"
 
 # Don't allow callers to escape to another kubeconfig/context.
 for arg in "$@"; do
