@@ -91,7 +91,7 @@ Projects can configure OpenCode telemetry in their `.envrc`:
 export MLFLOW_EXPERIMENT_ID=7
 
 export OPENCODE_ENABLE_TELEMETRY=1
-export OPENCODE_OTLP_ENDPOINT="https://otel.example.internal"  # or real domain e.g. https://otel.fous.ai
+export OPENCODE_OTLP_ENDPOINT="https://otel.example.internal"
 export OPENCODE_OTLP_PROTOCOL="http/protobuf"
 
 export OPENCODE_OTLP_HEADERS="x-mlflow-experiment-id=$MLFLOW_EXPERIMENT_ID"

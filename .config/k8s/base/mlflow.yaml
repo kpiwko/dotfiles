@@ -49,10 +49,13 @@ spec:
             - sqlite:////mlflow/mlflow.db
             - --artifacts-destination
             - /mlflow/artifacts
+            # The local devcluster is behind a reverse proxy; allow direct
+            # access through any local or configured development hostname.
             - --allowed-hosts
-            - mlflow.example.internal,localhost:*,127.0.0.1:*,mlflow:*
+            - "*"
+            # Local development may be reached from any configured origin.
             - --cors-allowed-origins
-            - https://mlflow.example.internal
+            - "*"
           ports:
             - containerPort: 5000
               name: http
