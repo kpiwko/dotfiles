@@ -89,8 +89,8 @@ def test_otel_collector_traces_pipeline() -> None:
     assert "pipelines:" in manifest
     assert "traces:" in manifest
     assert "receivers: [otlp]" in manifest
-    assert "processors: [memory_limiter, batch]" in manifest
-    assert "exporters: [otlphttp/mlflow]" in manifest
+    assert "processors: [memory_limiter, transform, batch]" in manifest
+    assert "exporters: [otlphttp/mlflow, debug]" in manifest
     assert "extensions: [health_check, headers_setter/mlflow]" in manifest
 
 
@@ -118,7 +118,7 @@ def test_mlflow_allowed_hosts_and_caddy_example() -> None:
     caddy_example = (ROOT / ".config" / "caddy" / "sites" / "otel.caddy.example").read_text()
 
     assert "--allowed-hosts" in mlflow_manifest
-    assert "mlflow:*" in mlflow_manifest
+    assert '- "*"' in mlflow_manifest
     assert "otel.example.internal" in caddy_example
     assert "import cloudflare_tls" in caddy_example
     assert "reverse_proxy 127.0.0.1:17903" in caddy_example

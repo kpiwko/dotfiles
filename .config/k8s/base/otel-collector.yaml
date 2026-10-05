@@ -20,6 +20,24 @@ data:
         check_interval: 1s
         limit_percentage: 75
         spike_limit_percentage: 15
+      transform:
+        error_mode: ignore
+        trace_statements:
+          - context: span
+            statements:
+              # Map standard GenAI semantic conventions from OpenCode attributes
+              - set(attributes["gen_ai.request.model"], attributes["llm.model_name"]) where attributes["gen_ai.request.model"] == nil and attributes["llm.model_name"] != nil
+              - set(attributes["gen_ai.response.model"], attributes["llm.model_name"]) where attributes["gen_ai.response.model"] == nil and attributes["llm.model_name"] != nil
+              - set(attributes["gen_ai.usage.input_tokens"], attributes["llm.token_count.prompt"]) where attributes["gen_ai.usage.input_tokens"] == nil and attributes["llm.token_count.prompt"] != nil
+              - set(attributes["gen_ai.usage.output_tokens"], attributes["llm.token_count.completion"]) where attributes["gen_ai.usage.output_tokens"] == nil and attributes["llm.token_count.completion"] != nil
+              - set(attributes["gen_ai.usage.cost"], attributes["cost_usd"]) where attributes["gen_ai.usage.cost"] == nil and attributes["cost_usd"] != nil
+
+              # Populate MLflow LLM cost attribute on spans where cost_usd is present
+              # MLflow UI expects a JSON string with input_cost, output_cost, and total_cost
+              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["cost_usd"] != nil'
+
+              # Handle root agent session span cost
+              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["session.total_cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["session.total_cost_usd"] != nil'
       batch:
         metadata_keys: ["x-mlflow-experiment-id"]
 
@@ -37,16 +55,16 @@ data:
         endpoint: http://mlflow:5000
         auth:
           authenticator: headers_setter/mlflow
-      # debug:
-      #   verbosity: detailed
+      debug:
+        verbosity: detailed
 
     service:
       extensions: [health_check, headers_setter/mlflow]
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [otlphttp/mlflow]
+          processors: [memory_limiter, transform, batch]
+          exporters: [otlphttp/mlflow, debug]
 ---
 apiVersion: apps/v1
 kind: Deployment
