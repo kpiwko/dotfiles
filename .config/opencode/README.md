@@ -46,3 +46,34 @@ reserve. This intentionally gives `implement-local` more working room than the
 previous 60k/16k setup while keeping automatic compaction and pruning enabled.
 Keep the oMLX memory guard enabled. If the server still rejects large prefills,
 reduce the advertised OpenCode context before weakening the server-side guard.
+
+## Terminal, workspace, and session model
+
+Ghostty is the terminal, Zellij is the workspace/project layer, and OpenCode
+holds AI conversations within a project:
+
+```text
+Zellij session
+│
+├── tab: dotfiles
+│   ├── pane: OpenCode
+│   │   ├── OpenCode session: investigation
+│   │   ├── OpenCode session: implementation
+│   │   └── OpenCode session: review
+│   └── pane: shell/tests
+│
+├── tab: another project
+│   └── ...
+```
+
+The main rule is: same checkout and a different AI conversation or task means
+an OpenCode session/tab (`Ctrl+n` / `session.new`, switched with `Ctrl+Tab` or
+`Ctrl+Shift+Tab`). A different checkout, worktree, or environment means a
+Zellij tab/session (`Alt+1/2/3`, `Alt+d`, or `Alt+r`).
+
+Use normal `opencode` by default; it connects to the OpenCode v2 shared
+background service. Do not use `--standalone` by default—reserve it for cases
+that specifically need process isolation. Zellij keeps `mouse_mode false`, so
+Ghostty and OpenCode can handle mouse capture, tab clicks, transcript scrolling,
+and text selection. Zellij owns `Alt-*`; applications such as OpenCode own
+`Ctrl-*`.

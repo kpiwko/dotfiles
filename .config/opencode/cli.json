@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "theme": {
+    "name": "solarized"
+  },
+  "mouse": true,
+  "tabs": {
+    "mode": "on",
+    "scope": "cwd",
+    "layout": "horizontal",
+    "indicators": "status"
+  },
+  "session": {
+    "sidebar": "auto",
+    "scrollbar": false,
+    "thinking": "hide",
+    "grouping": "auto",
+    "tps": true,
+    "markdown": "rendered",
+    "new_location": "launch",
+    "permissions": "prompt"
+  },
+  "scroll": {
+    "speed": 3,
+    "acceleration": false
+  }
+}
