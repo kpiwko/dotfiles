@@ -1,4 +1,4 @@
-mouse_mode false
+mouse_mode true
 pane_frames true
 simplified_ui false
 
@@ -45,14 +45,8 @@ keybinds {
         bind "Alt 1" { GoToTab 1; }
         bind "Alt 2" { GoToTab 2; }
         bind "Alt 3" { GoToTab 3; }
-        
-        bind "Alt Up" { HalfPageScrollUp; }
-        bind "Alt Down" { HalfPageScrollDown; }
-        bind "Alt End" { ScrollToBottom; }
-    }
 
-    // Move Lock toggle from ctrl+g to Alt+g; unbind quit
-    normal {
+        // Move Lock toggle from ctrl+g to Alt+g; unbind quit
         unbind "Ctrl g"
         unbind "Ctrl q"
         bind "Alt g" { SwitchToMode "Locked"; }
@@ -61,13 +55,6 @@ keybinds {
         unbind "Ctrl g"
         bind "Alt g" { SwitchToMode "Normal"; }
     }
-    scroll {
-        bind "Alt End" {
-            ScrollToBottom;
-            SwitchToMode "Normal";
-        }
-    }
-
     // Move Scroll and Move mode from ctrl to Alt
     shared_except "scroll" "locked" {
         unbind "Ctrl s"
