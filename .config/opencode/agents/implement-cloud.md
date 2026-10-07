@@ -2,7 +2,7 @@
 description: Explicit cloud implementation specialist using OpenAI Luna for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
 mode: subagent
 model: openai/gpt-5.6-luna
-steps: 24
+steps: 40
 permissions:
   - action: shell
     resource: "*"
@@ -53,6 +53,18 @@ permissions:
     resource: "diff*"
     effect: allow
   - action: shell
+    resource: "gh auth status*"
+    effect: allow
+  - action: shell
+    resource: "gh pr list*"
+    effect: allow
+  - action: shell
+    resource: "gh pr view*"
+    effect: allow
+  - action: shell
+    resource: "gh repo view*"
+    effect: allow
+  - action: shell
     resource: "gh pr create*"
     effect: ask
   - action: shell
@@ -61,6 +73,15 @@ permissions:
   - action: shell
     resource: "gh pr merge*"
     effect: ask
+  - action: shell
+    resource: "glab auth status*"
+    effect: allow
+  - action: shell
+    resource: "glab mr list*"
+    effect: allow
+  - action: shell
+    resource: "glab repo view*"
+    effect: allow
   - action: shell
     resource: "glab mr create*"
     effect: ask
@@ -119,6 +140,9 @@ permissions:
     resource: "pytest*"
     effect: allow
   - action: shell
+    resource: "tox*"
+    effect: allow
+  - action: shell
     resource: "rm -rf*"
     effect: deny
   - action: shell
@@ -126,6 +150,15 @@ permissions:
     effect: allow
   - action: shell
     resource: "sandbox-git status*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git start-branch*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git sync-base*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git publish*"
     effect: allow
   - action: shell
     resource: "sandbox-git diff*"
