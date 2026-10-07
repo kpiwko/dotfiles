@@ -2,7 +2,7 @@ mouse_mode true
 pane_frames true
 simplified_ui false
 
-copy_on_select false
+copy_on_select true
 copy_command "pbcopy"
 copy_clipboard "system"
 scroll_buffer_size 50000
