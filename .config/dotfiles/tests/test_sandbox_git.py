@@ -134,3 +134,106 @@ def test_bare_push_rejects_protected_current_branch(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "refusing to push protected/significant branch 'main'" in result.stderr
+
+
+@pytest.mark.binary("sandbox-git")
+def test_start_branch_fetches_base_and_preserves_local_changes(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path, branch="main")
+    bare = home / ".dotfiles"
+    dotfiles_git = ["git", f"--git-dir={bare}", f"--work-tree={home}"]
+
+    subprocess.run(
+        [*dotfiles_git, "push", "-u", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+    (home / "tracked.txt").write_text("local change\n")
+
+    result = sandbox_git(home, env, "start-branch", "feat/fresh", "main", "origin")
+
+    assert result.returncode == 0, result.stderr
+    branch = subprocess.run(
+        [*dotfiles_git, "branch", "--show-current"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert branch.stdout.strip() == "feat/fresh"
+    assert (home / "tracked.txt").read_text() == "local change\n"
+
+
+@pytest.mark.binary("sandbox-git")
+def test_start_branch_rejects_protected_destination(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path, branch="main")
+
+    result = sandbox_git(home, env, "start-branch", "main", "main", "origin")
+
+    assert result.returncode == 1
+    assert "refusing to create protected/significant branch 'main'" in result.stderr
+
+
+@pytest.mark.binary("sandbox-git")
+def test_sync_base_rebases_feature_branch_on_latest_remote_base(tmp_path: Path) -> None:
+    home, remote, env = init_repo(tmp_path, branch="main")
+    bare = home / ".dotfiles"
+    dotfiles_git = ["git", f"--git-dir={bare}", f"--work-tree={home}"]
+
+    subprocess.run(
+        [*dotfiles_git, "push", "-u", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+    start = sandbox_git(home, env, "start-branch", "feat/work", "main", "origin")
+    assert start.returncode == 0, start.stderr
+
+    (home / "feature.txt").write_text("feature\n")
+    subprocess.run([*dotfiles_git, "add", "feature.txt"], check=True)
+    subprocess.run(
+        [*dotfiles_git, "commit", "-m", "feature"],
+        check=True,
+        capture_output=True,
+    )
+
+    updater = tmp_path / "updater"
+    subprocess.run(["git", "clone", str(remote), str(updater)], check=True, capture_output=True)
+    git("config", "user.email", "test@example.com", cwd=updater)
+    git("config", "user.name", "Test", cwd=updater)
+    git("switch", "main", cwd=updater)
+    (updater / "base.txt").write_text("base\n")
+    git("add", "base.txt", cwd=updater)
+    git("commit", "-m", "advance base", cwd=updater)
+    pushed = git("push", "origin", "main", cwd=updater)
+    assert pushed.returncode == 0, pushed.stderr
+
+    result = sandbox_git(home, env, "sync-base", "main", "origin")
+
+    assert result.returncode == 0, result.stderr
+    ancestor = subprocess.run(
+        [*dotfiles_git, "merge-base", "--is-ancestor", "origin/main", "HEAD"],
+        check=False,
+    )
+    assert ancestor.returncode == 0
+
+
+@pytest.mark.binary("sandbox-git")
+def test_publish_supports_explicit_safe_remote(tmp_path: Path) -> None:
+    home, remote, env = init_repo(tmp_path)
+    bare = home / ".dotfiles"
+    dotfiles_git = ["git", f"--git-dir={bare}", f"--work-tree={home}"]
+    subprocess.run(
+        [*dotfiles_git, "remote", "add", "upstream", str(remote)],
+        check=True,
+    )
+
+    result = sandbox_git(home, env, "publish", "upstream")
+
+    assert result.returncode == 0, result.stderr
+    remote_branch = git("rev-parse", "refs/heads/feat/test", cwd=remote)
+    assert remote_branch.returncode == 0
+    upstream = subprocess.run(
+        [*dotfiles_git, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert upstream.stdout.strip() == "upstream/feat/test"
