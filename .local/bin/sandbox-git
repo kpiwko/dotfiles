@@ -22,10 +22,6 @@ PROTECTED_BRANCHES = {
 }
 
 
-class SandboxGitError(RuntimeError):
-    pass
-
-
 def fail(message: str) -> NoReturn:
     print(f"sandbox-git: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -56,6 +52,12 @@ def git_output(git: list[str], *args: str) -> str:
     return result.stdout.strip()
 
 
+def run_git(git: list[str], *args: str) -> None:
+    result = subprocess.run([*git, *args], check=False)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+
+
 def ensure_repo(git: list[str]) -> None:
     result = subprocess.run(
         [*git, "rev-parse", "--is-inside-work-tree"],
@@ -70,22 +72,23 @@ def ensure_repo(git: list[str]) -> None:
 def current_branch(git: list[str]) -> str:
     branch = git_output(git, "symbolic-ref", "--quiet", "--short", "HEAD")
     if not branch:
-        fail("detached HEAD; refusing to push")
+        fail("detached HEAD")
     return branch
 
 
-def default_branch(git: list[str]) -> str | None:
+def default_branch(git: list[str], remote: str = "origin") -> str | None:
     ref = git_output(
         git,
         "symbolic-ref",
         "--quiet",
         "--short",
-        "refs/remotes/origin/HEAD",
+        f"refs/remotes/{remote}/HEAD",
     )
-    if ref.startswith("origin/"):
-        return ref.removeprefix("origin/")
+    prefix = f"{remote}/"
+    if ref.startswith(prefix):
+        return ref.removeprefix(prefix)
 
-    remote_show = git_output(git, "remote", "show", "origin")
+    remote_show = git_output(git, "remote", "show", remote)
     for line in remote_show.splitlines():
         stripped = line.strip()
         if stripped.startswith("HEAD branch: "):
@@ -194,6 +197,38 @@ def split_push_args(args: list[str]) -> tuple[str | None, list[str]]:
     return repository, refspecs
 
 
+def validate_publish(git: list[str], remote: str) -> tuple[bool, str]:
+    ensure_repo(git)
+    current = current_branch(git)
+    default = default_branch(git, remote)
+
+    if is_protected(current, default):
+        fail(f"refusing to push protected/significant branch '{current}'")
+
+    upstream = upstream_for_current_branch(git)
+    if upstream is not None:
+        upstream_remote, upstream_branch = upstream
+        if upstream_remote != remote:
+            fail(
+                f"upstream '{upstream_remote}/{upstream_branch}' is not on "
+                f"requested remote '{remote}'"
+            )
+        if upstream_branch != current:
+            fail(f"upstream branch '{upstream_branch}' differs from '{current}'")
+
+    return upstream is None, current
+
+
+def publish(git: list[str], remote: str) -> None:
+    set_upstream, branch = validate_publish(git, remote)
+    args = ["push"]
+    if set_upstream:
+        args.extend(["--set-upstream", remote, f"HEAD:refs/heads/{branch}"])
+    else:
+        args.extend([remote, f"HEAD:refs/heads/{branch}"])
+    os.execvp(git[0], [*git, *args])
+
+
 def validate_push(git: list[str], args: list[str]) -> tuple[bool, str]:
     ensure_repo(git)
     current = current_branch(git)
@@ -219,6 +254,42 @@ def validate_push(git: list[str], args: list[str]) -> tuple[bool, str]:
     return False, current
 
 
+def start_branch(git: list[str], args: list[str]) -> None:
+    if not 1 <= len(args) <= 3:
+        fail("usage: sandbox-git start-branch <branch> [base] [remote]")
+
+    ensure_repo(git)
+    branch = normalize_branch(args[0])
+    remote = args[2] if len(args) >= 3 else "origin"
+    base = args[1] if len(args) >= 2 else default_branch(git, remote)
+
+    if not base:
+        fail(f"cannot determine default branch for remote '{remote}'")
+    if is_protected(branch, default_branch(git, remote)):
+        fail(f"refusing to create protected/significant branch '{branch}'")
+
+    run_git(git, "fetch", remote, base)
+    run_git(git, "switch", "-c", branch, f"{remote}/{base}")
+
+
+def sync_base(git: list[str], args: list[str]) -> None:
+    if len(args) > 2:
+        fail("usage: sandbox-git sync-base [base] [remote]")
+
+    ensure_repo(git)
+    current = current_branch(git)
+    remote = args[1] if len(args) >= 2 else "origin"
+    base = args[0] if args else default_branch(git, remote)
+
+    if not base:
+        fail(f"cannot determine default branch for remote '{remote}'")
+    if is_protected(current, default_branch(git, remote)):
+        fail(f"refusing to rebase protected/significant branch '{current}'")
+
+    run_git(git, "fetch", remote, base)
+    run_git(git, "rebase", f"{remote}/{base}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         fail("missing git subcommand")
@@ -226,6 +297,20 @@ def main() -> None:
     git = git_base()
     subcommand = sys.argv[1]
     args = sys.argv[2:]
+
+    if subcommand == "start-branch":
+        start_branch(git, args)
+        return
+
+    if subcommand == "sync-base":
+        sync_base(git, args)
+        return
+
+    if subcommand == "publish":
+        if len(args) > 1:
+            fail("usage: sandbox-git publish [remote]")
+        publish(git, args[0] if args else "origin")
+        return
 
     if subcommand == "push":
         set_upstream, branch = validate_push(git, args)
