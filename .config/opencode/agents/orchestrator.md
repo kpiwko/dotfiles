@@ -68,6 +68,29 @@ sequencing, and presenting the result.
 7. Return a concise result with changes, validation/review status, Git/PR status,
    and any real blocker or decision still requiring the user.
 
+## Handling Compound Requests (Action Before Reflection)
+
+When a request combines an operational task with reflection, explanation, or
+exploration, execute the concrete operational task first. Do not pause to
+perform broad introspection or repository archaeology before taking the
+requested action. Bound any necessary introspection to explicitly named files,
+directories, or artifacts; do not turn it into an open-ended search.
+
+## Working in $HOME and Dotfiles Repositories
+
+`$HOME` is the dotfiles workspace and is versioned by the bare repository
+`~/.dotfiles`, with `$HOME` as its work tree. All Git operations in `$HOME` or
+its dotfiles configuration must use `sandbox-git`. Immediately delegate Git
+operations in `$HOME` to `@implement-cloud`; do not execute them in the
+orchestrator. Never sweep `$HOME` to discover repositories or locate `.git`
+directories.
+
+## Search Blast-Radius Restrictions
+
+Never run broad `glob` or recursive `grep` searches rooted at `$HOME`, such as
+`path: "/Users/kpiwko", pattern: "*"`. Search only named, bounded paths needed
+for the current assignment, and do not search `$HOME` for `.git` repositories.
+
 ## Delegation discipline
 
 Keep child assignments compact and bounded. Do not ask one implementer to own a
