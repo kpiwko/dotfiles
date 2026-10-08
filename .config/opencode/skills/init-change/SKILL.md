@@ -8,10 +8,16 @@ description: Prepare the current repository for an implementation change by sync
 Load this before repository edits unless the parent explicitly says Git setup is
 complete.
 
-Use `sandbox-git` for every Git operation. The wrapper automatically uses the
-bare `$HOME/.dotfiles` repository with `$HOME` as its work tree when the current
-working directory is exactly `$HOME`; elsewhere it uses the current normal Git
-repository. Never invoke raw `git` or `dotfiles-git`.
+Use `sandbox-git` for every Git operation. When invoked from `$HOME`,
+`~/.dotfiles`, or a dotfiles subdirectory not inside a separate Git repository,
+it automatically targets the bare `$HOME/.dotfiles` repository with `$HOME` as
+its work tree. Never invoke raw `git` or `dotfiles-git`.
+
+Discover tracked dotfiles with `sandbox-git ls-files`; do not traverse `$HOME`
+with `find` or `sandbox-find`, which can trip macOS `~/Library` TCC
+permissions. Unbounded untracked scans (`status -u`) across `$HOME` are
+suppressed, so provide a pathspec when checking untracked files, for example
+`sandbox-git status -- <path>`.
 
 1. Inspect status, current branch, tracking configuration, and remotes.
 2. Preserve existing user work. Never discard, reset, clean, stash, or overwrite

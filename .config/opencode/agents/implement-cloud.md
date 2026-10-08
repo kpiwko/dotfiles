@@ -179,6 +179,12 @@ permissions:
     resource: "sandbox-git merge-base*"
     effect: allow
   - action: shell
+    resource: "sandbox-git merge --ff-only*"
+    effect: allow
+  - action: shell
+    resource: "sandbox-git check-ignore*"
+    effect: allow
+  - action: shell
     resource: "sandbox-git for-each-ref*"
     effect: allow
   - action: shell
