@@ -9,7 +9,8 @@
         "protocol": "http/protobuf",
         "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}"
       }
-    }
+    },
+    "@mohak34/opencode-notifier"
   ],
   "mcp": {
     "Atlassian": {
