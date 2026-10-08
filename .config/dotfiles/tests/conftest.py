@@ -39,12 +39,17 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 def clean_env() -> dict[str, str]:
     env = os.environ.copy()
     for key in list(env):
-        if key.startswith(("AI_DEV_", "DEVCLUSTER_", "CF_", "CLOUDFLARE_")):
+        if key.startswith(("AI_DEV_", "DEVCLUSTER_", "CF_", "CLOUDFLARE_")) or key in {
+            "UV_WORKING_DIRECTORY",
+            "UV_PROJECT_ENVIRONMENT",
+        }:
             env.pop(key, None)
     return env
 
 
 def run_script(path: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy() if env is None else env.copy()
+    env.pop("UV_WORKING_DIRECTORY", None)
     return subprocess.run(
         [str(path), *args],
         text=True,
