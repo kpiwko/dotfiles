@@ -84,31 +84,31 @@ Run the schema-focused tests from Task 3 and verify YAML parses, all six managed
 - Consumes: `.config/mlflow/gateway.yaml`, environment-backed secrets, and MLflow gateway REST APIs.
 - Produces: converged MLflow secrets, model definitions, and managed endpoints; read-only drift reports for `--check`.
 
-- [ ] **Step 1: Add inline `uv` script metadata and CLI**
+- [x] **Step 1: Add inline `uv` script metadata and CLI**
 
 Implement a self-contained Python script with inline dependencies (at minimum `pyyaml` and `requests`) and arguments `--config`, `--check`, `--dry-run`, `--verbose`, and an explicit `--yes` or equivalent guard for live mutation. Resolve the repository root/config path robustly and provide actionable errors for missing environment variables or malformed declarations.
 
-- [ ] **Step 2: Implement authenticated API client**
+- [x] **Step 2: Implement authenticated API client**
 
 Implement typed request helpers for list/create/delete secrets, list/create/delete model definitions, and list/create/get/update/delete endpoints. Normalize response envelopes, status failures, retries/timeouts, and redacted diagnostics. Use the verified MLflow paths under `/ajax-api/3.0/mlflow/gateway/` and never send secrets in logs.
 
-- [ ] **Step 3: Implement safe resource identity and planning**
+- [x] **Step 3: Implement safe resource identity and planning**
 
 Build a desired-state plan for only the declared managed names. Compare normalized current and desired secrets, model definitions, and endpoint `model_configs`; classify create/update/no-op/drift. Treat `vertex-dprod-opencode-opus-5` as an immutable protected resource and abort if a declaration attempts to claim it.
 
-- [ ] **Step 4: Implement `--check` and `--dry-run`**
+- [x] **Step 4: Implement `--check` and `--dry-run`**
 
 `--check` must be read-only and exit non-zero when managed resources drift or are missing, while ignoring unrelated endpoint differences. `--dry-run` must print redacted create/update actions without mutating MLflow. Both modes must be safe when the protected endpoint is present.
 
-- [ ] **Step 5: Implement idempotent, non-destructive apply**
+- [x] **Step 5: Implement idempotent, non-destructive apply**
 
 Create or update declared secrets and model definitions before endpoints, then converge endpoint model configurations. Delete only stale resources explicitly marked as managed by the declaration, if deletion is required by the schema; never perform an unscoped delete and never touch unrelated endpoints. Ensure repeated execution produces no changes.
 
-- [ ] **Step 6: Add operational output and exit behavior**
+- [x] **Step 6: Add operational output and exit behavior**
 
 Report resource counts and action summaries, identify the endpoint/model causing drift, return non-zero for validation/API failures, and keep credentials, bearer tokens, and secret payloads redacted. Include a usage/help example in the script header.
 
-- [ ] **Step 7: Validate against mocked APIs**
+- [x] **Step 7: Validate against mocked APIs**
 
 Run the Task 3 reconciler tests, including create/update/no-op plans, `--check` drift, `--dry-run` non-mutation, API failure handling, protected endpoint preservation, and unrelated endpoint preservation.
 
@@ -123,23 +123,23 @@ Run the Task 3 reconciler tests, including create/update/no-op plans, `--check` 
 - Consumes: gateway YAML, env examples, sync script, and mocked MLflow HTTP responses.
 - Produces: executable regression coverage for the declarative routing contract.
 
-- [ ] **Step 1: Test configuration schema and mappings**
+- [x] **Step 1: Test configuration schema and mappings**
 
 Test that the YAML parses, declares all six cloud endpoints, uses the exact `mlflow/<agent>` names, has one PRIMARY and one FALLBACK per endpoint, uses sequential fallback metadata, references only declared secret/model IDs, and records the OpenAI-unavailable exception. Test that local and LiteMaaS agents are not accidentally included.
 
-- [ ] **Step 2: Test CLI flags and safety defaults**
+- [x] **Step 2: Test CLI flags and safety defaults**
 
 Test help/argument parsing for `--check`, `--dry-run`, `--config`, and verbosity/confirmation behavior. Verify missing credentials fail clearly and that check/dry-run paths do not invoke mutating HTTP methods.
 
-- [ ] **Step 3: Test mocked reconciliation**
+- [x] **Step 3: Test mocked reconciliation**
 
 Mock the MLflow client and verify list/create/update/delete calls, desired payloads, endpoint model configuration ordering, secret reference resolution, redaction, and non-zero behavior on HTTP errors. Include an already-converged response that produces no writes.
 
-- [ ] **Step 4: Test drift detection and protected resources**
+- [x] **Step 4: Test drift detection and protected resources**
 
 Verify missing, changed, and stale managed resources are reported; unrelated endpoints and `vertex-dprod-opencode-opus-5` remain untouched; a declaration collision with the protected endpoint aborts before mutation.
 
-- [ ] **Step 5: Run the focused suite**
+- [x] **Step 5: Run the focused suite**
 
 Run:
 ```bash
