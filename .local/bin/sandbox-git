@@ -29,12 +29,22 @@ def fail(message: str) -> NoReturn:
 
 def git_base() -> list[str]:
     home = Path.home()
+    cwd = Path.cwd()
+    dotfiles = home / ".dotfiles"
 
-    if Path.cwd() == home:
-        dotfiles = home / ".dotfiles"
+    if cwd == home or cwd == dotfiles:
         if not dotfiles.is_dir():
             fail(f"dotfiles repository '{dotfiles}' does not exist")
         return ["git", f"--git-dir={dotfiles}", f"--work-tree={home}"]
+
+    if cwd.is_relative_to(home):
+        candidate = cwd
+        while candidate != home:
+            if (candidate / ".git").exists():
+                return ["git"]
+            candidate = candidate.parent
+        if dotfiles.is_dir():
+            return ["git", f"--git-dir={dotfiles}", f"--work-tree={home}"]
 
     return ["git"]
 
@@ -213,10 +223,7 @@ def validate_publish(git: list[str], remote: str) -> tuple[bool, str]:
                 f"upstream '{upstream_remote}/{upstream_branch}' is not on "
                 f"requested remote '{remote}'"
             )
-        if upstream_branch != current:
-            fail(f"upstream branch '{upstream_branch}' differs from '{current}'")
-
-    return upstream is None, current
+    return upstream is None or upstream[1] != current, current
 
 
 def publish(git: list[str], remote: str) -> None:
@@ -269,7 +276,7 @@ def start_branch(git: list[str], args: list[str]) -> None:
         fail(f"refusing to create protected/significant branch '{branch}'")
 
     run_git(git, "fetch", remote, base)
-    run_git(git, "switch", "-c", branch, f"{remote}/{base}")
+    run_git(git, "switch", "--no-track", "-c", branch, f"{remote}/{base}")
 
 
 def sync_base(git: list[str], args: list[str]) -> None:
@@ -290,6 +297,29 @@ def sync_base(git: list[str], args: list[str]) -> None:
     run_git(git, "rebase", f"{remote}/{base}")
 
 
+def guard_home_status_args(args: list[str]) -> list[str]:
+    """Prevent an unbounded untracked-file scan in the home worktree."""
+    home = Path.home()
+    if not (
+        Path.cwd() == home
+        or any(arg.startswith(f"--work-tree={home}") for arg in args)
+    ):
+        return args
+
+    separator = args.index("--") if "--" in args else len(args)
+    pathspecs = [arg for arg in args[separator + 1 :] if arg]
+    if not pathspecs:
+        pathspecs = [arg for arg in args[:separator] if not arg.startswith("-")]
+    if pathspecs:
+        return args
+
+    guarded = list(args)
+    for index, arg in enumerate(guarded):
+        if arg in {"-u", "-uall", "--untracked-files=all"}:
+            guarded[index] = "--untracked-files=no"
+    return guarded
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         fail("missing git subcommand")
@@ -297,6 +327,9 @@ def main() -> None:
     git = git_base()
     subcommand = sys.argv[1]
     args = sys.argv[2:]
+
+    if subcommand == "status":
+        args = guard_home_status_args(args)
 
     if subcommand == "start-branch":
         start_branch(git, args)

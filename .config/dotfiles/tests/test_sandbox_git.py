@@ -60,6 +60,19 @@ def sandbox_git(home: Path, env: dict[str, str], *args: str) -> subprocess.Compl
     )
 
 
+def sandbox_git_at(
+    cwd: Path, env: dict[str, str], *args: str
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(BIN / "sandbox-git"), *args],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+
 @pytest.mark.binary("sandbox-git")
 def test_dotfiles_push_accepts_remotes_prefixed_upstream(tmp_path: Path) -> None:
     home, _, env = init_repo(tmp_path)
@@ -170,6 +183,88 @@ def test_start_branch_rejects_protected_destination(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "refusing to create protected/significant branch 'main'" in result.stderr
+
+
+@pytest.mark.binary("sandbox-git")
+def test_start_branch_then_publish_without_upstream_conflict(tmp_path: Path) -> None:
+    home, remote, env = init_repo(tmp_path, branch="main")
+    bare = home / ".dotfiles"
+    dotfiles_git = ["git", f"--git-dir={bare}", f"--work-tree={home}"]
+    subprocess.run(
+        [*dotfiles_git, "push", "-u", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+
+    started = sandbox_git(home, env, "start-branch", "feat/publish", "main", "origin")
+    assert started.returncode == 0, started.stderr
+    (home / "feature.txt").write_text("feature\n")
+    subprocess.run([*dotfiles_git, "add", "feature.txt"], check=True)
+    subprocess.run([*dotfiles_git, "commit", "-m", "feature"], check=True, capture_output=True)
+
+    published = sandbox_git(home, env, "publish")
+
+    assert published.returncode == 0, published.stderr
+    assert git("rev-parse", "refs/heads/feat/publish", cwd=remote).returncode == 0
+
+
+@pytest.mark.binary("sandbox-git")
+def test_publish_recovers_when_upstream_points_to_base(tmp_path: Path) -> None:
+    home, remote, env = init_repo(tmp_path, branch="feat/publish")
+    bare = home / ".dotfiles"
+    dotfiles_git = ["git", f"--git-dir={bare}", f"--work-tree={home}"]
+    subprocess.run([*dotfiles_git, "push", "origin", "HEAD:main"], check=True, capture_output=True)
+    subprocess.run(
+        [*dotfiles_git, "branch", "--set-upstream-to=origin/main"],
+        check=True,
+        capture_output=True,
+    )
+
+    published = sandbox_git(home, env, "publish")
+
+    assert published.returncode == 0, published.stderr
+    upstream = subprocess.run(
+        [*dotfiles_git, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert upstream.stdout.strip() == "origin/feat/publish"
+    assert git("rev-parse", "refs/heads/feat/publish", cwd=remote).returncode == 0
+
+
+@pytest.mark.binary("sandbox-git")
+def test_git_base_detects_dotfiles_in_subdirectory_and_dotfiles_dir(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path)
+    dotfiles = home / ".dotfiles"
+    dotfiles_child = dotfiles / "test-child"
+    dotfiles_child.mkdir()
+    nested = home / "nested"
+    nested.mkdir()
+    subrepo = home / "subrepo"
+    subprocess.run(["git", "init", str(subrepo)], check=True, capture_output=True)
+
+    for cwd in (dotfiles, dotfiles_child, nested):
+        result = sandbox_git_at(cwd, env, "rev-parse", "--git-dir")
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()).resolve() == dotfiles.resolve()
+
+    result = sandbox_git_at(subrepo, env, "rev-parse", "--git-dir")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == ".git"
+
+
+@pytest.mark.binary("sandbox-git")
+def test_status_guards_untracked_scan_in_home(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path)
+    untracked = home / "deep" / "untracked.txt"
+    untracked.parent.mkdir()
+    untracked.write_text("not tracked\n")
+
+    result = sandbox_git(home, env, "status", "--untracked-files=all")
+
+    assert result.returncode == 0, result.stderr
+    assert "untracked.txt" not in result.stdout
 
 
 @pytest.mark.binary("sandbox-git")
