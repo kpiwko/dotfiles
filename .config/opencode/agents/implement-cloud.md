@@ -242,6 +242,18 @@ permissions:
     resource: "sandbox-git checkout -f*"
     effect: ask
   - action: shell
+    resource: "sandbox-git checkout --force*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git checkout -B*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git switch -C*"
+    effect: ask
+  - action: shell
+    resource: "sandbox-git switch --discard-changes*"
+    effect: ask
+  - action: shell
     resource: "sandbox-git clean*"
     effect: ask
   - action: shell
@@ -323,8 +335,10 @@ If the current working directory is not suitable for the assignment, return
 `NEEDS_ORCHESTRATOR` with the observed repository layout.
 
 Work directly in the current checkout and preserve existing user work. Invoke
-binaries from `PATH`. Use `sandbox-find` for file discovery, `sandbox-git` for
-Git operations, and `devcluster-kubectl` as the only interface to the local
+binaries from `PATH`. When working in `$HOME`, which is backed by the bare
+`~/.dotfiles` repository, all Git operations must use `sandbox-git` (never raw
+`git`). Use `sandbox-find` for file discovery, `sandbox-git` for all other Git
+operations, and `devcluster-kubectl` as the only interface to the local
 development cluster. Never use raw `kubectl`, `limactl shell devcluster`, `k3s`,
 `crictl`, `ctr`, `nerdctl`, or `sudo` to bypass that wrapper.
 

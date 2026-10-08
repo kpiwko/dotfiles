@@ -1,8 +1,8 @@
 ---
 description: Read-only implementation reviewer. Use after meaningful code changes; Qodo provides the external review pass and findings are filtered for actionable issues.
 mode: subagent
-model: omlx/Qwen3-Coder-Next-6bit
-steps: 12
+model:  openai/gpt-5.6-luna
+steps: 20
 permissions:
   - action: edit
     resource: "*"
