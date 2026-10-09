@@ -1,7 +1,7 @@
 ---
 description: Implementation planning specialist. Use for genuinely non-trivial sequencing, multi-component work, migrations, or repository analysis before implementation.
 mode: subagent
-model: google-vertex/gemini-3.8-flash
+model: mlflow/plan
 steps: 16
 permissions:
   - action: shell

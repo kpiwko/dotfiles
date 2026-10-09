@@ -1,7 +1,7 @@
 ---
-description: Explicit cloud implementation specialist using OpenAI Luna for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
+description: Primary cloud implementation specialist using MLflow AI Gateway for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
 mode: subagent
-model: openai/gpt-5.6-luna
+model: mlflow/implement
 steps: 40
 permissions:
   - action: shell

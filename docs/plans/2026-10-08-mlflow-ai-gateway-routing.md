@@ -162,19 +162,19 @@ Expected: all gateway schema, CLI, mocked reconciler, drift, idempotency, and sa
 - Consumes: current OpenCode agent front matter, delegation policy, and permissions.
 - Produces: one cloud implementation agent named `implement` whose model is `mlflow/implement`.
 
-- [ ] **Step 1: Consolidate the agent definition**
+- [x] **Step 1: Consolidate the agent definition**
 
 Move the implementation behavior, permissions, workflow, and constraints from `implement-cloud.md` into `implement.md`; update its description to identify the MLflow-routed cloud implementation path and set `model: mlflow/implement`.
 
-- [ ] **Step 2: Update orchestrator delegation and permissions**
+- [x] **Step 2: Update orchestrator delegation and permissions**
 
 Replace allow-list and prose references from `implement-cloud` to `implement`, preserving the existing restrictions and explicit routing semantics. Ensure `implement-local` and `implement-maas` delegation remains unchanged.
 
-- [ ] **Step 3: Update documentation references**
+- [x] **Step 3: Update documentation references**
 
 Update `.config/opencode/README.md` and all bounded configuration/documentation references so the old agent name is absent except in migration notes where explicitly useful.
 
-- [ ] **Step 4: Validate agent files**
+- [x] **Step 4: Validate agent files**
 
 Run focused searches and configuration tests to verify `implement.md` exists, `implement-cloud.md` does not, orchestrator permissions target `implement`, and no stale delegation target remains.
 
@@ -195,19 +195,19 @@ Run focused searches and configuration tests to verify `implement.md` exists, `i
 - Consumes: MLflow gateway OpenAI-compatible endpoint and current OpenCode v2 provider/agent schema.
 - Produces: cloud agent model routing through `mlflow`, while preserving local and LiteMaaS provider entries.
 
-- [ ] **Step 1: Add the `mlflow` OpenAI-compatible provider**
+- [x] **Step 1: Add the `mlflow` OpenAI-compatible provider**
 
 Add an OpenCode provider using the project’s established `@ai-sdk/openai-compatible` pattern, base URL `https://mlflow.fous.ai/gateway/mlflow/v1` (prefer an environment-backed equivalent), an API key reference if required, and models `orchestrator`, `architect`, `plan`, `implement`, `review`, and `zweistein` with stable IDs and suitable limits/capabilities.
 
-- [ ] **Step 2: Update cloud agent front matter**
+- [x] **Step 2: Update cloud agent front matter**
 
 Set the six cloud agent model fields to `mlflow/orchestrator`, `mlflow/architect`, `mlflow/plan`, `mlflow/implement`, `mlflow/review`, and `mlflow/zweistein`. Keep `implement-local` on `omlx/Qwen3-Coder-Next-6bit` and `implement-maas` on `litemaas/Qwen3.8-27B-NT`.
 
-- [ ] **Step 3: Preserve tracing and defaults**
+- [x] **Step 3: Preserve tracing and defaults**
 
 Keep the existing OTEL plugin and environment-based endpoint behavior intact. Confirm default-agent behavior remains intentional and does not silently route local/LiteMaaS agents through MLflow.
 
-- [ ] **Step 4: Validate JSONC and model references**
+- [x] **Step 4: Validate JSONC and model references**
 
 Run the repository’s applicable OpenCode/config tests or parser validation. Assert each front matter model exists in `opencode.jsonc`, the MLflow base URL ends in `/gateway/mlflow/v1`, and no removed `implement-cloud` model/agent reference remains.
 

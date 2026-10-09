@@ -89,8 +89,54 @@
           "limit": {"context": 120000, "output": 16000}
         }
       }
+    },
+    "mlflow": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MLflow AI Gateway",
+      "options": {
+        "baseURL": "{env:MLFLOW_GATEWAY_BASE_URL:-https://mlflow.fous.ai}/gateway/mlflow/v1",
+        "apiKey": "dummy"
+      },
+      "models": {
+        "orchestrator": {
+          "modelID": "orchestrator",
+          "name": "Orchestrator",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        },
+        "architect": {
+          "modelID": "architect",
+          "name": "Architect",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        },
+        "plan": {
+          "modelID": "plan",
+          "name": "Plan",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        },
+        "implement": {
+          "modelID": "implement",
+          "name": "Implement",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        },
+        "review": {
+          "modelID": "review",
+          "name": "Review",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        },
+        "zweistein": {
+          "modelID": "zweistein",
+          "name": "Zweistein",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        }
+      }
     }
   },
   "default_agent": "orchestrator",
-  "model": "google-vertex/gemini-3.8-flash"
+  "model": "mlflow/orchestrator"
 }
