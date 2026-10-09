@@ -21,15 +21,14 @@ model is `Qwen3.8-27B-NT`.
 ## Implementation agents
 
 - `implement-local`: default implementation agent using local oMLX.
-- `implement-cloud`: explicit OpenAI Luna implementation agent.
+- `implement`: primary MLflow-routed cloud implementation agent.
 - `implement-maas`: explicit LiteMaaS implementation agent.
 - The implementation agents intentionally use the same workflow, skills, and
   Git policy so provider/model behavior can be compared.
-- `implement-cloud` and `implement-maas` are only used when explicitly
+- `implement` and `implement-maas` are only used when explicitly
   requested; there is no automatic remote fallback.
 
-The primary orchestrator and default root model use
-`google-vertex/gemini-3.8-flash`.
+The primary orchestrator and default root model use `mlflow/orchestrator`.
 
 ## Git safety
 

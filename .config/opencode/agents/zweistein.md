@@ -1,7 +1,7 @@
 ---
 description: Premium autonomous engineering agent for difficult tasks. Use only when the user explicitly requests Zweistein.
 mode: subagent
-model: openai/gpt-5.6-terra
+model: mlflow/zweistein
 steps: 40
 permissions:
   - action: shell
