@@ -15,6 +15,13 @@ def test_script_is_executable() -> None:
     assert os.access(SCRIPT, os.X_OK)
 
 
+def test_inline_mlflow_dependency_requires_v317() -> None:
+    script = SCRIPT.read_text()
+
+    assert '"mlflow>=3.17.0,<4",' in script
+    assert "mlflow>=3.16" not in script
+
+
 def test_help_lists_commands(clean_env: dict[str, str]) -> None:
     result = run_script(SCRIPT, "--help", env=clean_env)
 

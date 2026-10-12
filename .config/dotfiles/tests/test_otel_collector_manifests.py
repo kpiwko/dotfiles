@@ -104,13 +104,15 @@ def test_otel_collector_service_nodeport_mapping() -> None:
     assert "nodePort: 17903" in manifest
 
 
-def test_kustomization_and_kind_config_include_otel_collector() -> None:
+def test_kustomization_and_lima_config_expose_otel_collector() -> None:
     kustomization = (K8S_DIR / "kustomization.yaml").read_text()
-    kind_config = (K8S_DIR / "kind-config.yaml").read_text()
+    base_kustomization = (K8S_BASE / "kustomization.yaml").read_text()
+    lima_config = (ROOT / ".config" / "lima" / "devcluster.yaml").read_text()
 
-    assert "base/otel-collector.yaml" in kustomization
-    assert "containerPort: 17903" in kind_config
-    assert "hostPort: 17903" in kind_config
+    assert "- base" in kustomization
+    assert "otel-collector.yaml" in base_kustomization
+    assert "guestPortRange: [17900, 17999]" in lima_config
+    assert "hostPortRange: [17900, 17999]" in lima_config
 
 
 def test_mlflow_allowed_hosts_and_caddy_example() -> None:

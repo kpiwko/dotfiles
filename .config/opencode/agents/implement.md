@@ -1,7 +1,7 @@
 ---
-description: Primary cloud implementation specialist using MLflow AI Gateway for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
+description: Primary cloud implementation specialist using AgentGateway for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
 mode: subagent
-model: mlflow/implement
+model: agentgateway/worker
 steps: 40
 permissions:
   - action: shell

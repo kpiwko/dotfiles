@@ -20,15 +20,23 @@ model is `Qwen3.8-27B-NT`.
 
 ## Implementation agents
 
-- `implement-local`: default implementation agent using local oMLX.
-- `implement`: primary MLflow-routed cloud implementation agent.
-- `implement-maas`: explicit LiteMaaS implementation agent.
-- The implementation agents intentionally use the same workflow, skills, and
-  Git policy so provider/model behavior can be compared.
-- `implement` and `implement-maas` are only used when explicitly
-  requested; there is no automatic remote fallback.
+- `implement`, `implement-local`, and `implement-maas` use the AgentGateway
+  `worker` alias. The legacy names remain for existing workflows.
 
-The primary orchestrator and default root model use `mlflow/orchestrator`.
+The primary orchestrator and default root model use `agentgateway/worker`.
+
+## AgentGateway inference boundary
+
+OpenCode calls AgentGateway's OpenAI-compatible endpoint through
+`AGENTGATEWAY_BASE_URL` and authenticates with `AGENTGATEWAY_API_KEY`.
+`omnipower` routes to Enmaas Claude Opus 5.5, `architect` routes to Enmaas
+Terra with direct OpenAI fallback, `worker` and `reviewer` route to Enmaas
+Luna with direct OpenAI fallback, `spade` routes to Enmaas GLM 5.3, and
+`gemini` explicitly targets Vertex Gemini 3.8 Flash.
+
+AgentGateway keeps its SQLite request database on its own PVC. MLflow remains
+the telemetry backend through the existing OpenTelemetry collector and is not
+used for inference.
 
 ## Git safety
 

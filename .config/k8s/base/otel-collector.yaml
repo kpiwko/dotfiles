@@ -76,7 +76,8 @@ metadata:
     app.kubernetes.io/name: otel-collector
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
-  replicas: 1
+  # Stop this MLflow database writer until the runtime overlay is applied.
+  replicas: 0
   selector:
     matchLabels:
       app: otel-collector

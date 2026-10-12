@@ -1,7 +1,7 @@
 ---
 description: Primary engineering orchestrator. Use this as the user-facing agent; it owns task sequencing, specialist delegation, review, and explicitly requested premium work.
 mode: primary
-model: mlflow/orchestrator
+model: agentgateway/worker
 permissions:
   - action: shell
     resource: "*"

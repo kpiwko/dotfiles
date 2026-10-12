@@ -9,7 +9,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: standard
+  # This must match the already-bound claim; storageClassName is immutable.
+  storageClassName: local-path
   resources:
     requests:
       storage: 10Gi
@@ -23,7 +24,8 @@ metadata:
     app.kubernetes.io/name: mlflow
     app.kubernetes.io/part-of: ai-infrastructure
 spec:
-  replicas: 1
+  # The root Kustomization is the migration-safe maintenance state.
+  replicas: 0
   selector:
     matchLabels:
       app: mlflow
@@ -34,7 +36,7 @@ spec:
     spec:
       containers:
         - name: mlflow
-          image: ghcr.io/mlflow/mlflow:v3.16.1
+          image: ghcr.io/mlflow/mlflow:v3.17.0
           command:
             - mlflow
           args:

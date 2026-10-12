@@ -1,6 +1,66 @@
 # Kubernetes AI Development Stack
 
 This directory contains Kubernetes manifests for the AI development infrastructure managed by devcluster.
+MLflow is pinned to `ghcr.io/mlflow/mlflow:v3.17.0`.
+
+## MLflow Migration-safe Manifests
+
+The root Kustomization is intentionally a maintenance state: `kubectl apply -k
+~/.config/k8s` leaves the MLflow and OpenTelemetry Collector writers scaled to
+zero. Do not use the root Kustomization to start the stack directly.
+
+The existing `ai-dev/mlflow-pvc` is a 10Gi `ReadWriteOnce` claim with the
+immutable `local-path` storage class. Every manifest or Kustomize render that
+declares `mlflow-pvc` must retain `storageClassName: local-path`; never change
+it to `standard` or delete and recreate the claim to resolve an immutable-field
+error. The migration manifest only references the claim, so it does not
+declare a storage class.
+
+`devcluster up` is the supported v3.17.0 lifecycle. It applies the safe base,
+confirms that both writers have terminated, runs the exclusive
+`mlflow-db-migrate` Job, waits for it to complete and be cleaned up, applies
+`~/.config/k8s/runtime`, and waits for MLflow and OTel readiness. This creates
+an expected maintenance window. The migration Job mounts the RWO SQLite PVC by
+itself and runs the idempotent command:
+
+```text
+mlflow db upgrade sqlite:////mlflow/mlflow.db
+```
+
+After the migration, `devcluster up` creates `agentgateway-secrets`, applies
+the runtime overlay, and waits for MLflow, OTel, and AgentGateway readiness.
+Do not apply the runtime overlay manually unless the preceding migration has
+completed successfully.
+
+### Failure containment and upgrade posture
+
+MLflow and OTel are both stopped before migration because they are writers to
+the same SQLite database on the `mlflow-pvc` ReadWriteOnce volume. A failed
+migration leaves those writers stopped for diagnosis; later runtime and
+AgentGateway phases are not applied. Inspect the bounded Job diagnostics with
+`devcluster logs <pod>` or `devcluster-kubectl describe job mlflow-db-migrate
+-n ai-dev`.
+
+This initial setup explicitly accepts data loss. It provides **no** backup,
+restore workflow, automatic schema downgrade, or recovery guarantee. After a
+successful v3.17.0 migration, do not automatically roll the schema or image
+back to an older MLflow version. Any destructive/manual recovery decision must
+be separately approved.
+
+### AgentGateway credentials
+
+AgentGateway is a standalone Deployment with a single SQLite-backed replica.
+Its ConfigMap is read-only repository state; provider credentials are loaded
+only from `agentgateway-secrets`. The bounded source identity file
+`~/.config/opencode/itpc-ca-993e2467de-opencode-vertex.json` must be readable;
+its contents are materialized only as the `vertex-credentials.json` Secret key,
+mounted read-only in the AgentGateway Pod, and never committed, printed, or
+passed as a host path to the Pod.
+
+The public model aliases are `omnipower`, `architect`, `worker`, `reviewer`,
+`spade`, and `gemini`. Terra and Luna routes use Enmaas first and direct OpenAI
+as their fallback. Gemini is defined for explicit use through Vertex and is not
+an automatic fallback target.
 
 ## NotebookLM MCP Authentication Guide
 
@@ -18,7 +78,8 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
 ## Stack Overview
 
 The stack includes:
-- **MLflow** - GenAI tracking server for OpenCode traces
+- **MLflow** - GenAI tracking and artifact server for OpenCode traces
+- **AgentGateway** - the sole OpenAI-compatible inference endpoint
 - **MCP Servers** - Model Context Protocol servers (NotebookLM, Workspace)
 - **OpenTelemetry Collector** - vendor-neutral telemetry gateway for OpenCode
 
@@ -35,6 +96,13 @@ Access MLflow directly at `http://127.0.0.1:17902`. Do not use host port
 5000: macOS AirPlay may reserve it. If a Kubernetes port-forward is required
 for debugging, use `kubectl port-forward svc/mlflow 15000:5000 -n ai-dev` and
 connect to `http://127.0.0.1:15000`.
+
+### AgentGateway
+- Image: `cr.agentgateway.dev/agentgateway:v1.6.0`
+- NodePort: 17904 (`https://agentgateway.fous.ai/v1` through Caddy)
+- PVC: 2Gi SQLite request-log and analytics database
+- The external API requires `AGENTGATEWAY_API_KEY`; the UI is deliberately not
+  exposed through Caddy.
 
 ### MCP Servers
 - Requests: 100m CPU, 256Mi memory each
@@ -56,7 +124,8 @@ Access the Collector directly at `http://127.0.0.1:17903`.
 |----------------|-----------|---------|-------------|
 | 80 | 17988 | Ingress HTTP | HTTP ingress traffic |
 | 443 | 17943 | Ingress HTTPS | HTTPS ingress traffic |
-| 5000 | 17902 | MLflow | GenAI tracking UI and API |
+| 5000 | 17902 | MLflow | GenAI tracking, artifacts, and API |
+| 4000 | 17904 | AgentGateway | OpenAI-compatible model API |
 | 17200 | 17980 | MCP NotebookLM | NotebookLM MCP server |
 | 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
