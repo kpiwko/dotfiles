@@ -70,6 +70,11 @@ spec:
                 secretKeyRef:
                   name: agentgateway-secrets
                   key: AGENTGATEWAY_API_KEY
+            - name: MLFLOW_EXPERIMENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: agentgateway-secrets
+                  key: MLFLOW_EXPERIMENT_ID
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /var/run/agentgateway/vertex/credentials.json
           ports:

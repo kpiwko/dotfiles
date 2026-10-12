@@ -8,7 +8,9 @@
       "options": {
         "enabled": true,
         "protocol": "http/protobuf",
-        "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}"
+        "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}",
+        "tracePropagationProviders": ["agentgateway", "agentgateway-gemini"],
+        "disabledMetrics": ["cost.usage", "session.cost.total", "model.usage"]
       }
     },
     "@mohak34/opencode-notifier"
@@ -84,8 +86,27 @@
           "limit": {"context": 250000, "output": 16000}
         }
       }
+    },
+    "agentgateway-gemini": {
+      "npm": "@ai-sdk/google",
+      "name": "AgentGateway Gemini",
+      "options": {
+        "baseURL": "{env:AGENTGATEWAY_GEMINI_BASE_URL}",
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}",
+        "headers": {
+          "Authorization": "Bearer {env:AGENTGATEWAY_API_KEY}"
+        }
+      },
+      "models": {
+        "gemini": {
+          "modelID": "gemini",
+          "name": "Gemini 3.8 Flash (Vertex via AgentGateway)",
+          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
+          "limit": {"context": 250000, "output": 16000}
+        }
+      }
     }
   },
   "default_agent": "orchestrator",
-  "model": "agentgateway/worker"
+  "model": "agentgateway-gemini/gemini"
 }

@@ -62,6 +62,20 @@ The public model aliases are `omnipower`, `architect`, `worker`, `reviewer`,
 as their fallback. Gemini is defined for explicit use through Vertex and is not
 an automatic fallback target.
 
+### AgentGateway telemetry and cost attribution
+
+AgentGateway exports resolved provider, upstream model, token usage, and
+realized cost through OTLP/gRPC to the in-cluster OpenTelemetry Collector. The
+Collector forwards both AgentGateway and OpenCode workflow spans to the fixed
+MLflow experiment selected by `MLFLOW_EXPERIMENT_ID`. OpenCode contributes
+session, agent, and tool context; AgentGateway is the cost authority because it
+knows the actual failover target.
+
+The AgentGateway model catalog prices built-in public provider/model pairs. Add
+an Enmaas override only after its billing rate and the emitted
+provider/model-label pair are verified. Do not substitute an upstream public
+price for an Enmaas bill.
+
 ## NotebookLM MCP Authentication Guide
 
 NotebookLM uses session-based authentication rather than standard OAuth tokens. To authenticate:
@@ -79,7 +93,8 @@ NotebookLM uses session-based authentication rather than standard OAuth tokens. 
 
 The stack includes:
 - **MLflow** - GenAI tracking and artifact server for OpenCode traces
-- **AgentGateway** - the sole OpenAI-compatible inference endpoint
+- **AgentGateway** - the sole inference endpoint, exposing OpenAI-compatible
+  and native Gemini APIs
 - **MCP Servers** - Model Context Protocol servers (NotebookLM, Workspace)
 - **OpenTelemetry Collector** - vendor-neutral telemetry gateway for OpenCode
 
@@ -130,23 +145,22 @@ Access the Collector directly at `http://127.0.0.1:17903`.
 | 6080 | 17982 | MCP NotebookLM noVNC | NotebookLM noVNC web interface (`/vnc.html`) |
 | 8000 | 17981 | MCP Workspace | Google Workspace MCP server |
 | 6443 | 17964 | Kubernetes API | API server (127.0.0.1:17964) |
+| 4317 | internal only | OTel Collector | AgentGateway OTLP/gRPC receiver |
 | 4318 | 17903 | OTel Collector | OTLP HTTP receiver |
 
 ## Architecture
 
 ```text
-OpenCode
-  |
-  | OTLP/HTTP (x-mlflow-experiment-id)
-  v
-Caddy
-  |
-  v
-OTel Collector (k3s / ai-dev)
-  |
-  | x-mlflow-experiment-id preserved
-  v
-MLflow (k3s)
+OpenCode -- OpenAI-compatible or native Gemini model request --> AgentGateway
+   |                                                               |
+   | OTLP/HTTP: session, agent, tool, client spans                | OTLP/gRPC: resolved
+   |                                                               | provider/model/usage/cost
+   +-----------------------------+---------------------------------+
+                                 v
+                    OTel Collector (fixed MLflow experiment header)
+                                 |
+                                 v
+                              MLflow (k3s)
 ```
 
 Future telemetry backends (metrics, logs, or alternative trace backends) should
@@ -170,6 +184,10 @@ export OPENCODE_RESOURCE_ATTRIBUTES="service.name=opencode,service.namespace=dot
 # Keep logs/metrics disabled at plugin side until backends are added:
 export OPENCODE_DISABLE_LOGS=1
 ```
+
+The shared OpenCode service batches telemetry from concurrent sessions, so a
+fixed MLflow experiment is required. Filter traces by OpenCode session/trace
+attributes instead of creating one MLflow experiment per session.
 
 ## Commands Reference
 

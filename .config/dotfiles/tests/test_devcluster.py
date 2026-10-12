@@ -73,6 +73,7 @@ def ai_factory_inputs() -> dict[str, str]:
         "VERTEX_PROJECT": "project",
         "VERTEX_LOCATION": "global",
         "AGENTGATEWAY_API_KEY": "agentgateway-secret",
+        "MLFLOW_EXPERIMENT_ID": "42",
     }
 
 
@@ -134,6 +135,7 @@ def test_up_sequences_safe_lifecycle_and_secrets_after_runtime(
     assert runtime_apply < mlflow_ready < otel_ready < agentgateway_ready
     assert "--from-file=vertex-credentials.json=" in commands[agentgateway_secret]
     assert "AGENTGATEWAY_API_KEY=agentgateway-secret" in commands[agentgateway_secret]
+    assert "MLFLOW_EXPERIMENT_ID=42" in commands[agentgateway_secret]
     assert "enmaas-secret" not in result.stdout + result.stderr
     assert str(Path(env["GOOGLE_APPLICATION_CREDENTIALS"])) not in result.stdout + result.stderr
 
