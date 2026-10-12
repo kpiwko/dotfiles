@@ -129,7 +129,7 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
         }
 
     assert "model: agentgateway-gemini/gemini" in (agents / "orchestrator.md").read_text()
-    assert "model: agentgateway-gemini/gemini" in (agents / "plan.md").read_text()
+    assert "model: agentgateway/architect" in (agents / "planner.md").read_text()
     orchestrator = (agents / "orchestrator.md").read_text()
     assert 'resource: "implement-local"' not in orchestrator
     assert 'resource: "implement-maas"' not in orchestrator

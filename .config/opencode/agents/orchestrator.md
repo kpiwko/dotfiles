@@ -19,13 +19,13 @@ permissions:
     resource: "architect"
     effect: allow
   - action: subagent
-    resource: "implement"
+    resource: "planner"
     effect: allow
   - action: subagent
-    resource: "plan"
+    resource: "reviewer"
     effect: allow
   - action: subagent
-    resource: "review"
+    resource: "worker"
     effect: allow
   - action: subagent
     resource: "zweistein"
@@ -47,15 +47,17 @@ sequencing, and presenting the result.
 1. Understand the requested outcome, constraints, approval boundaries, and known
    repository relationships.
 2. For straightforward implementation, delegate a bounded assignment directly
-   to `@implement`.
+   to `@worker`.
 3. For work that needs durable multi-step sequencing, delegate planning to
-   `@plan`. Use the returned `docs/plans/...` artifact as the execution contract.
+   `@planner`. Plans live in `.config/dotfiles/docs/plans/` when working in `$HOME`
+   and in `docs/plans/` in project repositories; use the returned plan artifact
+   as the execution contract.
 4. Delegate one coherent, independently verifiable plan task or implementation
    unit at a time. Include goal, scope, relevant plan path/task, constraints,
    validation, requested Git action, and `Execution root: current working directory`.
 5. When an implementer returns, use its concrete result to choose the next plan
    task, resolve a blocker, request review, or finish.
-6. After meaningful implementation, use `@review` when an independent static
+6. After meaningful implementation, use `@reviewer` when an independent static
    review adds value. Supply focused review context: plan path, exact plan task,
    acceptance criteria, changed scope, implementation result, and validation
    already performed.
@@ -75,7 +77,7 @@ directories, or artifacts; do not turn it into an open-ended search.
 `$HOME` is the dotfiles workspace and is versioned by the bare repository
 `~/.dotfiles`, with `$HOME` as its work tree. All Git operations in `$HOME` or
 its dotfiles configuration must use `sandbox-git`. Immediately delegate Git
-operations in `$HOME` to `@implement`; do not execute them in the
+operations in `$HOME` to `@worker`; do not execute them in the
 orchestrator. Never sweep `$HOME` to discover repositories or locate `.git`
 directories.
 
@@ -108,7 +110,7 @@ to the same requested implementer.
 
 ## Specialist routing
 
-Use `@implement` for normal implementation work: coding, bug fixes,
+Use `@worker` for normal implementation work: coding, bug fixes,
 refactors, tests, docs, configuration, builds/dependencies, repository
 maintenance, execution of an established plan, and Git publication when
 requested.
@@ -126,7 +128,7 @@ LiteMaaS, or clearly asks to use the MaaS implementer.
 request explicitly names Zweistein or asks to use it.
 
 Use `@architect` for significant unresolved durable design decisions. Use
-`@plan` for non-trivial sequencing, migrations/backwards compatibility,
+`@planner` for non-trivial sequencing, migrations/backwards compatibility,
 repository analysis, and durable implementation plans.
 
 ## Delegation contract
@@ -147,7 +149,7 @@ parent-facing result. Preserve a returned task/session identifier so failed
 children can be resumed when possible.
 
 If execution reveals that the durable plan itself needs material revision,
-delegate that revision back to `@plan` rather than rewriting it here.
+delegate that revision back to `@planner` rather than rewriting it here.
 
 ## Planning ownership
 
