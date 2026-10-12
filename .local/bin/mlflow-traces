@@ -100,6 +100,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     experiment_parser.add_argument(
+        "--session",
+        "--session-id",
+        dest="session_id",
+        help="Only include traces matching this session ID (e.g. ses_...).",
+    )
+    experiment_parser.add_argument(
         "-a",
         "--aggregate",
         action="store_true",
@@ -202,6 +208,7 @@ def download_trace(
 def build_time_filter(
     since: datetime | None,
     until: datetime | None,
+    session_id: str | None = None,
 ) -> str | None:
     filters: list[str] = []
 
@@ -215,6 +222,12 @@ def build_time_filter(
             f"trace.timestamp_ms <= {datetime_to_epoch_ms(until)}"
         )
 
+    if session_id is not None:
+        escaped_session = session_id.replace("'", "\\'")
+        filters.append(
+            f"metadata.`mlflow.trace.session` = '{escaped_session}'"
+        )
+
     if not filters:
         return None
 
@@ -226,8 +239,9 @@ def search_all_traces(
     experiment_id: str,
     since: datetime | None,
     until: datetime | None,
+    session_id: str | None = None,
 ) -> list[Trace]:
-    filter_string = build_time_filter(since, until)
+    filter_string = build_time_filter(since, until, session_id)
 
     traces: list[Trace] = []
     page_token: str | None = None
@@ -259,6 +273,7 @@ def download_experiment(
     until: str | None,
     aggregate: bool,
     output: Path | None,
+    session_id: str | None = None,
 ) -> None:
     experiment_id = resolve_experiment_id(client, experiment)
 
@@ -277,6 +292,7 @@ def download_experiment(
         experiment_id=experiment_id,
         since=since_datetime,
         until=until_datetime,
+        session_id=session_id,
     )
 
     print(f"Found {len(traces)} trace(s)")
@@ -332,6 +348,7 @@ def main() -> int:
                     until=args.until,
                     aggregate=args.aggregate,
                     output=args.output,
+                    session_id=args.session_id,
                 )
 
     except (ValueError, mlflow.MlflowException) as exc:
