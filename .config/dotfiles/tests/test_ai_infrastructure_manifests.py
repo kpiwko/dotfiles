@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from conftest import ROOT
 
@@ -14,8 +17,12 @@ RUNTIME = K8S_DIR / "runtime"
 
 
 def render(path: Path) -> str:
+    cmd = shutil.which("kubectl") or shutil.which("kustomize") or shutil.which("devcluster-kubectl")
+    if not cmd:
+        pytest.fail("Neither kubectl, kustomize, nor devcluster-kubectl found in PATH")
+    args = [cmd, "build" if Path(cmd).name == "kustomize" else "kustomize", str(path)]
     result = subprocess.run(
-        ["devcluster-kubectl", "kustomize", path],
+        args,
         check=True,
         capture_output=True,
         text=True,
