@@ -20,9 +20,11 @@ model is `Qwen3.8-27B-NT`.
 
 ## Implementation agents
 
-- `implement` uses the AgentGateway `worker` alias.
+- `worker` uses the AgentGateway `worker` alias.
+- `planner` uses the AgentGateway `architect` alias.
+- `reviewer` uses the AgentGateway `reviewer` alias.
 
-The primary orchestrator, planner, and default root model use
+The primary orchestrator and default root model use
 `agentgateway-gemini/gemini`.
 
 ## AgentGateway inference boundary

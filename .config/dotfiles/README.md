@@ -99,11 +99,10 @@ OpenCode configuration is stored under `~/.config/opencode/`. See `~/.config/ope
 - **Configuration:** `~/.config/opencode/opencode.jsonc`
 - **Markdown Agents:** `~/.config/opencode/agents/`
   - `orchestrator.md`: user-facing primary agent and task router.
-  - `implement-local.md`: default local oMLX implementation specialist.
-  - `implement-maas.md`: explicitly selected LiteMaaS implementation specialist with matching capabilities.
-  - `plan.md`: planning specialist for complex sequencing/multi-component tasks.
+  - `worker.md`: default AgentGateway implementation specialist.
+  - `planner.md`: planning specialist for complex sequencing/multi-component tasks.
   - `architect.md`: architecture specialist that persists durable decisions in ADR directories under `docs/`.
-  - `review.md`: read-only reviewer leveraging Qodo.
+  - `reviewer.md`: read-only reviewer leveraging Qodo.
   - `zweistein.md`: explicitly selected premium autonomous engineering path.
 - **Implementation skills:** `~/.config/opencode/skills/`
   - `init-change`: synchronizes the intended base and establishes a feature branch through `sandbox-git`.

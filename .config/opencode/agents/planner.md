@@ -1,7 +1,7 @@
 ---
 description: Implementation planning specialist. Use for genuinely non-trivial sequencing, multi-component work, migrations, or repository analysis before implementation.
 mode: subagent
-model: agentgateway-gemini/gemini
+model: agentgateway/architect
 steps: 16
 permissions:
   - action: shell
@@ -12,6 +12,9 @@ permissions:
     effect: deny
   - action: edit
     resource: "docs/plans/**"
+    effect: allow
+  - action: edit
+    resource: ".config/dotfiles/docs/plans/**"
     effect: allow
   - action: skill
     resource: "*"
@@ -43,9 +46,9 @@ non-trivial work and save it as durable repository state.
 2. Use existing project patterns and accepted ADRs as constraints.
 3. Use `brainstorming` only when requirements genuinely need exploration.
 4. Use `writing-plans` to produce the implementation plan.
-5. Save the finished plan under
-   `docs/plans/YYYY-MM-DD-<feature-name>.md`, overriding the Superpowers default
-   plan location.
+5. Save the finished plan under `$HOME` (dotfiles) at
+   `.config/dotfiles/docs/plans/YYYY-MM-DD-<name>.md`; in project repositories,
+   use `docs/plans/YYYY-MM-DD-<name>.md`.
 6. Self-review the plan for requirement coverage, concrete file/symbol references,
    validation, task boundaries, and unresolved decisions.
 7. Return the plan path, a concise summary, and any decision that requires the

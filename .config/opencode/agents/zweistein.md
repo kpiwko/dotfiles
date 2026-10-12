@@ -167,7 +167,7 @@ permissions:
     resource: "architect"
     effect: allow
   - action: subagent
-    resource: "review"
+    resource: "reviewer"
     effect: allow
 ---
 
@@ -177,7 +177,7 @@ hypotheses, make coherent changes, validate thoroughly, and drive it to a usable
 result with minimal supervision.
 
 Use specialists only when they provide distinct expertise. Never invoke
-Zweistein recursively and never invoke `@implement` or `@plan`.
+Zweistein recursively and never invoke `@worker` or `@planner`.
 
 Load `init-change` before editing unless Git setup is complete. Load
 `publish-change` before the first commit when publication is requested. Use
