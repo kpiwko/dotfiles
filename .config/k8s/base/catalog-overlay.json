@@ -1,0 +1,45 @@
+{
+  "providers": {
+    "custom": {
+      "models": {
+        "gpt-5.6-terra": {
+          "rates": { "input": "2", "output": "12", "cacheRead": "0.20" }
+        },
+        "gpt-5.6-luna": {
+          "rates": { "input": "0.20", "output": "1.20", "cacheRead": "0.02" }
+        }
+      }
+    },
+    "openai": {
+      "models": {
+        "gpt-5.6-terra": {
+          "rates": { "input": "2", "output": "12", "cacheRead": "0.20" }
+        },
+        "gpt-5.6-luna": {
+          "rates": { "input": "0.20", "output": "1.20", "cacheRead": "0.02" }
+        }
+      }
+    },
+    "anthropic": {
+      "models": {
+        "claude-opus-5-5": {
+          "rates": { "input": "4", "output": "20", "cacheRead": "0.20" }
+        }
+      }
+    },
+    "vertex": {
+      "models": {
+        "gemini-3.8-flash": {
+          "rates": { "input": "0.75", "output": "3.75", "cacheRead": "0.075" }
+        }
+      }
+    },
+    "google": {
+      "models": {
+        "gemini-3.8-flash": {
+          "rates": { "input": "0.75", "output": "3.75", "cacheRead": "0.075" }
+        }
+      }
+    }
+  }
+}

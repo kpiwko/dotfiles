@@ -71,6 +71,22 @@ def test_agentgateway_config_uses_expected_models_and_secret_boundary() -> None:
     assert "ai-factory-secrets" not in deployment_manifest
     assert "vertex-credentials.json" in deployment_manifest
     assert "name: MLFLOW_EXPERIMENT_ID" in deployment_manifest
+    assert "modelCatalog:" in config
+    assert "- file: /etc/agentgateway/catalog-overlay.json" in config
+
+
+def test_agentgateway_catalog_overlay_and_kustomization() -> None:
+    catalog_path = BASE / "catalog-overlay.json"
+    catalog = json.loads(catalog_path.read_text())
+    catalog_text = catalog_path.read_text()
+    kustomization = (BASE / "kustomization.yaml").read_text()
+
+    assert catalog_path.is_file()
+    for model in ("gpt-5.6-terra", "gpt-5.6-luna", "claude-opus-5-5", "gemini-3.8-flash"):
+        assert model in catalog_text
+        assert any(model in provider.get("models", {}) for provider in catalog["providers"].values())
+    assert "catalog-overlay.json" in kustomization
+    assert "agentgateway-config" in kustomization
 
 
 def test_opencode_agents_reference_only_agentgateway_models() -> None:

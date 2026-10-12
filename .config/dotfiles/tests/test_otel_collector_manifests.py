@@ -65,9 +65,18 @@ def test_otel_collector_maps_agentgateway_realized_costs() -> None:
     manifest = OTEL_MANIFEST.read_text()
 
     assert 'attributes["agw.ai.usage.cost.total"]' in manifest
+    assert 'attributes["agw.ai.usage.cost.total"] == nil' in manifest
+    assert 'set(attributes["agw.ai.usage.cost.total"], attributes["gen_ai.usage.cost"])' in manifest
     assert 'attributes["agw.ai.usage.cost.input"]' in manifest
     assert 'attributes["agw.ai.usage.cost.output"]' in manifest
     assert 'attributes["mlflow.llm.cost"]' in manifest
+
+
+def test_otel_collector_guards_zero_cost_transformations() -> None:
+    manifest = OTEL_MANIFEST.read_text()
+
+    assert 'attributes["cost_usd"] != 0' in manifest
+    assert 'attributes["session.total_cost_usd"] != 0' in manifest
 
 
 def test_otel_collector_memory_limiter_processor() -> None:

@@ -35,6 +35,7 @@ data:
               - set(attributes["gen_ai.usage.output_tokens"], attributes["llm.token_count.completion"]) where attributes["gen_ai.usage.output_tokens"] == nil and attributes["llm.token_count.completion"] != nil
               - set(attributes["gen_ai.usage.cost"], attributes["agw.ai.usage.cost.total"]) where attributes["gen_ai.usage.cost"] == nil and attributes["agw.ai.usage.cost.total"] != nil
               - set(attributes["gen_ai.usage.cost"], attributes["cost_usd"]) where attributes["gen_ai.usage.cost"] == nil and attributes["cost_usd"] != nil
+              - set(attributes["agw.ai.usage.cost.total"], attributes["gen_ai.usage.cost"]) where attributes["agw.ai.usage.cost.total"] == nil and attributes["gen_ai.usage.cost"] != nil and attributes["gen_ai.usage.cost"] != 0 and attributes["gen_ai.usage.cost"] != "0"
 
               # AgentGateway's native spans carry realized cost after a catalog match.
               # Do not create a cost value when its input/output breakdown is absent.
@@ -42,10 +43,10 @@ data:
 
               # Preserve compatibility with existing OpenCode-originated cost fields.
               # MLflow UI expects a JSON string with input_cost, output_cost, and total_cost
-              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["cost_usd"] != nil'
+              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["cost_usd"] != nil and attributes["cost_usd"] != 0 and attributes["cost_usd"] != "0"'
 
               # Handle root agent session span cost
-              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["session.total_cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["session.total_cost_usd"] != nil'
+              - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["session.total_cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["session.total_cost_usd"] != nil and attributes["session.total_cost_usd"] != 0 and attributes["session.total_cost_usd"] != "0"'
       batch:
         metadata_keys: ["x-mlflow-experiment-id"]
 
