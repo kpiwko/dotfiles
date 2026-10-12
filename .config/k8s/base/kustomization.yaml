@@ -11,6 +11,7 @@ configMapGenerator:
   - name: agentgateway-config
     files:
       - agentgateway.yaml
+      - catalog-overlay.json
 labels:
   - pairs:
       app.kubernetes.io/managed-by: dotfiles

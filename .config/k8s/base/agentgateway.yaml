@@ -3,6 +3,8 @@
 # Repository-managed, read-only AgentGateway configuration. Provider credentials
 # are injected only from the agentgateway-secrets Kubernetes Secret.
 config:
+  modelCatalog:
+    - file: /etc/agentgateway/catalog-overlay.json
   database:
     url: sqlite:///data/agentgateway.db
   storage:
