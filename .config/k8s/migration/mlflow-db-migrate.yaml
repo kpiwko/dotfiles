@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mlflow-db-migrate
+  namespace: ai-dev
+  labels:
+    app.kubernetes.io/name: mlflow-db-migrate
+    app.kubernetes.io/component: database-migration
+    app.kubernetes.io/part-of: ai-infrastructure
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mlflow-db-migrate
+        app.kubernetes.io/component: database-migration
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: mlflow-db-migrate
+          image: ghcr.io/mlflow/mlflow:v3.17.0
+          command:
+            - mlflow
+            - db
+            - upgrade
+            - sqlite:////mlflow/mlflow.db
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow
+      volumes:
+        - name: mlflow-data
+          persistentVolumeClaim:
+            claimName: mlflow-pvc

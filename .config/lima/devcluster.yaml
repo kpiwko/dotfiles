@@ -1,0 +1,89 @@
+# Dedicated single-node Kubernetes VM for the dotfiles `cluster` role.
+minimumLimaVersion: 2.0.0
+vmType: vz
+arch: aarch64
+cpus: 4
+memory: "8GiB"
+disk: "100GiB"
+containerd:
+  system: false
+  user: false
+portForwards:
+  - guestPort: 6443
+    hostIP: "127.0.0.1"
+    hostPort: 17964
+    proto: tcp
+  - guestPortRange: [17900, 17999]
+    hostIP: "127.0.0.1"
+    hostPortRange: [17900, 17999]
+    proto: tcp
+  - guestIP: "0.0.0.0"
+    proto: any
+    ignore: true
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euxo pipefail
+      dnf install -y curl ca-certificates firewalld kernel-modules-extra \
+        container-selinux selinux-policy-base policycoreutils-python-utils \
+        iptables iptables-nft
+      cat >/etc/modules-load.d/k3s.conf <<'EOF'
+      overlay
+      br_netfilter
+      vxlan
+      EOF
+      modprobe overlay
+      modprobe br_netfilter
+      modprobe vxlan
+      cat >/etc/sysctl.d/90-k3s.conf <<'EOF'
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+      EOF
+      sysctl --system
+      if ! rpm -q k3s-selinux >/dev/null 2>&1; then
+        dnf install -y https://rpm.rancher.io/k3s/latest/common/centos/9/noarch/k3s-selinux-1.6-1.el9.noarch.rpm
+      fi
+      mkdir -p /etc/rancher/k3s
+      cat >/etc/rancher/k3s/config.yaml <<'EOF'
+      disable:
+        - traefik
+        - servicelb
+      write-kubeconfig-mode: "0644"
+      https-listen-port: 6443
+      bind-address: "0.0.0.0"
+      tls-san:
+        - "127.0.0.1"
+        - "localhost"
+      service-node-port-range: "17900-17999"
+      flannel-backend: vxlan
+      EOF
+      systemctl enable --now firewalld
+      firewall-cmd --permanent --add-port=6443/tcp
+      firewall-cmd --permanent --add-port=17900-17999/tcp
+      firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16
+      firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16
+      firewall-cmd --reload
+      if ! command -v k3s >/dev/null 2>&1; then
+        curl --fail --location --retry 3 https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -
+      fi
+      systemctl enable --now k3s
+probes:
+  - mode: readiness
+    description: k3s API service is active
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      sudo systemctl is-active --quiet k3s
+images:
+  - location: "https://cloud.centos.org/centos/9-stream/aarch64/images/CentOS-Stream-GenericCloud-9-20260720.0.aarch64.qcow2"
+    arch: "aarch64"
+    digest: "sha256:6dcb4e1518d84e414fb53fe28ae841bb16bba2499a7ad523caabf44b3ccbb3c2"
+  - location: https://cloud.centos.org/centos/9-stream/aarch64/images/CentOS-Stream-GenericCloud-9-latest.aarch64.qcow2
+    arch: aarch64
+mountTypesUnsupported: [9p]
+firmware:
+  legacyBIOS: true

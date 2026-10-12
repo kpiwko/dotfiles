@@ -2,7 +2,7 @@
   "sound": true,
   "notification": true,
   "bell": false,
-  "timeout": 5,
+  "timeout": 10,
   "notificationTitle": null,
   "showProjectName": true,
   "showFullPath": false,

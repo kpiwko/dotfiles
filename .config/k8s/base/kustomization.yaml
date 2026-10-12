@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai-dev
+resources:
+  - namespace.yaml
+  - agentgateway-deployment.yaml
+  - mlflow.yaml
+  - mcp-servers.yaml
+  - otel-collector.yaml
+configMapGenerator:
+  - name: agentgateway-config
+    files:
+      - agentgateway.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: dotfiles

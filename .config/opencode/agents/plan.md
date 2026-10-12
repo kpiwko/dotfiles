@@ -1,7 +1,7 @@
 ---
 description: Implementation planning specialist. Use for genuinely non-trivial sequencing, multi-component work, migrations, or repository analysis before implementation.
 mode: subagent
-model: mlflow/plan
+model: agentgateway/worker
 steps: 16
 permissions:
   - action: shell

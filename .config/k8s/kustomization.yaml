@@ -1,11 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: ai-dev
+# This safe base intentionally leaves MLflow and the OTel writer stopped.
+# Apply runtime/ only after the MLflow database migration has completed.
 resources:
-  - base/namespace.yaml
-  - base/mlflow.yaml
-  - base/mcp-servers.yaml
-  - base/otel-collector.yaml
-labels:
-  - pairs:
-      app.kubernetes.io/managed-by: dotfiles
+  - base

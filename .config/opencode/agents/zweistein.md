@@ -1,7 +1,7 @@
 ---
 description: Premium autonomous engineering agent for difficult tasks. Use only when the user explicitly requests Zweistein.
 mode: subagent
-model: mlflow/zweistein
+model: agentgateway/omnipower
 steps: 40
 permissions:
   - action: shell

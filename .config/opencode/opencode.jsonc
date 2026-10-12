@@ -39,98 +39,47 @@
     "buffer": 8000
   },
   "provider": {
-    "openai": {
-      "name": "OpenAI",
-      "options": {"apiKey": "{env:OPENAI_API_KEY}"},
-      "models": {
-        "gpt-5.6-luna": {"name": "GPT-5.6 Luna", "limit": {"context": 250000, "output": 16000}},
-        "gpt-5.6-terra": {"name": "GPT-5.6 Terra"}
-      }
-    },
-    "omlx": {
+    "agentgateway": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "omlx",
-      "options": {"baseURL": "{env:OMLX_BASE_URL}", "apiKey": "{env:OMLX_API_KEY}"},
-      "models": {
-        "Qwen3-Coder-Next-6bit": {
-          "modelID": "Qwen3-Coder-Next-6bit",
-          "name": "Qwen3 Coder",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 120000, "output": 16000},
-          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
-        },
-        "Qwen3.8-27B-bf16": {
-          "modelID": "Qwen3.8-27B-bf16",
-          "name": "Qwen3.8 Full",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000},
-          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
-        },
-        "Qwen3.8-27B-8bit": {
-          "modelID": "Qwen3.8-27B-8bit",
-          "name": "Qwen3.8",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "options": {"extraBody": {"chat_template_kwargs": {"enable_thinking": false, "preserve_thinking": false}}}
-        }
-      }
-    },
-    "litemaas": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteMaaS",
+      "name": "AgentGateway",
       "options": {
-        "baseURL": "{env:LITEMAAS_BASE_URL}",
-        "apiKey": "{env:LITEMAAS_API_KEY}"
+        "baseURL": "{env:AGENTGATEWAY_BASE_URL}",
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
       },
       "models": {
-        "Qwen3.8-27B-NT": {
-          "modelID": "Qwen3.8-27B-NT",
-          "name": "Qwen3.8 27B NT",
+        "omnipower": {
+          "modelID": "omnipower",
+          "name": "Omnipower (Claude Opus 5.5)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 120000, "output": 16000}
-        }
-      }
-    },
-    "mlflow": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "MLflow AI Gateway",
-      "options": {
-        "baseURL": "{env:MLFLOW_GATEWAY_BASE_URL:-https://mlflow.fous.ai}/gateway/mlflow/v1",
-        "apiKey": "dummy"
-      },
-      "models": {
-        "orchestrator": {
-          "modelID": "orchestrator",
-          "name": "Orchestrator",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "limit": {"context": 250000, "output": 32000}
         },
         "architect": {
           "modelID": "architect",
-          "name": "Architect",
+          "name": "Architect (GPT-5.6 Terra)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
           "limit": {"context": 250000, "output": 16000}
         },
-        "plan": {
-          "modelID": "plan",
-          "name": "Plan",
+        "worker": {
+          "modelID": "worker",
+          "name": "Worker (GPT-5.6 Luna)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
           "limit": {"context": 250000, "output": 16000}
         },
-        "implement": {
-          "modelID": "implement",
-          "name": "Implement",
+        "reviewer": {
+          "modelID": "reviewer",
+          "name": "Reviewer (GPT-5.6 Luna)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
           "limit": {"context": 250000, "output": 16000}
         },
-        "review": {
-          "modelID": "review",
-          "name": "Review",
+        "spade": {
+          "modelID": "spade",
+          "name": "Spade (GLM 5.3)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
           "limit": {"context": 250000, "output": 16000}
         },
-        "zweistein": {
-          "modelID": "zweistein",
-          "name": "Zweistein",
+        "gemini": {
+          "modelID": "gemini",
+          "name": "Gemini 3.8 Flash (Vertex)",
           "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
           "limit": {"context": 250000, "output": 16000}
         }
@@ -138,5 +87,5 @@
     }
   },
   "default_agent": "orchestrator",
-  "model": "mlflow/orchestrator"
+  "model": "agentgateway/worker"
 }

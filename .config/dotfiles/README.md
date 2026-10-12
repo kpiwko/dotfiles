@@ -73,7 +73,7 @@ a machine can opt into additional, non-exclusive **roles** that install
 extra software and services. Available roles include:
 - `dev`: Local development workstation (enables local Caddy reverse proxy, local TLS, developer tools).
 - `ai-server`: Dedicated AI server (Caddy reverse proxy with Cloudflare DNS-01 TLS, local LLM/tracing backends).
-- `cluster`: Local Kubernetes development environment (Kind, Podman, MLflow, and MCP servers).
+- `cluster`: Local Kubernetes development environment (Lima/k3s, MLflow telemetry, AgentGateway, and MCP servers).
 
 Manage roles with the `dotfiles-role` helper (installed to `~/.local/bin`,
 already on `PATH` once this repo is checked out):
@@ -204,11 +204,12 @@ Two flavors of "never commit this" exist in this repo:
 3. Commit tracked site definitions as usual.
 4. Rerun `dotfiles-caddy-install` — it syncs `sites/` with `rsync --delete`, validates, and reloads.
 
-# Kubernetes (Kind) Cluster Role
+# Kubernetes (Lima/k3s) Cluster Role
 
-The `cluster` role sets up a local Kubernetes development environment using
-[Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) with Podman as the
-container runtime.
+The `cluster` role sets up a local Kubernetes development environment using a
+[Lima](https://lima-vm.io/) virtual machine running single-node
+[k3s](https://k3s.io/). Its tracked instance definition is
+`.config/lima/devcluster.yaml`.
 
 ## Architecture
 
@@ -218,7 +219,8 @@ container runtime.
 ## Services
 
 The cluster includes:
-- **MLflow** - GenAI tracking server for OpenCode traces
+- **MLflow** - GenAI tracking and artifact server for OpenCode traces
+- **AgentGateway** - the sole OpenAI-compatible inference endpoint
 - **MCP Servers** - Model Context Protocol (NotebookLM, Workspace)
 
 ## Secret Management & Google Workspace OAuth
@@ -240,7 +242,7 @@ The cluster includes:
 
 ```zsh
 dotfiles-role enable cluster
-devcluster create          # Create Kind cluster
+devcluster create          # Create Lima/k3s cluster
 devcluster up              # Deploy kustomize manifests
 devcluster status          # Check cluster status
 ```
@@ -258,7 +260,8 @@ make cluster-status
 |----------------|-----------|---------|
 | 80 | 17988 | Ingress HTTP |
 | 443 | 17943 | Ingress HTTPS |
-| 5000 | 17902 | MLflow |
+| 5000 | 17902 | MLflow | Tracking and artifacts |
+| 4000 | 17904 | AgentGateway |
 | 17200 | 17980 | MCP NotebookLM |
 | 6080 | 17982 | MCP NotebookLM noVNC |
 | 8000 | 17981 | MCP Workspace |

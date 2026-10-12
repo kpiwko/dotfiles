@@ -1,7 +1,7 @@
 ---
 description: Architecture specialist. Use only for significant durable technical decisions, ADR conflicts, system boundaries, APIs, data/storage, security, or infrastructure choices.
 mode: subagent
-model: mlflow/architect
+model: agentgateway/architect
 steps: 16
 permissions:
   - action: edit

@@ -40,8 +40,15 @@ def clean_env() -> dict[str, str]:
     env = os.environ.copy()
     for key in list(env):
         if key.startswith(("AI_DEV_", "DEVCLUSTER_", "CF_", "CLOUDFLARE_")) or key in {
+            "ENMAAS_KEY",
+            "ENMAAS_URL",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "AGENTGATEWAY_API_KEY",
+            "OPENAI_API_KEY",
             "UV_WORKING_DIRECTORY",
             "UV_PROJECT_ENVIRONMENT",
+            "VERTEX_LOCATION",
+            "VERTEX_PROJECT",
         }:
             env.pop(key, None)
     return env

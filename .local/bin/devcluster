@@ -1,12 +1,12 @@
 #!/bin/sh
-# devcluster - Kubernetes (Kind) AI infrastructure management
+# devcluster - Lima/k3s AI infrastructure management
 # Supports roles: cluster
 
 set -eu
 
 K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
-CLUSTER_NAME="kind-ai-dev"
-KIND_CONFIG="$K8S_DIR/kind-config.yaml"
+CLUSTER_NAME="devcluster"
+LIMA_CONFIG="${LIMA_CONFIG:-$HOME/.config/lima/devcluster.yaml}"
 KUSTOMIZE_DIR="$K8S_DIR"
 DEVCLUSTER_KUBECONFIG="${DEVCLUSTER_KUBECONFIG:-$HOME/.kube/opencode-devcluster}"
 
@@ -14,7 +14,7 @@ usage() {
   echo "Usage: devcluster <command> [options]" >&2
   echo "" >&2
   echo "Commands:" >&2
-  echo "  create    Create Kind cluster with AI infrastructure configuration" >&2
+  echo "  create    Create the Lima/k3s development cluster" >&2
   echo "  up        Deploy kustomize manifests to cluster" >&2
   echo "  status    Show cluster and pod status" >&2
   echo "  logs      Show logs for a pod (use: logs <pod> [container])" >&2
@@ -23,6 +23,7 @@ usage() {
   echo "" >&2
   echo "Environment:" >&2
   echo "  K8S_DIR           Path to k8s manifests (default: ~/.config/k8s)" >&2
+  echo "  LIMA_CONFIG        Lima instance configuration (default: ~/.config/lima/devcluster.yaml)" >&2
   echo "  DOTFILES_ROLES_FILE  Path to roles file (default: ~/.config/dotfiles/roles)" >&2
   exit 1
 }
@@ -39,10 +40,10 @@ check_cluster_role() {
   }
 }
 
-check_kind() {
-  if ! command -v kind >/dev/null 2>&1; then
-    echo "devcluster: error: kind not found" >&2
-    echo "Install with: brew install kind" >&2
+check_lima() {
+  if ! command -v limactl >/dev/null 2>&1; then
+    echo "devcluster: error: limactl not found" >&2
+    echo "Install with: brew install lima" >&2
     exit 1
   fi
 }
@@ -50,45 +51,47 @@ check_kind() {
 check_kubectl() {
   if command -v devcluster-kubectl >/dev/null 2>&1; then
     KUBECTL_BIN="devcluster-kubectl"
-  elif command -v kubectl >/dev/null 2>&1; then
-    KUBECTL_BIN="kubectl"
   else
-    echo "devcluster: error: kubectl not found" >&2
-    echo "Install with: brew install kubernetes-cli" >&2
+    echo "devcluster: error: devcluster-kubectl not found" >&2
     exit 1
   fi
 }
 
-export_kubeconfig() {
-  check_kind
+sync_kubeconfig() {
   mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind export kubeconfig --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
+  # k3s writes its API endpoint as the guest loopback address. Lima forwards
+  # it to the fixed host port declared by the tracked instance configuration.
+  # The wrapper requires the stable devcluster context name.
+  limactl shell "$CLUSTER_NAME" sudo cat /etc/rancher/k3s/k3s.yaml | \
+    sed \
+      -e 's#127.0.0.1:6443#127.0.0.1:17964#' \
+      -e 's/^current-context: default$/current-context: devcluster/' \
+      -e 's/name: default/name: devcluster/g' \
+      -e 's/cluster: default/cluster: devcluster/' \
+      -e 's/user: default/user: devcluster/' \
+      > "$DEVCLUSTER_KUBECONFIG"
+  chmod 600 "$DEVCLUSTER_KUBECONFIG"
 }
 
 cmd_create() {
   check_cluster_role
-  check_kind
-  
-  echo "Creating Kind cluster: $CLUSTER_NAME"
-  
-  if [ -f "$KIND_CONFIG" ]; then
-    mkdir -p "$(dirname "$DEVCLUSTER_KUBECONFIG")"
-    export KIND_EXPERIMENTAL_PROVIDER=podman
-    kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG" --kubeconfig "$DEVCLUSTER_KUBECONFIG"
-    export_kubeconfig
-  else
-    echo "devcluster: error: kind config not found at $KIND_CONFIG" >&2
+  check_lima
+
+  if [ ! -f "$LIMA_CONFIG" ]; then
+    echo "devcluster: error: Lima config not found at $LIMA_CONFIG" >&2
     exit 1
   fi
+
+  echo "Creating Lima/k3s cluster: $CLUSTER_NAME"
+  limactl start --name "$CLUSTER_NAME" "$LIMA_CONFIG"
+  sync_kubeconfig
 }
 
 cmd_up() {
   if [ ! -f "$DEVCLUSTER_KUBECONFIG" ]; then
-    if command -v kind >/dev/null 2>&1; then
-      echo "Exporting kubeconfig to $DEVCLUSTER_KUBECONFIG..."
-      export_kubeconfig || true
-    fi
+    check_lima
+    echo "Synchronizing k3s kubeconfig to $DEVCLUSTER_KUBECONFIG..."
+    sync_kubeconfig
   fi
 
   check_kubectl
@@ -111,7 +114,7 @@ cmd_up() {
     done < "$K8S_DIR/.env"
   fi
 
-  echo "Provisioning secrets for namespace ai-dev..."
+  echo "Provisioning namespace and Workspace MCP secret..."
   $KUBECTL_BIN create namespace ai-dev --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
 
   $KUBECTL_BIN create secret generic workspace-mcp-secrets \
@@ -120,22 +123,143 @@ cmd_up() {
     --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="${AI_DEV_GOOGLE_OAUTH_CLIENT_SECRET:-${AI_DEV_GOOGLE_AUTH_CLIENT_SECRET:-${DEVCLUSTER_GOOGLE_OAUTH_CLIENT_SECRET:-${GOOGLE_OAUTH_CLIENT_SECRET:-}}}}" \
     --dry-run=client -o yaml | $KUBECTL_BIN apply -f -
 
-  echo "Deploying kustomize manifests..."
-  
-  if [ -d "$KUSTOMIZE_DIR" ]; then
-    $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
-  else
+  if [ ! -d "$KUSTOMIZE_DIR" ]; then
     echo "devcluster: error: kustomize dir not found at $KUSTOMIZE_DIR" >&2
+    exit 1
+  fi
+
+  echo "Applying migration-safe base..."
+  $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
+  wait_for_writers_to_stop
+
+  run_job_phase "mlflow-db-migrate" "$K8S_DIR/migration"
+
+  provision_agentgateway_secrets
+
+  echo "Starting MLflow, OpenTelemetry, and AgentGateway runtime..."
+  $KUBECTL_BIN apply -k "$K8S_DIR/runtime"
+  wait_for_runtime
+}
+
+wait_for_writers_to_stop() {
+  echo "Confirming MLflow database writers have stopped..."
+  $KUBECTL_BIN wait --for=delete pod -n ai-dev -l app=mlflow --timeout=120s
+  $KUBECTL_BIN wait --for=delete pod -n ai-dev -l app=otel-collector --timeout=120s
+  writers=$($KUBECTL_BIN get pods -n ai-dev -l 'app in (mlflow,otel-collector)' -o name)
+  if [ -n "$writers" ]; then
+    echo "devcluster: error: MLflow writer Pods remain after safe-base apply" >&2
+    $KUBECTL_BIN get pods -n ai-dev -l 'app in (mlflow,otel-collector)' -o wide >&2 || true
     exit 1
   fi
 }
 
+job_failure_diagnostics() {
+  job_name="$1"
+  echo "devcluster: error: Job $job_name did not complete" >&2
+  $KUBECTL_BIN get job "$job_name" -n ai-dev -o wide >&2 || true
+  $KUBECTL_BIN describe job "$job_name" -n ai-dev >&2 || true
+  $KUBECTL_BIN get pods -n ai-dev -l "job-name=$job_name" -o wide >&2 || true
+  # Job manifests must not log secret values. Redact common shell, YAML, and
+  # JSON forms (including the mounted Vertex service-account document) while
+  # retaining bounded failure context.
+  $KUBECTL_BIN logs "job/$job_name" -n ai-dev --tail=100 2>&1 | \
+    sed -E \
+      -e 's/((ENMAAS_KEY|OPENAI_API_KEY|AGENTGATEWAY_API_KEY)[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
+      -e 's/(("?(ENMAAS_KEY|OPENAI_API_KEY|AGENTGATEWAY_API_KEY|api_key|access_token|token|private_key|private_key_id|client_email)"?)[[:space:]]*:[[:space:]]*)"[^"]*"/\1"[REDACTED]"/g' \
+      -e "s/((\"?(ENMAAS_KEY|OPENAI_API_KEY|AGENTGATEWAY_API_KEY|api_key|access_token|token|private_key|private_key_id|client_email)\"?)[[:space:]]*:[[:space:]]*)'[^']*'/\\1'[REDACTED]'/g" \
+      -e 's/(("?(ENMAAS_KEY|OPENAI_API_KEY|AGENTGATEWAY_API_KEY|api_key|access_token|token|private_key|private_key_id|client_email)"?)[[:space:]]*:[[:space:]]*)[^[:space:],}]+/\1[REDACTED]/g' >&2 || true
+}
+
+prepare_fresh_job() {
+  job_name="$1"
+  if ! $KUBECTL_BIN get job "$job_name" -n ai-dev >/dev/null 2>&1; then
+    return
+  fi
+
+  job_active=$($KUBECTL_BIN get job "$job_name" -n ai-dev -o jsonpath='{.status.active}')
+  job_succeeded=$($KUBECTL_BIN get job "$job_name" -n ai-dev -o jsonpath='{.status.succeeded}')
+  job_failed=$($KUBECTL_BIN get job "$job_name" -n ai-dev -o jsonpath='{.status.failed}')
+  if [ -n "$job_active" ] && [ "$job_active" != 0 ]; then
+    echo "devcluster: error: Job $job_name is active; refusing to replace it" >&2
+    $KUBECTL_BIN get job "$job_name" -n ai-dev -o wide >&2 || true
+    exit 1
+  fi
+  if { [ -n "$job_succeeded" ] && [ "$job_succeeded" != 0 ]; } || \
+     { [ -n "$job_failed" ] && [ "$job_failed" != 0 ]; }; then
+    if [ -n "$job_failed" ] && [ "$job_failed" != 0 ]; then
+      job_failure_diagnostics "$job_name"
+    fi
+    echo "Removing terminal Job $job_name before retry..."
+    if ! $KUBECTL_BIN delete job "$job_name" -n ai-dev --wait=true --timeout=60s; then
+      job_failure_diagnostics "$job_name"
+      exit 1
+    fi
+    return
+  fi
+
+  echo "devcluster: error: Job $job_name exists but is not terminal; refusing to replace it" >&2
+  $KUBECTL_BIN get job "$job_name" -n ai-dev -o wide >&2 || true
+  exit 1
+}
+
+run_job_phase() {
+  job_name="$1"
+  job_dir="$2"
+  echo "Running $job_name..."
+  prepare_fresh_job "$job_name"
+  $KUBECTL_BIN apply -k "$job_dir"
+  if ! $KUBECTL_BIN wait --for=condition=complete "job/$job_name" -n ai-dev --timeout=300s; then
+    job_failure_diagnostics "$job_name"
+    exit 1
+  fi
+  if ! $KUBECTL_BIN wait --for=delete "job/$job_name" -n ai-dev --timeout=360s; then
+    job_failure_diagnostics "$job_name"
+    exit 1
+  fi
+}
+
+wait_for_runtime() {
+  echo "Waiting for MLflow, OpenTelemetry, and AgentGateway runtime availability..."
+  $KUBECTL_BIN rollout status deployment/mlflow -n ai-dev --timeout=180s
+  $KUBECTL_BIN rollout status deployment/otel-collector -n ai-dev --timeout=180s
+  $KUBECTL_BIN rollout status deployment/agentgateway -n ai-dev --timeout=180s
+}
+
+provision_agentgateway_secrets() {
+  for required_key in ENMAAS_KEY ENMAAS_URL OPENAI_API_KEY VERTEX_PROJECT VERTEX_LOCATION AGENTGATEWAY_API_KEY; do
+    eval "required_value=\${$required_key:-}"
+    if [ -z "$required_value" ]; then
+      echo "devcluster: error: required AgentGateway input $required_key is not set" >&2
+      exit 1
+    fi
+  done
+
+  expected_vertex_credentials="$HOME/.config/opencode/itpc-ca-993e2467de-opencode-vertex.json"
+  vertex_credentials_source="${GOOGLE_APPLICATION_CREDENTIALS:-}"
+  if [ "$vertex_credentials_source" != "$expected_vertex_credentials" ] || [ ! -r "$vertex_credentials_source" ]; then
+    echo "devcluster: error: configured Vertex credentials source is invalid" >&2
+    exit 1
+  fi
+
+  echo "Provisioning AgentGateway secret..."
+  set -- create secret generic agentgateway-secrets --namespace ai-dev \
+    "--from-literal=ENMAAS_KEY=$ENMAAS_KEY" \
+    "--from-literal=ENMAAS_URL=$ENMAAS_URL" \
+    "--from-literal=OPENAI_API_KEY=$OPENAI_API_KEY" \
+    "--from-literal=VERTEX_PROJECT=$VERTEX_PROJECT" \
+    "--from-literal=VERTEX_LOCATION=$VERTEX_LOCATION" \
+    "--from-literal=AGENTGATEWAY_API_KEY=$AGENTGATEWAY_API_KEY" \
+    "--from-file=vertex-credentials.json=$vertex_credentials_source" \
+    --dry-run=client -o yaml
+  $KUBECTL_BIN "$@" | $KUBECTL_BIN apply -f -
+}
+
 cmd_status() {
   check_kubectl
-  check_kind
+  check_lima
   
-  echo "=== Cluster Nodes ==="
-  kind get clusters 2>/dev/null || true
+  echo "=== Lima Instance ==="
+  limactl list "$CLUSTER_NAME"
   echo ""
   $KUBECTL_BIN get nodes
   echo ""
@@ -159,18 +283,15 @@ cmd_logs() {
 }
 
 cmd_down() {
-  check_kind
-  check_kubectl
+  check_lima
   echo "Stopping cluster: $CLUSTER_NAME"
-  export_kubeconfig
-  $KUBECTL_BIN scale --replicas=0 -n ai-dev --all
+  limactl stop "$CLUSTER_NAME"
 }
 
 cmd_delete() {
-  check_kind
+  check_lima
   echo "Deleting cluster: $CLUSTER_NAME"
-  export KIND_EXPERIMENTAL_PROVIDER=podman
-  kind delete cluster --name "$CLUSTER_NAME" --kubeconfig "$DEVCLUSTER_KUBECONFIG" 2>/dev/null || kind delete cluster --name "$CLUSTER_NAME"
+  limactl delete "$CLUSTER_NAME"
   rm -f "$DEVCLUSTER_KUBECONFIG"
 }
 
