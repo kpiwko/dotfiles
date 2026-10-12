@@ -226,7 +226,7 @@ wait_for_runtime() {
 }
 
 provision_agentgateway_secrets() {
-  for required_key in ENMAAS_KEY ENMAAS_URL OPENAI_API_KEY VERTEX_PROJECT VERTEX_LOCATION AGENTGATEWAY_API_KEY; do
+  for required_key in ENMAAS_KEY ENMAAS_URL OPENAI_API_KEY VERTEX_PROJECT VERTEX_LOCATION AGENTGATEWAY_API_KEY MLFLOW_EXPERIMENT_ID; do
     eval "required_value=\${$required_key:-}"
     if [ -z "$required_value" ]; then
       echo "devcluster: error: required AgentGateway input $required_key is not set" >&2
@@ -249,6 +249,7 @@ provision_agentgateway_secrets() {
     "--from-literal=VERTEX_PROJECT=$VERTEX_PROJECT" \
     "--from-literal=VERTEX_LOCATION=$VERTEX_LOCATION" \
     "--from-literal=AGENTGATEWAY_API_KEY=$AGENTGATEWAY_API_KEY" \
+    "--from-literal=MLFLOW_EXPERIMENT_ID=$MLFLOW_EXPERIMENT_ID" \
     "--from-file=vertex-credentials.json=$vertex_credentials_source" \
     --dry-run=client -o yaml
   $KUBECTL_BIN "$@" | $KUBECTL_BIN apply -f -

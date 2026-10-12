@@ -42,12 +42,32 @@ def test_otel_collector_otlp_http_receiver() -> None:
     assert "include_metadata: true" in manifest
 
 
+def test_otel_collector_accepts_in_cluster_otlp_grpc() -> None:
+    manifest = OTEL_MANIFEST.read_text()
+
+    assert "grpc:" in manifest
+    assert "endpoint: 0.0.0.0:4317" in manifest
+    assert "name: otlp-grpc" in manifest
+    assert "port: 4317" in manifest
+    assert "targetPort: 4317" in manifest
+    assert "nodePort: 4317" not in manifest
+
+
 def test_otel_collector_batch_processor_preserves_experiment_id() -> None:
     manifest = OTEL_MANIFEST.read_text()
 
     assert "batch:" in manifest
     assert "metadata_keys:" in manifest
     assert "x-mlflow-experiment-id" in manifest
+
+
+def test_otel_collector_maps_agentgateway_realized_costs() -> None:
+    manifest = OTEL_MANIFEST.read_text()
+
+    assert 'attributes["agw.ai.usage.cost.total"]' in manifest
+    assert 'attributes["agw.ai.usage.cost.input"]' in manifest
+    assert 'attributes["agw.ai.usage.cost.output"]' in manifest
+    assert 'attributes["mlflow.llm.cost"]' in manifest
 
 
 def test_otel_collector_memory_limiter_processor() -> None:

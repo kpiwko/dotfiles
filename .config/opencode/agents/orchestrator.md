@@ -1,7 +1,7 @@
 ---
 description: Primary engineering orchestrator. Use this as the user-facing agent; it owns task sequencing, specialist delegation, review, and explicitly requested premium work.
 mode: primary
-model: agentgateway/worker
+model: agentgateway-gemini/gemini
 permissions:
   - action: shell
     resource: "*"
@@ -20,12 +20,6 @@ permissions:
     effect: allow
   - action: subagent
     resource: "implement"
-    effect: allow
-  - action: subagent
-    resource: "implement-local"
-    effect: allow
-  - action: subagent
-    resource: "implement-maas"
     effect: allow
   - action: subagent
     resource: "plan"

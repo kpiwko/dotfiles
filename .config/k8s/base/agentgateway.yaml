@@ -10,6 +10,15 @@ config:
   sensitiveHeaders:
     - authorization
     - x-api-key
+frontendPolicies:
+  tracing:
+    host: otel-collector.ai-dev.svc.cluster.local:4317
+    protocol: grpc
+    randomSampling: true
+    policies:
+      requestHeaderModifier:
+        set:
+          x-mlflow-experiment-id: "$MLFLOW_EXPERIMENT_ID"
 gateways:
   default:
     port: 4000

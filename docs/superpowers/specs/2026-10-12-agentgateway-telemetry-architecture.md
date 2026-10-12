@@ -9,7 +9,12 @@ in-cluster OpenTelemetry Collector to MLflow.
 
 ## Routing
 
-OpenCode sends model requests to AgentGateway's OpenAI-compatible endpoint.
+OpenCode uses two provider definitions that both address the same AgentGateway
+deployment:
+
+- `agentgateway` uses the OpenAI-compatible API for the Enmaas/OpenAI routes.
+- `agentgateway-gemini` uses the native Gemini API for Vertex Gemini tool calls.
+
 AgentGateway performs provider routing and failover:
 
 - `architect`: Enmaas GPT-5.6 Terra, then direct OpenAI.
@@ -17,13 +22,16 @@ AgentGateway performs provider routing and failover:
 - `gemini`: direct Vertex Gemini 3.8 Flash only.
 
 The top-level OpenCode default model and the `orchestrator` and `plan` agents
-use `agentgateway/gemini`. Existing sessions retain their selected model; a new
+use `agentgateway-gemini/gemini`. Its native Gemini request reaches
+`/v1beta/models/gemini:generateContent` at AgentGateway, which routes it to
+Vertex. This avoids OpenAI Chat Completions tool-call translation without
+bypassing AgentGateway. Existing sessions retain their selected model; a new
 session or OpenCode service restart is required to apply the new default.
 
 ## Trace topology
 
 ```text
-OpenCode service --model request + W3C traceparent--> AgentGateway --> provider
+OpenCode service --OpenAI or native Gemini request + W3C traceparent--> AgentGateway --> provider
        |                                                |
        | OpenCode session/tool/client spans              | resolved model, usage,
        |                                                | and realized-cost spans
@@ -47,6 +55,8 @@ AgentGateway loads a model-cost catalog plus a repository-managed pricing
 overlay for routes whose provider/model names are not in the built-in catalog,
 notably Enmaas and the selected Vertex model. Its realized cost attributes are
 mapped by the OpenTelemetry Collector into MLflow-compatible LLM cost fields.
+This applies to every configured model API because both OpenCode providers use
+the same AgentGateway deployment.
 
 OpenCode's plugin-derived cost and per-model metrics are disabled because its
 public aliases cannot reliably identify an AgentGateway failover target. The
@@ -68,8 +78,9 @@ isolated OpenCode service per invocation.
 
 `.config/k8s/README.md` documents the cluster-side trace topology, cost catalog,
 fixed-experiment rule, and validation commands. `.config/opencode/README.md`
-documents OpenCode's provider/trace propagation role and the restart/new-session
-behavior after model configuration changes.
+documents the two OpenCode-to-AgentGateway protocol adapters, native Gemini
+tool-call rationale, trace propagation, and restart/new-session behavior after
+model configuration changes.
 
 ## Safety boundaries
 

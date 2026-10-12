@@ -20,15 +20,22 @@ model is `Qwen3.8-27B-NT`.
 
 ## Implementation agents
 
-- `implement`, `implement-local`, and `implement-maas` use the AgentGateway
-  `worker` alias. The legacy names remain for existing workflows.
+- `implement` uses the AgentGateway `worker` alias.
 
-The primary orchestrator and default root model use `agentgateway/worker`.
+The primary orchestrator, planner, and default root model use
+`agentgateway-gemini/gemini`.
 
 ## AgentGateway inference boundary
 
-OpenCode calls AgentGateway's OpenAI-compatible endpoint through
-`AGENTGATEWAY_BASE_URL` and authenticates with `AGENTGATEWAY_API_KEY`.
+OpenCode uses two providers that target the same AgentGateway deployment and
+authenticate with `AGENTGATEWAY_API_KEY`:
+
+- `agentgateway` uses `AGENTGATEWAY_BASE_URL` and OpenAI-compatible requests
+  for `omnipower`, `architect`, `worker`, `reviewer`, and `spade`.
+- `agentgateway-gemini` uses `AGENTGATEWAY_GEMINI_BASE_URL` and the native
+  Gemini API for `gemini`. This avoids OpenAI-format translation during chained
+  Gemini function calls while preserving AgentGateway routing and telemetry.
+
 `omnipower` routes to Enmaas Claude Opus 5.5, `architect` routes to Enmaas
 Terra with direct OpenAI fallback, `worker` and `reviewer` route to Enmaas
 Luna with direct OpenAI fallback, `spade` routes to Enmaas GLM 5.3, and
@@ -36,7 +43,13 @@ Luna with direct OpenAI fallback, `spade` routes to Enmaas GLM 5.3, and
 
 AgentGateway keeps its SQLite request database on its own PVC. MLflow remains
 the telemetry backend through the existing OpenTelemetry collector and is not
-used for inference.
+used for inference. The OpenCode OTel plugin propagates W3C trace context to
+both providers and records session/tool workflow spans; AgentGateway records
+the resolved upstream model and realized cost. The plugin's alias-based cost
+metrics are disabled.
+
+Configuration changes require a new OpenCode session or service restart. An
+existing session retains its stored model selection.
 
 ## Git safety
 
