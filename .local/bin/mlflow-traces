@@ -63,6 +63,15 @@ def parse_args() -> argparse.Namespace:
         help="MLflow trace ID, e.g. tr-012345...",
     )
     trace_parser.add_argument(
+        "--compat",
+        action="store_true",
+        help=(
+            "Modify downloaded trace(s) for MLflow Evaluation Dataset compatibility "
+            "(wraps non-dict root inputs/outputs into dicts, see "
+            "https://github.com/mlflow/mlflow/issues/24709)."
+        ),
+    )
+    trace_parser.add_argument(
         "-o",
         "--output",
         type=Path,
@@ -104,6 +113,15 @@ def parse_args() -> argparse.Namespace:
         "--session-id",
         dest="session_id",
         help="Only include traces matching this session ID (e.g. ses_...).",
+    )
+    experiment_parser.add_argument(
+        "--compat",
+        action="store_true",
+        help=(
+            "Modify downloaded trace(s) for MLflow Evaluation Dataset compatibility "
+            "(wraps non-dict root inputs/outputs into dicts, see "
+            "https://github.com/mlflow/mlflow/issues/24709)."
+        ),
     )
     experiment_parser.add_argument(
         "-a",
@@ -160,8 +178,52 @@ def datetime_to_epoch_ms(value: datetime) -> int:
     return int(value.timestamp() * 1000)
 
 
-def trace_to_dict(trace: Trace) -> dict:
-    return json.loads(trace.to_json())
+def normalize_dataset_value(value: object, fallback_key: str = "input") -> dict:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            pass
+
+    if isinstance(value, dict):
+        return value
+
+    return {fallback_key: value}
+
+
+def make_trace_dataset_compatible(trace_dict: dict) -> dict:
+    data = trace_dict.get("data", {})
+    spans = data.get("spans") or []
+
+    for span in spans:
+        attributes = span.get("attributes", {})
+        for key, fallback in (
+            ("mlflow.spanInputs", "input"),
+            ("input.value", "input"),
+            ("mlflow.spanOutputs", "output"),
+            ("output.value", "output"),
+        ):
+            if key in attributes:
+                attributes[key] = json.dumps(
+                    normalize_dataset_value(attributes[key], fallback),
+                    ensure_ascii=False,
+                )
+
+        for key, fallback in (("inputs", "input"), ("outputs", "output")):
+            if key in span:
+                span[key] = normalize_dataset_value(span[key], fallback)
+
+    if "request" in data:
+        data["request"] = normalize_dataset_value(data["request"], "input")
+    if "response" in data:
+        data["response"] = normalize_dataset_value(data["response"], "output")
+
+    return trace_dict
+
+
+def trace_to_dict(trace: Trace, compat: bool = False) -> dict:
+    trace_dict = json.loads(trace.to_json())
+    return make_trace_dataset_compatible(trace_dict) if compat else trace_dict
 
 
 def write_json(path: Path, value: object) -> None:
@@ -196,11 +258,12 @@ def download_trace(
     client: MlflowClient,
     trace_id: str,
     output: Path | None,
+    compat: bool = False,
 ) -> None:
     trace = client.get_trace(trace_id)
 
     destination = output or Path(f"{trace_id}.json")
-    write_json(destination, trace_to_dict(trace))
+    write_json(destination, trace_to_dict(trace, compat=compat))
 
     print(f"Wrote {destination}")
 
@@ -274,6 +337,7 @@ def download_experiment(
     aggregate: bool,
     output: Path | None,
     session_id: str | None = None,
+    compat: bool = False,
 ) -> None:
     experiment_id = resolve_experiment_id(client, experiment)
 
@@ -302,7 +366,7 @@ def download_experiment(
 
         write_json(
             destination,
-            [trace_to_dict(trace) for trace in traces],
+            [trace_to_dict(trace, compat=compat) for trace in traces],
         )
 
         print(f"Wrote {destination}")
@@ -317,7 +381,7 @@ def download_experiment(
 
         write_json(
             destination,
-            trace_to_dict(trace),
+            trace_to_dict(trace, compat=compat),
         )
 
     print(f"Wrote {len(traces)} trace(s) to {output_dir}/")
@@ -338,6 +402,7 @@ def main() -> int:
                     client=client,
                     trace_id=args.trace_id,
                     output=args.output,
+                    compat=args.compat,
                 )
 
             case "experiment":
@@ -349,6 +414,7 @@ def main() -> int:
                     aggregate=args.aggregate,
                     output=args.output,
                     session_id=args.session_id,
+                    compat=args.compat,
                 )
 
     except (ValueError, mlflow.MlflowException) as exc:
