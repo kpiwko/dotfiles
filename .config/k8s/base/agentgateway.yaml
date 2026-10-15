@@ -41,34 +41,41 @@ llm:
         model: claude-opus-5-5
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
-    - name: enmaas-gpt-5-6-terra
+    - name: enmaas-sonnet-5-5
+      visibility: internal
+      provider: anthropic
+      params:
+        model: claude-sonnet-5-5
+        apiKey: $ENMAAS_KEY
+        baseUrl: $ENMAAS_URL
+    - name: enmaas-gpt-6-1-sol
       visibility: internal
       provider:
         custom:
           formats:
             - type: completions
       params:
-        model: gpt-5.6-terra
+        model: gpt-6.1-sol
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
       finalTransformation:
         max_completion_tokens: "llmRequest.max_tokens"
         max_tokens: 'fail("remove")'
-        reasoning_effort: '"none"'
+        reasoning_effort: '"medium"'
     - name: openai-gpt-5-6-terra
       visibility: internal
       provider: openAI
       params:
         model: gpt-5.6-terra
         apiKey: $OPENAI_API_KEY
-    - name: enmaas-gpt-5-6-luna
+    - name: enmaas-gpt-6-luna
       visibility: internal
       provider:
         custom:
           formats:
             - type: completions
       params:
-        model: gpt-5.6-luna
+        model: gpt-6-luna
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
       finalTransformation:
@@ -81,8 +88,8 @@ llm:
       params:
         model: gpt-5.6-luna
         apiKey: $OPENAI_API_KEY
-    - name: spade
-      visibility: public
+    - name: enmaas-glm-5-3
+      visibility: internal
       provider: anthropic
       params:
         model: rits/zai-org/glm-5-3
@@ -106,7 +113,7 @@ llm:
       routing:
         failover:
           targets:
-            - model: enmaas-gpt-5-6-terra
+            - model: enmaas-gpt-6-1-sol
               priority: 0
             - model: openai-gpt-5-6-terra
               priority: 1
@@ -114,15 +121,19 @@ llm:
       routing:
         failover:
           targets:
-            - model: enmaas-gpt-5-6-luna
+            - model: enmaas-glm-5-3
               priority: 0
-            - model: openai-gpt-5-6-luna
-              priority: 1
     - name: reviewer
       routing:
         failover:
           targets:
-            - model: enmaas-gpt-5-6-luna
+            - model: enmaas-sonnet-5-5
+              priority: 0
+    - name: spade
+      routing:
+        failover:
+          targets:
+            - model: enmaas-gpt-6-luna
               priority: 0
             - model: openai-gpt-5-6-luna
               priority: 1
