@@ -5,8 +5,14 @@
         "gpt-5.6-terra": {
           "rates": { "input": "2", "output": "12", "cacheRead": "0.20" }
         },
+        "gpt-6.1-sol": {
+          "rates": { "input": "2.00", "output": "10.00", "cacheRead": "0.10", "cacheWrite": "2.50" }
+        },
         "gpt-5.6-luna": {
           "rates": { "input": "0.20", "output": "1.20", "cacheRead": "0.02" }
+        },
+        "gpt-6-luna": {
+          "rates": { "input": "0.10", "output": "0.50", "cacheRead": "0.01", "cacheWrite": "0.125" }
         }
       }
     },
@@ -17,6 +23,12 @@
         },
         "gpt-5.6-luna": {
           "rates": { "input": "0.20", "output": "1.20", "cacheRead": "0.02" }
+        },
+        "gpt-6-luna": {
+          "rates": { "input": "0.10", "output": "0.50", "cacheRead": "0.01", "cacheWrite": "0.125" }
+        },
+        "gpt-6.1-sol": {
+          "rates": { "input": "2.00", "output": "10.00", "cacheRead": "0.10", "cacheWrite": "2.50" }
         }
       }
     },
@@ -24,6 +36,12 @@
       "models": {
         "claude-opus-5-5": {
           "rates": { "input": "4", "output": "20", "cacheRead": "0.20" }
+        },
+        "rits/zai-org/glm-5-3": {
+          "rates": { "input": "0", "output": "0", "cacheRead": "0", "cacheWrite": "0" }
+        },
+        "claude-sonnet-5-5": {
+          "rates": { "input": "1.50", "output": "7.50", "cacheRead": "0.15" }
         }
       }
     },

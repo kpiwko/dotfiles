@@ -63,13 +63,18 @@ def test_agentgateway_config_uses_expected_models_and_secret_boundary() -> None:
 
     assert "url: sqlite:///data/agentgateway.db" in config
     assert "mode: strict" in config
-    for model in ("enmaas-opus-5-5", "enmaas-gpt-5-6-terra", "openai-gpt-5-6-terra", "enmaas-gpt-5-6-luna", "openai-gpt-5-6-luna", "spade", "gemini"):
+    for model in ("enmaas-opus-5-5", "enmaas-sonnet-5-5", "enmaas-gpt-6-1-sol", "openai-gpt-5-6-terra", "enmaas-gpt-6-luna", "openai-gpt-5-6-luna", "enmaas-glm-5-3", "gemini"):
         assert f"name: {model}" in config
     assert config.count('max_completion_tokens: "llmRequest.max_tokens"') == 2
     assert config.count("max_tokens: 'fail(\"remove\")'") == 2
-    assert config.count("reasoning_effort: '\"none\"'") == 2
+    assert config.count("reasoning_effort: '\"medium\"'") == 1
+    assert config.count("reasoning_effort: '\"none\"'") == 1
+    assert "- model: enmaas-gpt-6-1-sol" in config
     assert "- model: openai-gpt-5-6-terra" in config
-    assert config.count("- model: openai-gpt-5-6-luna") == 2
+    assert config.count("- model: openai-gpt-5-6-luna") == 1
+    assert config.count("- model: enmaas-gpt-6-luna") == 1
+    assert config.count("- model: enmaas-glm-5-3") == 1
+    assert config.count("- model: enmaas-sonnet-5-5") == 1
     assert "frontendPolicies:" in config
     assert "host: otel-collector.ai-dev.svc.cluster.local:4317" in config
     assert "protocol: grpc" in config
@@ -89,7 +94,7 @@ def test_agentgateway_catalog_overlay_and_kustomization() -> None:
     kustomization = (BASE / "kustomization.yaml").read_text()
 
     assert catalog_path.is_file()
-    for model in ("gpt-5.6-terra", "gpt-5.6-luna", "claude-opus-5-5", "gemini-3.8-flash"):
+    for model in ("gpt-5.6-terra", "gpt-6.1-sol", "gpt-5.6-luna", "gpt-6-luna", "claude-opus-5-5", "rits/zai-org/glm-5-3", "claude-sonnet-5-5", "gemini-3.8-flash"):
         assert model in catalog_text
         assert any(model in provider.get("models", {}) for provider in catalog["providers"].values())
     assert "catalog-overlay.json" in kustomization

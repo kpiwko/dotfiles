@@ -57,10 +57,12 @@ its contents are materialized only as the `vertex-credentials.json` Secret key,
 mounted read-only in the AgentGateway Pod, and never committed, printed, or
 passed as a host path to the Pod.
 
-The public model aliases are `omnipower`, `architect`, `worker`, `reviewer`,
-`spade`, and `gemini`. Terra and Luna routes use Enmaas first and direct OpenAI
-as their fallback. Gemini is defined for explicit use through Vertex and is not
-an automatic fallback target.
+The model aliases are `omnipower`, `architect`, `worker`, `reviewer`, `spade`,
+and `gemini`. Omnipower uses Enmaas Claude Opus 5.5; architect uses Enmaas
+GPT-6.1 Sol with OpenAI Terra fallback; worker uses Enmaas GLM 5.3; reviewer
+uses Enmaas Claude Sonnet 5.5; and spade uses Enmaas GPT-6 Luna with OpenAI
+Luna fallback. Gemini is defined for explicit use through Vertex and is not an
+automatic fallback target.
 
 ### AgentGateway telemetry and cost attribution
 

@@ -39,8 +39,9 @@ authenticate with `AGENTGATEWAY_API_KEY`:
   Gemini function calls while preserving AgentGateway routing and telemetry.
 
 `omnipower` routes to Enmaas Claude Opus 5.5, `architect` routes to Enmaas
-Terra with direct OpenAI fallback, `worker` and `reviewer` route to Enmaas
-Luna with direct OpenAI fallback, `spade` routes to Enmaas GLM 5.3, and
+GPT-6.1 Sol with direct OpenAI Terra fallback, `worker` routes to Enmaas GLM
+5.3, `reviewer` routes to Enmaas Claude Sonnet 5.5, `spade` routes to Enmaas
+GPT-6 Luna with direct OpenAI Luna fallback, and
 `gemini` explicitly targets Vertex Gemini 3.8 Flash.
 
 AgentGateway keeps its SQLite request database on its own PVC. MLflow remains
