@@ -127,7 +127,6 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
     assert otel_plugin["options"]["disabledMetrics"] == [
         "cost.usage",
         "session.cost.total",
-        "model.usage",
     ]
     for agent in agents.glob("*.md"):
         frontmatter = agent.read_text().split("---", 2)[1]
