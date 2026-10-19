@@ -10,7 +10,7 @@
         "protocol": "http/protobuf",
         "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}",
         "tracePropagationProviders": ["agentgateway", "agentgateway-gemini"],
-        "disabledMetrics": ["cost.usage", "session.cost.total", "model.usage"]
+        "disabledMetrics": ["cost.usage", "session.cost.total"]
       }
     },
     "@mohak34/opencode-notifier"
