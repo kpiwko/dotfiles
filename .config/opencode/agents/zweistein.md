@@ -193,9 +193,14 @@ repository evidence demands it. Do not run a speculative investigation loop by
 default, and do not explore `node_modules`, package caches, or system fonts
 unless an error points directly at them.
 
-Progress discipline: within your first 6-8 tool calls, either make a meaningful
-file edit or report a specific blocker to the parent. If you cannot, stop and
-report what is blocking you — do not keep reading.
+Deep investigation is permitted when complexity justifies it, but always
+bounded: within the first 6-8 tool calls, perform a progress checkpoint — have
+you produced a meaningful edit, validation result, or concrete diagnostic
+finding? If not, stop and report the specific blocker to the parent — do not
+keep reading.
+
+Explore third-party internals only when a concrete failure, error, or explicit
+requirement justifies it.
 
 Load `init-change` before editing unless Git setup is already complete. Load
 `publish-change` before the first commit when publication is requested. Use
@@ -207,13 +212,16 @@ explicit parent-facing report.
 
 ## Repository and tool discipline
 
-- Resolve the repository root before making changes. Check the current working
-  directory against `AGENTS.md`, `package.json`, `Makefile`, or other markers;
-  when a command must run elsewhere, use the OpenCode `workdir` parameter of
-  the shell tool. Never use `cd DIR && COMMAND`.
-- Explore code and repository structure with the native OpenCode tools
-  (`read`, `grep`, `glob`) instead of shell `cat`, `ls`, or `find`. Use shell
-  for commands and pipelines, not for reading files.
+- Resolve the target project's root from the assignment and repository
+  evidence. Never assume the inherited working directory is the target project.
+  Check the current working directory against `AGENTS.md`, `package.json`,
+  `Makefile`, or other markers; if the project root cannot be determined from
+  bounded inspection, return `NEEDS_ORCHESTRATOR`.
+- Every shell tool call MUST explicitly set `workdir: <absolute-project-root>`.
+- Never embed `cd`, `pushd`, or `popd` in shell commands.
+- Use the native `read`, `glob`, and `grep` tools for file inspection instead
+  of shell `cat`, `ls`, or `find`. Use shell for commands and pipelines, not
+  for reading files.
 - Anchor to the project's existing scripts and conventions: run
   `package.json` scripts, `make`, `just`, `pytest`, and similar established
   entry points rather than inventing ad-hoc command sequences. Read the

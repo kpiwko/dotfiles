@@ -326,28 +326,39 @@ decision is missing, remote relationships remain ambiguous, or the supplied
 plan task cannot be executed as written, return `NEEDS_ORCHESTRATOR` with the
 specific discrepancy.
 
-## Execution environment
+## Execution root
 
-Use the current working directory as the execution root for the assignment.
-Run commands directly from that directory and address subdirectories through
-command arguments or explicit paths while keeping the execution root unchanged.
-If the current working directory is not suitable for the assignment, return
-`NEEDS_ORCHESTRATOR` with the observed repository layout.
+- Resolve the target project's root from the assignment and repository
+  evidence. Never assume the inherited working directory is the target
+  project.
+- Every shell tool call MUST explicitly set `workdir: <absolute-project-root>`.
+- Never embed `cd`, `pushd`, or `popd` in shell commands.
+- Use native read, glob, and grep tools for file inspection.
+- Use sandbox-git for all Git operations, including when workdir is set to a
+  project repository.
+- If the project root cannot be determined from bounded inspection, return
+  `NEEDS_ORCHESTRATOR`.
 
-Work directly in the current checkout and preserve existing user work. Invoke
-binaries from `PATH`. When working in `$HOME`, which is backed by the bare
-`~/.dotfiles` repository, all Git operations must use `sandbox-git` (never raw
-`git`). Use `sandbox-find` for file discovery, `sandbox-git` for all other Git
-operations, and `devcluster-kubectl` as the only interface to the local
-development cluster. Never use raw `kubectl`, `limactl shell devcluster`, `k3s`,
-`crictl`, `ctr`, `nerdctl`, or `sudo` to bypass that wrapper.
+## Execution discipline
+
+- Prefer the smallest implementation that satisfies the acceptance
+  criteria.
+- Within the first 6-8 tool calls, perform a progress checkpoint:
+  - Have I produced a meaningful edit, validation result, or concrete
+    diagnostic finding?
+  - Am I still investigating something necessary?
+  - What is the next action toward the deliverable?
+- This checkpoint is not a hard limit on task execution.
+- Explore third-party internals only when a concrete failure, error, or
+  explicit requirement justifies it.
+- Prefer established repository commands over ad-hoc scripts.
 
 ## Shell discipline
 
 Run one logical operation per shell tool call. Do not chain independent commands
 with `&&`, `||`, or `;` merely to reduce tool calls. Never use `cd DIR && CMD`;
-keep the execution root unchanged and pass paths directly. Pipelines are fine
-only when the pipeline itself is necessary to the operation.
+set `workdir` explicitly and pass paths directly. Pipelines are fine only when
+the pipeline itself is necessary to the operation.
 
 Run one `sandbox-git` command per shell call. Do not append `echo`, `printf`, or
 another command just to expose an exit status; use the command result directly.

@@ -54,7 +54,7 @@ sequencing, and presenting the result.
    as the execution contract.
 4. Delegate one coherent, independently verifiable plan task or implementation
    unit at a time. Include goal, scope, relevant plan path/task, constraints,
-   validation, requested Git action, and `Execution root: current working directory`.
+   validation, requested Git action, and `Execution root: <absolute-project-root>`.
 5. When an implementer returns, use its concrete result to choose the next plan
    task, resolve a blocker, request review, or finish.
 6. After meaningful implementation, use `@reviewer` when an independent static
@@ -131,12 +131,36 @@ Use `@architect` for significant unresolved durable design decisions. Use
 `@planner` for non-trivial sequencing, migrations/backwards compatibility,
 repository analysis, and durable implementation plans.
 
-## Delegation contract
+## Delegation execution contract
+
+Every implementation assignment must include:
+
+- Execution root: <absolute-project-root>
+- Goal and expected deliverable
+- Relevant files or directories
+- Acceptance criteria
+- Existing validation command, when known
+- Git and publication expectations
+
+The child must explicitly set `shell.workdir` to the execution root for every
+shell invocation.
+
+If the orchestrator cannot determine the project root, provide the known
+target path and instruct the child to resolve the root through bounded
+inspection.
+
+Require implementation agents to checkpoint progress after 6-8 tool calls.
+
+Do not require extensive investigation when the assignment can be implemented
+directly.
+
+Escalate to deeper investigation only after concrete execution failures,
+unexpected behavior, or evidence that established project patterns are
+insufficient.
 
 Pass relevant findings and the plan path/task rather than replaying the primary
 conversation. Pass known base/push/PR target relationships rather than making
-the specialist rediscover them. Treat the current working directory inherited
-by the specialist as the execution root for the assignment.
+the specialist rediscover them.
 
 For review assignments, pass the smallest sufficient evidence set rather than
 asking the reviewer to rediscover the entire plan or implementation history.
