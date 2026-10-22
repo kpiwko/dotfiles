@@ -53,15 +53,12 @@ llm:
       provider:
         custom:
           formats:
+            - type: responses
             - type: completions
       params:
         model: gpt-6.1-sol
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
-      finalTransformation:
-        max_completion_tokens: "llmRequest.max_tokens"
-        max_tokens: 'fail("remove")'
-        reasoning_effort: '"medium"'
     - name: openai-gpt-5-6-terra
       visibility: internal
       provider: openAI
@@ -73,15 +70,12 @@ llm:
       provider:
         custom:
           formats:
+            - type: responses
             - type: completions
       params:
         model: gpt-6-luna
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
-      finalTransformation:
-        max_completion_tokens: "llmRequest.max_tokens"
-        max_tokens: 'fail("remove")'
-        reasoning_effort: '"none"'
     - name: openai-gpt-5-6-luna
       visibility: internal
       provider: openAI
@@ -93,6 +87,13 @@ llm:
       provider: anthropic
       params:
         model: rits/zai-org/glm-5-3
+        apiKey: $ENMAAS_KEY
+        baseUrl: $ENMAAS_URL
+    - name: enmaas-deepseek-4-1-flash
+      visibility: internal
+      provider: anthropic
+      params:
+        model: rits/zai-org/deepseek-ai/DeepSeek-V4.1-Flash-1017
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
     - name: gemini
@@ -122,6 +123,12 @@ llm:
         failover:
           targets:
             - model: enmaas-glm-5-3
+              priority: 0
+    - name: illusionist
+      routing:
+        failover:
+          targets:
+            - model: enmaas-deepseek-4-1-flash
               priority: 0
     - name: reviewer
       routing:

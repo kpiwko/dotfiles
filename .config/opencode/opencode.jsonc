@@ -1,6 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["{env:HOME}/.config/opencode/AGENTS.md"],
+  "instructions": [
+    "{env:HOME}/.config/opencode/AGENTS.md"
+  ],
   "plugins": [
     "superpowers@git+https://github.com/obra/superpowers.git",
     {
@@ -9,42 +11,66 @@
         "enabled": true,
         "protocol": "http/protobuf",
         "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}",
-        "tracePropagationProviders": ["agentgateway", "agentgateway-gemini"],
-        "disabledMetrics": ["cost.usage", "session.cost.total"]
+        "tracePropagationProviders": [
+          "agentgateway",
+          "agentgateway-gemini"
+        ],
+        "disabledMetrics": [
+          "cost.usage",
+          "session.cost.total"
+        ]
       }
     },
     "@mohak34/opencode-notifier"
   ],
   "mcp": {
-    "Atlassian": {
-      "type": "remote",
-      "url": "https://mcp.atlassian.com/v1/mcp/authv2",
-      "enabled": true,
-      "oauth": {}
-    },
-    "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {"Authorization": "Bearer {env:CONTEXT7_API_KEY}"},
-      "enabled": true
-    },
-    "notebooklm": {"type": "remote", "url": "{env:NOTEBOOKLM_MCP_URL}", "enabled": true},
-    "workspace": {"type": "remote", "url": "{env:WORKSPACE_MCP_URL}", "enabled": true}
+    "servers": {
+      "Atlassian": {
+        "type": "remote",
+        "url": "https://mcp.atlassian.com/v1/mcp/authv2"
+      },
+      "context7": {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
+        }
+      },
+      "notebooklm": {
+        "type": "remote",
+        "url": "{env:NOTEBOOKLM_MCP_URL}"
+      },
+      "workspace": {
+        "type": "remote",
+        "url": "{env:WORKSPACE_MCP_URL}"
+      }
+    }
   },
   "permissions": [
-    {"action": "Atlassian_*", "resource": "*", "effect": "deny"},
-    {"action": "context7_*", "resource": "*", "effect": "deny"}
+    {
+      "action": "Atlassian_*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "context7_*",
+      "resource": "*",
+      "effect": "deny"
+    }
   ],
   "compaction": {
     "auto": true,
-    "keep": {"tokens": 8000},
+    "keep": {
+      "tokens": 8000
+    },
     "buffer": 8000
   },
-  "provider": {
+  "providers": {
     "agentgateway": {
-      "npm": "@ai-sdk/openai-compatible",
       "name": "AgentGateway",
-      "options": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
         "baseURL": "{env:AGENTGATEWAY_BASE_URL}",
         "apiKey": "{env:AGENTGATEWAY_API_KEY}"
       },
@@ -52,61 +78,144 @@
         "omnipower": {
           "modelID": "omnipower",
           "name": "Omnipower (Claude Opus 5.5)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 32000}
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 350000,
+            "output": 64000
+          }
         },
         "architect": {
           "modelID": "architect",
           "name": "Architect (GPT-6.1 Sol)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "package": "@opencode/ai/providers/openai-compatible/responses",
+          "settings": {
+            "reasoningEffort": "medium"
+          },
+          "variants": [
+            {
+              "id": "low",
+              "settings": {"reasoningEffort": "low"}
+            },
+            {
+              "id": "medium",
+              "settings": {"reasoningEffort": "medium"}
+            },
+            {
+              "id": "high",
+              "settings": {"reasoningEffort": "high"}
+            },
+            {
+              "id": "xhigh",
+              "settings": {"reasoningEffort": "xhigh"}
+            }
+          ],
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"],
+            "reasoning": {
+              "supported": true,
+              "effort": ["low", "medium", "high", "xhigh"]
+            }
+          },
+          "limit": {
+            "context": 350000,
+            "output": 32000
+          }
         },
         "worker": {
           "modelID": "worker",
           "name": "Worker (GLM 5.3)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "capabilities": {
+            "tools": true,
+            "input": ["text"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 350000,
+            "output": 32000
+          }
+        },
+        "illusionist": {
+          "modelID": "illusionist",
+          "name": "Illusionist (DeepSeek V4.1 Flash)",
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 350000,
+            "output": 32000
+          }
         },
         "reviewer": {
           "modelID": "reviewer",
           "name": "Reviewer (Claude Sonnet 5.5)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 250000,
+            "output": 16000
+          }
         },
         "spade": {
           "modelID": "spade",
           "name": "Spade (GPT-6 Luna)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
-        },
-        "gemini": {
-          "modelID": "gemini",
-          "name": "Gemini 3.8 Flash (Vertex)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "package": "@opencode/ai/providers/openai-compatible/responses",
+          "settings": {
+            "reasoningEffort": "medium"
+          },
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"],
+            "reasoning": {
+              "supported": true,
+              "effort": ["low", "medium", "high"]
+            }
+          },
+          "limit": {
+            "context": 250000,
+            "output": 32000
+          }
         }
       }
     },
     "agentgateway-gemini": {
-      "npm": "@ai-sdk/google",
       "name": "AgentGateway Gemini",
-      "options": {
+      "package": "@opencode/ai/providers/google",
+      "settings": {
         "baseURL": "{env:AGENTGATEWAY_GEMINI_BASE_URL}",
-        "apiKey": "{env:AGENTGATEWAY_API_KEY}",
-        "headers": {
-          "Authorization": "Bearer {env:AGENTGATEWAY_API_KEY}"
-        }
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
+      },
+      "headers": {
+        "Authorization": "Bearer {env:AGENTGATEWAY_API_KEY}"
       },
       "models": {
         "gemini": {
           "modelID": "gemini",
           "name": "Gemini 3.8 Flash (Vertex via AgentGateway)",
-          "capabilities": {"tools": true, "input": ["text"], "output": ["text"]},
-          "limit": {"context": 250000, "output": 16000}
+          "capabilities": {
+            "tools": true,
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 250000,
+            "output": 16000
+          }
         }
       }
     }
   },
   "default_agent": "orchestrator",
-  "model": "agentgateway-gemini/gemini"
+  "model": "agentgateway/architect"
 }
