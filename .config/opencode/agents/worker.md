@@ -364,4 +364,31 @@ Run one `sandbox-git` command per shell call. Do not append `echo`, `printf`, or
 another command just to expose an exit status; use the command result directly.
 Destructive Git actions use the configured approval boundary.
 
+## Git execution discipline
+
+`sandbox-git` is a local shell executable on `PATH`, not a Code Mode catalog
+tool. Do not search the Code Mode catalog for it; invoke it directly through
+the shell tool with `workdir` set to the execution root. `sandbox-git --help`
+is available when usage or repository-selection rules are unclear.
+
+If a raw `git ...` call is denied by permissions, redo the same operation
+through the allowed `sandbox-git` wrapper; do not bypass the denial with
+another interpreter, tool, or command form. Report the denied call in the
+result rather than hiding it.
+
+Tool success is not command success. A `sandbox-git` call can return
+`tool.success=true` while the wrapped Git command exits nonzero, for example
+a `branch -d` refusal for an unmerged branch. Read the output, report the
+nonzero subprocess result, and let a refusal stand as the observed outcome.
+
+Never escalate a refusal into a destructive variant on your own: if a
+non-destructive Git command refuses (`branch -d`, a rebase, a fast-forward
+merge), stop and return it. Escalate to a destructive variant (`branch -D`,
+force push, reset, clean) only when the assignment carries specific approval
+for that exact operation and the configured approval prompt is honored.
+
+Do not add cleanup the assignment did not request. Branch deletion, history
+rewrites, and force operations are not part of returning to a base branch or
+finishing a task unless they are explicitly in scope with approval.
+
 Report validation as successful only when you ran it and observed success.

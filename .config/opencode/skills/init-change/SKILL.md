@@ -20,8 +20,8 @@ suppressed, so provide a pathspec when checking untracked files, for example
 `sandbox-git status -- <path>`.
 
 1. Inspect status, current branch, tracking configuration, and remotes.
-2. Preserve existing user work. Never discard, reset, clean, stash, or overwrite
-   it without explicit approval.
+2. Preserve existing user work. Preserve dirty and untracked work; never
+   discard, reset, clean, stash, or overwrite it without explicit approval.
 3. Determine the intended base remote and branch from parent instructions or
    strong repository evidence. Never assume `origin/main` only because it exists.
 4. Prefer `sandbox-git start-branch <branch> [base] [remote]` when creating a
@@ -30,7 +30,9 @@ suppressed, so provide a pathspec when checking untracked files, for example
 5. Prefer `sandbox-git sync-base [base] [remote]` to rebase an active feature
    branch onto a freshly fetched base.
 6. Before reusing a feature branch, verify any associated PR/MR state and check
-   whether its commits are already contained in the fetched base.
+   whether its commits are already contained in the fetched base. Ancestry and
+   review state are evidence for this guard, not authorization to reuse, merge,
+   or delete anything.
 7. A merged review, or a branch fully contained in the intended base with no new
    work, is stale and must not be reused.
 8. If stale and clean, create a fresh descriptive feature branch from the fetched
@@ -40,6 +42,13 @@ suppressed, so provide a pathspec when checking untracked files, for example
    with `sync-base` when appropriate.
 10. Never merge remote changes merely to synchronize a feature branch.
 11. Do not push or publish anything.
+
+`start-branch` and `sync-base` are feature-change setup helpers. Maintenance
+work such as returning to the base branch, analysis-only inspection, or
+finishing a task does not require them: do not create branches, rebase, or
+delete anything unless the assignment explicitly requests that scope. A
+refusal from a non-destructive command is an observed outcome to report, not
+a signal to escalate or clean up.
 
 Return ambiguous base/remote/review state or rebase conflicts to the
 orchestrator rather than guessing.

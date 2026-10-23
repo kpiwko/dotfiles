@@ -162,6 +162,24 @@ Pass relevant findings and the plan path/task rather than replaying the primary
 conversation. Pass known base/push/PR target relationships rather than making
 the specialist rediscover them.
 
+For Git work, carry the delegation scope explicitly and separately: operation,
+target repository, base remote and branch, push destination, review target,
+and approval/publication scope. Do not collapse them into a single "update the
+repository" instruction. A feature-implementation assignment looks like:
+
+- Execution root: `/absolute/project/root`
+- Goal and acceptance criteria (or plan path/task)
+- Git: create the feature branch with
+  `sandbox-git start-branch <branch> <base> <remote>` and commit to it; the
+  child sets `shell.workdir` to the execution root for every call.
+- Scope: implementation and tests only; no cleanup; Publication: none.
+
+For a maintenance/return-to-base request, pass the base remote and branch
+explicitly and scope the assignment to the single requested synchronization
+operation. Do not add cleanup, branch deletion, rewrites, or publication to a
+return-to-base assignment; a refusal from the safe variant is returned as
+evidence, not escalated.
+
 For review assignments, pass the smallest sufficient evidence set rather than
 asking the reviewer to rediscover the entire plan or implementation history.
 Include the relevant plan path and exact task/acceptance criteria when a durable

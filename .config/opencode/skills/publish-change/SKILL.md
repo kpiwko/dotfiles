@@ -24,7 +24,10 @@ Use `sandbox-git` for every Git operation. Never invoke raw `git`,
 
 Treat the push destination and PR/MR target independently. Before pushing,
 fetch the intended target/base and repeat the stale-branch guard: query current
-review state and check ancestry against the fetched base.
+review state and check ancestry against the fetched base. Review state and
+ancestry are evidence for the guard, not authorization to push, merge, or
+delete; human approval and the configured tool permission boundary still
+govern every publication and destructive action.
 
 - Never push a branch whose review is merged.
 - Return closed-but-unmerged review state to the orchestrator unless explicitly
