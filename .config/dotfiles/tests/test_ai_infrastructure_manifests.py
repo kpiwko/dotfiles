@@ -63,18 +63,28 @@ def test_agentgateway_config_uses_expected_models_and_secret_boundary() -> None:
 
     assert "url: sqlite:///data/agentgateway.db" in config
     assert "mode: strict" in config
-    for model in ("enmaas-opus-5-5", "enmaas-sonnet-5-5", "enmaas-gpt-6-1-sol", "openai-gpt-5-6-terra", "enmaas-gpt-6-luna", "openai-gpt-5-6-luna", "enmaas-glm-5-3", "gemini"):
-        assert f"name: {model}" in config
-    assert config.count('max_completion_tokens: "llmRequest.max_tokens"') == 2
-    assert config.count("max_tokens: 'fail(\"remove\")'") == 2
-    assert config.count("reasoning_effort: '\"medium\"'") == 1
-    assert config.count("reasoning_effort: '\"none\"'") == 1
+    for model in (
+        "enmaas-opus-5-5",
+        "enmaas-sonnet-5-5",
+        "enmaas-gpt-6-1-sol",
+        "openai-gpt-5-6-terra",
+        "enmaas-gpt-6-luna",
+        "openai-gpt-5-6-luna",
+        "enmaas-glm-5-3",
+        "enmaas-deepseek-4-1-flash",
+        "gemini",
+    ):
+        assert f"name: {model}" in config, model
+    assert config.count("- type: responses") == 2
+    assert config.count("- type: completions") == 2
+    assert "finalTransformation:" not in config
     assert "- model: enmaas-gpt-6-1-sol" in config
     assert "- model: openai-gpt-5-6-terra" in config
     assert config.count("- model: openai-gpt-5-6-luna") == 1
     assert config.count("- model: enmaas-gpt-6-luna") == 1
     assert config.count("- model: enmaas-glm-5-3") == 1
     assert config.count("- model: enmaas-sonnet-5-5") == 1
+    assert config.count("- model: enmaas-deepseek-4-1-flash") == 1
     assert "frontendPolicies:" in config
     assert "host: otel-collector.ai-dev.svc.cluster.local:4317" in config
     assert "protocol: grpc" in config
@@ -105,13 +115,42 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
     config = json.loads((ROOT / ".config" / "opencode" / "opencode.jsonc").read_text())
     agents = ROOT / ".config" / "opencode" / "agents"
 
-    assert config["model"] == "agentgateway-gemini/gemini"
+    assert config["model"] == "agentgateway/architect"
     assert config["default_agent"] == "orchestrator"
-    assert set(config["provider"]) == {"agentgateway", "agentgateway-gemini"}
-    gemini_provider = config["provider"]["agentgateway-gemini"]
-    assert gemini_provider["npm"] == "@ai-sdk/google"
-    assert gemini_provider["options"]["baseURL"] == "{env:AGENTGATEWAY_GEMINI_BASE_URL}"
-    assert gemini_provider["options"]["headers"] == {
+    assert set(config["providers"]) == {"agentgateway", "agentgateway-gemini"}
+    agentgateway = config["providers"]["agentgateway"]
+    assert agentgateway["package"] == "@opencode/ai/providers/openai-compatible"
+    assert agentgateway["settings"]["baseURL"] == "{env:AGENTGATEWAY_BASE_URL}"
+    assert set(agentgateway["models"]) == {
+        "omnipower",
+        "architect",
+        "worker",
+        "illusionist",
+        "reviewer",
+        "spade",
+    }
+    architect = agentgateway["models"]["architect"]
+    assert architect["modelID"] == "architect"
+    assert architect["package"] == "@opencode/ai/providers/openai-compatible/responses"
+    assert architect["settings"]["reasoningEffort"] == "medium"
+    assert {variant["id"] for variant in architect["variants"]} == {
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    }
+    assert architect["capabilities"]["reasoning"] == {
+        "supported": True,
+        "effort": ["low", "medium", "high", "xhigh"],
+    }
+    assert architect["limit"]["context"] == 350000
+    illusionist = agentgateway["models"]["illusionist"]
+    assert illusionist["modelID"] == "illusionist"
+    assert "DeepSeek" in illusionist["name"]
+    gemini_provider = config["providers"]["agentgateway-gemini"]
+    assert gemini_provider["package"] == "@opencode/ai/providers/google"
+    assert gemini_provider["settings"]["baseURL"] == "{env:AGENTGATEWAY_GEMINI_BASE_URL}"
+    assert gemini_provider["headers"] == {
         "Authorization": "Bearer {env:AGENTGATEWAY_API_KEY}"
     }
     assert gemini_provider["models"]["gemini"]["modelID"] == "gemini"
@@ -133,13 +172,13 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
         model = next(line.split(":", 1)[1].strip() for line in frontmatter.splitlines() if line.startswith("model:"))
         assert model in {
             "agentgateway/architect",
+            "agentgateway/architect#high",
             "agentgateway/omnipower",
             "agentgateway/reviewer",
             "agentgateway/worker",
-            "agentgateway-gemini/gemini",
         }
 
-    assert "model: agentgateway-gemini/gemini" in (agents / "orchestrator.md").read_text()
+    assert "model: agentgateway/architect" in (agents / "orchestrator.md").read_text()
     assert "model: agentgateway/architect" in (agents / "planner.md").read_text()
     orchestrator = (agents / "orchestrator.md").read_text()
     assert 'resource: "implement-local"' not in orchestrator

@@ -310,6 +310,90 @@ def test_sync_base_rebases_feature_branch_on_latest_remote_base(tmp_path: Path) 
     assert ancestor.returncode == 0
 
 
+def make_failing_git(sentinel: Path) -> Path:
+    """Write a fake git executable that records any invocation and fails."""
+    script = sentinel.parent / "fake-bin" / "git"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$*" >> "{sentinel}"\n'
+        "exit 99\n"
+    )
+    script.chmod(0o755)
+    return script.parent
+
+
+def env_with_failing_git(env: dict[str, str], fake_bin: Path) -> dict[str, str]:
+    patched = env.copy()
+    patched["PATH"] = f"{fake_bin}{os.pathsep}{patched.get('PATH', '')}"
+    return patched
+
+
+@pytest.mark.binary("sandbox-git")
+def test_help_in_home_exits_zero_without_invoking_git(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path)
+    sentinel = tmp_path / "git-calls.log"
+    fake_bin = make_failing_git(sentinel)
+
+    result = sandbox_git_at(
+        home, env_with_failing_git(env, fake_bin), "--help"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not sentinel.exists()
+
+
+@pytest.mark.binary("sandbox-git")
+def test_help_outside_git_repository_exits_zero_without_invoking_git(
+    tmp_path: Path,
+) -> None:
+    home, _, env = init_repo(tmp_path)
+    outside = tmp_path / "not-a-repo"
+    outside.mkdir()
+    sentinel = tmp_path / "git-calls.log"
+    fake_bin = make_failing_git(sentinel)
+
+    result = sandbox_git_at(
+        outside, env_with_failing_git(env, fake_bin), "--help"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not sentinel.exists()
+
+
+@pytest.mark.binary("sandbox-git")
+def test_help_documents_wrapper_usage_and_guards(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path)
+    sentinel = tmp_path / "git-calls.log"
+    fake_bin = make_failing_git(sentinel)
+
+    result = sandbox_git_at(
+        home, env_with_failing_git(env, fake_bin), "--help"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not sentinel.exists()
+    for expected in (
+        "local shell executable",
+        "HOME bare dotfiles",
+        "project repository",
+        "start-branch",
+        "sync-base",
+        "publish",
+        "approval",
+        "wrapper",
+    ):
+        assert expected in result.stdout, f"help output missing {expected!r}"
+
+
+@pytest.mark.binary("sandbox-git")
+def test_git_subcommand_still_passes_through_after_help(tmp_path: Path) -> None:
+    home, _, env = init_repo(tmp_path, branch="main")
+
+    passing = sandbox_git(home, env, "rev-parse", "--git-dir")
+    assert passing.returncode == 0, passing.stderr
+
+
 @pytest.mark.binary("sandbox-git")
 def test_publish_supports_explicit_safe_remote(tmp_path: Path) -> None:
     home, remote, env = init_repo(tmp_path)

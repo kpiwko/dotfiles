@@ -320,9 +320,62 @@ def guard_home_status_args(args: list[str]) -> list[str]:
     return guarded
 
 
+HELP = """\
+sandbox-git: guarded wrapper for Git in this workspace
+
+sandbox-git is a local shell executable: run it from a shell with an
+explicit working directory. It is not a Code Mode/MCP catalog tool.
+It wraps the git binary; all Git operations in this workspace go
+through this wrapper.
+
+Usage:
+  sandbox-git --help
+  sandbox-git start-branch <branch> [base] [remote]
+  sandbox-git sync-base [base] [remote]
+  sandbox-git publish [remote]
+  sandbox-git <git-subcommand> [args...]
+
+Repository selection (from the current working directory):
+  - In HOME itself, in ~/.dotfiles, or in a HOME subdirectory that is not
+    inside another repository, commands target the HOME bare dotfiles
+    repository: ~/.dotfiles as the Git directory with HOME as the work
+    tree. (HOME 'status' scans also have an untracked-files guard.)
+  - Inside a project repository (any directory with a .git entry at or
+    above it), commands use that project repository's normal Git layout.
+
+Subcommands:
+  start-branch <branch> [base] [remote]
+      Fetch the base ref from the remote (default: origin) and create a
+      new non-tracking local branch from it. Default base: the remote's
+      default branch. Refuses protected/significant branch names.
+  sync-base [base] [remote]
+      Fetch the base ref and rebase the current, non-protected branch
+      onto it. Default base: the remote's default branch.
+  publish [remote]
+      Push the current branch to the remote (default: origin), refusing
+      protected/significant branches and upstreams on a different remote.
+  <git-subcommand> [args...]
+      Any other Git subcommand is passed through to Git unchanged,
+      including its exit status ('push' destinations are still guarded).
+
+Approvals versus wrapper guards:
+  This wrapper only refuses unsafe branch targets (protected/significant
+  branches, cross-remote upstreams). It does not approve anything.
+  Destructive Git operations (force push, branch deletion, reset, clean)
+  and push/PR publication still require the separately configured human
+  approval flow. A command passing through this wrapper is not evidence
+  of approval, and a nonzero Git exit inside a successful tool call must
+  still be reported.
+"""
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         fail("missing git subcommand")
+
+    if sys.argv[1] == "--help":
+        print(HELP, end="")
+        return
 
     git = git_base()
     subcommand = sys.argv[1]

@@ -67,6 +67,18 @@ publication.
 Separate required work from optional improvements and follow established
 repository structure rather than introducing speculative refactors.
 
+Describe Git work in tasks as outcomes and verification steps, not as raw Git
+command sequences for the implementer to copy. Name the target repository,
+execution root, base remote/branch, and where relevant the push destination
+and review target, then state the required end state and how to verify it.
+
+Distinguish the Git permission a task needs and state it explicitly:
+analysis with no Git change, local synchronization of a feature branch,
+branch rewrite, commit, push, and review creation are separate scopes.
+Assign only the narrowest scope the task requires rather than a blanket
+grant, and keep approval/publication boundaries (force push, deletion,
+PR/MR creation, merges) visible as explicit user gates in the task.
+
 When `writing-plans` recommends `subagent-driven-development` or
 `executing-plans`, treat that execution handoff as advisory. This planner
 produces the plan only; the parent orchestrator owns task sequencing and
