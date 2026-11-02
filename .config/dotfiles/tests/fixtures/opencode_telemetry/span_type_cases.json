@@ -1,0 +1,190 @@
+{
+  "_meta": {
+    "description": "Synthetic OpenInference span-kind / mlflow.spanType compatibility cases for the guarded Collector mapping. Entirely fabricated data: no production traces, prompts, model outputs or credentials. traceId is exactly 32 hex chars, spanId exactly 16 hex chars, per OTLP/JSON pdata requirements of Collector 0.123.0.",
+    "collector": "otel/opentelemetry-collector-k8s 0.123.0 (digest 35c94823...87b4)",
+    "mlflow_allowlist_source": "mlflow/tracing/otel/translation/open_inference.py OpenInferenceTranslator.SPAN_KIND_TO_MLFLOW_TYPE in MLflow v3.17.0 (image digest 78803b7a...cddd11), verified from the pinned image source",
+    "allowlist": ["AGENT", "CHAIN", "EMBEDDING", "EVALUATOR", "GUARDRAIL", "LLM", "RERANKER", "RETRIEVER", "TOOL", "UNKNOWN"],
+    "json_serialized_kind_note": "MLflow's display translator json-decodes string kinds, but the Collector mapping uses exact string equality against the verified allowlist and deliberately does not decode or rewrite kinds; a JSON-quoted kind therefore stays unmapped (conservative, no invented value)."
+  },
+  "cases": [
+    {
+      "case": "supported_agent",
+      "expect_mlflow_span_type": "AGENT",
+      "trace_id": "6a100000000000000000000000000001",
+      "span_id": "0000000000000a01",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "AGENT"}},
+        {"key": "input.value", "value": {"stringValue": "synthetic-in-agent"}},
+        {"key": "output.value", "value": {"stringValue": "synthetic-out-agent"}},
+        {"key": "llm.token_count.prompt", "value": {"intValue": "11"}},
+        {"key": "llm.token_count.completion", "value": {"intValue": "7"}},
+        {"key": "cost_usd", "value": {"doubleValue": 0.011}},
+        {"key": "other.marker", "value": {"stringValue": "keep-agent"}}
+      ]
+    },
+    {
+      "case": "supported_chain",
+      "expect_mlflow_span_type": "CHAIN",
+      "trace_id": "6a100000000000000000000000000002",
+      "span_id": "0000000000000a02",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "CHAIN"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-chain"}}
+      ]
+    },
+    {
+      "case": "supported_llm",
+      "expect_mlflow_span_type": "LLM",
+      "trace_id": "6a100000000000000000000000000003",
+      "span_id": "0000000000000a03",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "LLM"}},
+        {"key": "llm.token_count.prompt", "value": {"intValue": "13"}},
+        {"key": "llm.token_count.completion", "value": {"intValue": "5"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-llm"}}
+      ]
+    },
+    {
+      "case": "supported_retriever",
+      "expect_mlflow_span_type": "RETRIEVER",
+      "trace_id": "6a100000000000000000000000000004",
+      "span_id": "0000000000000a04",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-retriever"}}
+      ]
+    },
+    {
+      "case": "supported_embedding",
+      "expect_mlflow_span_type": "EMBEDDING",
+      "trace_id": "6a100000000000000000000000000005",
+      "span_id": "0000000000000a05",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "EMBEDDING"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-embedding"}}
+      ]
+    },
+    {
+      "case": "supported_reranker",
+      "expect_mlflow_span_type": "RERANKER",
+      "trace_id": "6a100000000000000000000000000006",
+      "span_id": "0000000000000a06",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "RERANKER"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-reranker"}}
+      ]
+    },
+    {
+      "case": "supported_tool",
+      "expect_mlflow_span_type": "TOOL",
+      "trace_id": "6a100000000000000000000000000007",
+      "span_id": "0000000000000a07",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "TOOL"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-tool"}}
+      ]
+    },
+    {
+      "case": "supported_guardrail",
+      "expect_mlflow_span_type": "GUARDRAIL",
+      "trace_id": "6a100000000000000000000000000008",
+      "span_id": "0000000000000a08",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "GUARDRAIL"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-guardrail"}}
+      ]
+    },
+    {
+      "case": "supported_evaluator",
+      "expect_mlflow_span_type": "EVALUATOR",
+      "trace_id": "6a100000000000000000000000000009",
+      "span_id": "0000000000000a09",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "EVALUATOR"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-evaluator"}}
+      ]
+    },
+    {
+      "case": "supported_unknown",
+      "expect_mlflow_span_type": "UNKNOWN",
+      "trace_id": "6a10000000000000000000000000000a",
+      "span_id": "0000000000000a0a",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "UNKNOWN"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-unknown"}}
+      ]
+    },
+    {
+      "case": "canonical_wins_over_conflicting_kind",
+      "expect_mlflow_span_type": "CHAIN",
+      "trace_id": "6a10000000000000000000000000000b",
+      "span_id": "0000000000000a0b",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "TOOL"}},
+        {"key": "mlflow.spanType", "value": {"stringValue": "CHAIN"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-canonical"}}
+      ]
+    },
+    {
+      "case": "canonical_empty_preserved",
+      "expect_mlflow_span_type": "",
+      "trace_id": "6a10000000000000000000000000000c",
+      "span_id": "0000000000000a0c",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "LLM"}},
+        {"key": "mlflow.spanType", "value": {"stringValue": ""}},
+        {"key": "other.marker", "value": {"stringValue": "keep-empty"}}
+      ]
+    },
+    {
+      "case": "canonical_nonstring_preserved",
+      "expect_mlflow_span_type": 42,
+      "trace_id": "6a10000000000000000000000000000d",
+      "span_id": "0000000000000a0d",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "TOOL"}},
+        {"key": "mlflow.spanType", "value": {"intValue": "42"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-nonstring"}}
+      ]
+    },
+    {
+      "case": "unsupported_kind_stays_unmapped",
+      "expect_mlflow_span_type": null,
+      "trace_id": "6a10000000000000000000000000000e",
+      "span_id": "0000000000000a0e",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "SESSION"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-unsupported"}}
+      ]
+    },
+    {
+      "case": "missing_kind_stays_unmapped",
+      "expect_mlflow_span_type": null,
+      "trace_id": "6a10000000000000000000000000000f",
+      "span_id": "0000000000000a0f",
+      "attributes": [
+        {"key": "other.marker", "value": {"stringValue": "keep-missing"}}
+      ]
+    },
+    {
+      "case": "nonstring_kind_stays_unmapped",
+      "expect_mlflow_span_type": null,
+      "trace_id": "6a100000000000000000000000000010",
+      "span_id": "0000000000000a10",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"intValue": "7"}},
+        {"key": "other.marker", "value": {"stringValue": "keep-nonstring-kind"}}
+      ]
+    },
+    {
+      "case": "json_serialized_kind_stays_unmapped",
+      "expect_mlflow_span_type": null,
+      "trace_id": "6a100000000000000000000000000011",
+      "span_id": "0000000000000a11",
+      "attributes": [
+        {"key": "openinference.span.kind", "value": {"stringValue": "\"RETRIEVER\""}},
+        {"key": "other.marker", "value": {"stringValue": "keep-json-kind"}}
+      ]
+    }
+  ]
+}

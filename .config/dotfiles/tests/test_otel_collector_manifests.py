@@ -61,6 +61,17 @@ def test_otel_collector_batch_processor_preserves_experiment_id() -> None:
     assert "x-mlflow-experiment-id" in manifest
 
 
+def test_otel_collector_experiment_header_has_no_fallback_default() -> None:
+    manifest = OTEL_MANIFEST.read_text()
+
+    # Batching must keep per-request experiment metadata so mixed-header
+    # batches never lose the routing key, and the headers_setter must not gain
+    # a default_value fallback that would silently reroute missing-header
+    # traffic into an unintended experiment.
+    assert 'metadata_keys: ["x-mlflow-experiment-id"]' in manifest
+    assert "default_value" not in manifest
+
+
 def test_otel_collector_maps_agentgateway_realized_costs() -> None:
     manifest = OTEL_MANIFEST.read_text()
 
@@ -77,6 +88,60 @@ def test_otel_collector_guards_zero_cost_transformations() -> None:
 
     assert 'attributes["cost_usd"] != 0' in manifest
     assert 'attributes["session.total_cost_usd"] != 0' in manifest
+
+
+# Exact MLflow 3.17.0 OpenInferenceTranslator.SPAN_KIND_TO_MLFLOW_TYPE allowlist
+# (mlflow/tracing/otel/translation/open_inference.py in the pinned v3.17.0 image).
+# Each kind maps to the same-named mlflow.entities.SpanType value. Do not add or
+# invent kinds: unsupported kinds must stay unmapped (no UNKNOWN synthesis).
+OPENINFERENCE_SPAN_KIND_ALLOWLIST = frozenset(
+    {
+        "TOOL",
+        "CHAIN",
+        "LLM",
+        "RETRIEVER",
+        "EMBEDDING",
+        "AGENT",
+        "RERANKER",
+        "UNKNOWN",
+        "GUARDRAIL",
+        "EVALUATOR",
+    }
+)
+
+
+def test_otel_collector_maps_openinference_span_types_without_overwrite() -> None:
+    manifest = OTEL_MANIFEST.read_text()
+
+    # MLflow 3.17.0 SQL span-type workaround: the SQL spans.type column is written
+    # only from the inbound canonical mlflow.spanType, while openinference.span.kind
+    # is translated into stored display attributes only, so OpenInference-only spans
+    # get a NULL SQL type and disappear from grouped span_type metrics. The Collector
+    # copies the canonical attribute before ingestion using the exact upstream
+    # allowlist, only when the canonical attribute is absent.
+    for kind in sorted(OPENINFERENCE_SPAN_KIND_ALLOWLIST):
+        statement = (
+            f'set(attributes["mlflow.spanType"], "{kind}") '
+            f'where attributes["mlflow.spanType"] == nil '
+            f'and attributes["openinference.span.kind"] == "{kind}"'
+        )
+        assert statement in manifest, f"missing guarded span-type mapping for {kind}"
+
+    # Every canonical write must be nil-guarded: no overwrite of an existing
+    # canonical value (including empty or non-string ones).
+    for line in manifest.splitlines():
+        if 'set(attributes["mlflow.spanType"]' in line:
+            assert 'attributes["mlflow.spanType"] == nil' in line, (
+                f"unguarded mlflow.spanType write: {line.strip()}"
+            )
+
+    # Exactly the allowlist kinds are mapped; nothing else invents a span type.
+    mapped = {
+        line.split('"')[-2]
+        for line in manifest.splitlines()
+        if 'set(attributes["mlflow.spanType"]' in line
+    }
+    assert mapped == OPENINFERENCE_SPAN_KIND_ALLOWLIST
 
 
 def test_otel_collector_memory_limiter_processor() -> None:
