@@ -185,6 +185,31 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
     assert 'resource: "implement-maas"' not in orchestrator
 
 
+def test_telemetry_routes_to_fixed_experiment_23() -> None:
+    config = json.loads((ROOT / ".config" / "opencode" / "opencode.jsonc").read_text())
+    gateway_config = (BASE / "agentgateway.yaml").read_text()
+    gateway_deployment = (BASE / "agentgateway-deployment.yaml").read_text()
+    env_example = (K8S_DIR / "env.example").read_text()
+
+    otel_plugin = next(
+        plugin
+        for plugin in config["plugins"]
+        if isinstance(plugin, dict) and plugin.get("package") == "@devtheops/opencode-plugin-otel"
+    )
+    assert otel_plugin["options"]["otlpHeaders"] == "x-mlflow-experiment-id=23"
+
+    # The gateway header stays secret-sourced: 23 is provisioned into
+    # agentgateway-secrets, never hardcoded into the manifest.
+    assert 'x-mlflow-experiment-id: "$MLFLOW_EXPERIMENT_ID"' in gateway_config
+    assert 'x-mlflow-experiment-id: "23"' not in gateway_config
+    assert "x-mlflow-experiment-id: 23" not in gateway_config
+    assert "name: MLFLOW_EXPERIMENT_ID" in gateway_deployment
+    assert "agentgateway-secrets" in gateway_deployment
+
+    # The provisioning template documents the agreed target and the manual step.
+    assert "MLFLOW_EXPERIMENT_ID=23" in env_example
+
+
 def test_mlflow_gateway_artifacts_are_removed() -> None:
     assert not (ROOT / ".config" / "mlflow" / "gateway.yaml").exists()
     assert not (K8S_DIR / "gateway-bootstrap").exists()
