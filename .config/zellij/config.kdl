@@ -12,6 +12,9 @@ theme "solarized-light-pop"
 // login shell to preserve zsh configuration
 default_shell "/bin/zsh"
 
+load_plugins {
+    "zellij:link"
+}
 
 keybinds {
     normal {
