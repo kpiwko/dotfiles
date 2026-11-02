@@ -54,6 +54,27 @@ metrics are disabled.
 Configuration changes require a new OpenCode session or service restart. An
 existing session retains its stored model selection.
 
+## Deferred OTel plugin root-output fix
+
+The OTel plugin is `@devtheops/opencode-plugin-otel` v2.0.1 (latest verified
+2026-10-29; upstream `main` is also affected and no option or fixed release
+was found). It ends the root `opencode.session` span without `output.value`,
+so MLflow shows a blank response preview on an otherwise SUCCESS trace. The
+final `opencode.llm` child span does emit `output` and MLflow translates it
+correctly; only the root span is affected.
+
+TODO (deferred 2026-10-29): a fixed upstream release or maintained fork must
+emit the session's final assistant output before ending the root span. The
+fix owner is the upstream plugin, not this setup — do not patch the npm cache
+or add Collector I/O mapping. Track and re-evaluate upstream releases
+periodically; a remediation plan exists in the local working tree only
+(`.config/dotfiles/docs/plans/2026-10-26-opencode-mlflow-investigation-remediation.md`,
+untracked) and is not part of this repository's committed documentation.
+
+This note lives here rather than in `opencode.jsonc` because the dotfiles
+manifest tests parse that file with strict `json.loads`, so it is kept
+comment-free.
+
 ## Git safety
 
 Agents use only `sandbox-git` for Git operations. It selects

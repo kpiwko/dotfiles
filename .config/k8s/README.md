@@ -16,11 +16,14 @@ it to `standard` or delete and recreate the claim to resolve an immutable-field
 error. The migration manifest only references the claim, so it does not
 declare a storage class.
 
-`devcluster up` is the supported v3.17.0 lifecycle. It applies the safe base,
-confirms that both writers have terminated, runs the exclusive
-`mlflow-db-migrate` Job, waits for it to complete and be cleaned up, applies
-`~/.config/k8s/runtime`, and waits for MLflow and OTel readiness. This creates
-an expected maintenance window. The migration Job mounts the RWO SQLite PVC by
+`devcluster up` is the supported v3.17.0 lifecycle. It starts the Lima
+instance if it is stopped (blocking until the instance's k3s service is
+active), then applies the safe base, confirms that both writers have terminated, runs
+the exclusive `mlflow-db-migrate` Job, waits for it to complete and be cleaned
+up, applies `~/.config/k8s/runtime`, and waits for MLflow and OTel readiness.
+If the instance does not exist or fails to start, `devcluster up` stops before
+any cluster operation. This creates an expected maintenance window. The
+migration Job mounts the RWO SQLite PVC by
 itself and runs the idempotent command:
 
 ```text
@@ -72,6 +75,19 @@ Collector forwards both AgentGateway and OpenCode workflow spans to the fixed
 MLflow experiment selected by `MLFLOW_EXPERIMENT_ID`. OpenCode contributes
 session, agent, and tool context; AgentGateway is the cost authority because it
 knows the actual failover target.
+
+The agreed fixed experiment is **23** for every emitter. OpenCode's telemetry
+plugin is configured to send `x-mlflow-experiment-id: 23` itself through the
+`otlpHeaders` option in `~/.config/opencode/opencode.jsonc` (effective after
+service restart), and the `headers_setter` extension forwards that metadata
+unchanged, so OpenCode spans do not depend on this variable. AgentGateway expands the header from the
+`MLFLOW_EXPERIMENT_ID` key of the `agentgateway-secrets` Secret, which
+`devcluster up` provisions from your shell environment or
+`~/.config/k8s/.env`. Neither manifest hardcodes the value. Before running
+`devcluster up`, set `MLFLOW_EXPERIMENT_ID=23` in `~/.config/k8s/.env` (or
+export it in the shell, which takes precedence) so AgentGateway spans land in
+experiment 23 as well; a stale value such as `21` will route only AgentGateway
+traffic to the wrong experiment.
 
 The AgentGateway model catalog prices built-in public provider/model pairs. Add
 an Enmaas override only after its billing rate and the emitted
@@ -135,6 +151,34 @@ connect to `http://127.0.0.1:15000`.
 
 Access the Collector directly at `http://127.0.0.1:17903`.
 
+#### MLflow 3.17.0 span-type compatibility mapping
+
+The Collector's `transform` processor copies `openinference.span.kind` into the
+canonical `mlflow.spanType` attribute before ingestion. This is a local workaround
+for a measured MLflow 3.17.0 indexing bug: the SQL `spans.type` column is written
+only from the inbound canonical `mlflow.spanType`, while `openinference.span.kind`
+is translated into stored display attributes only, so OpenInference-only spans get
+a NULL SQL type and silently drop out of grouped `span_type` trace metrics even
+though the MLflow UI displays their kind. The mapping is copied verbatim from the
+upstream MLflow 3.17.0 `OpenInferenceTranslator.SPAN_KIND_TO_MLFLOW_TYPE` allowlist
+(TOOL, CHAIN, LLM, RETRIEVER, EMBEDDING, AGENT, RERANKER, UNKNOWN, GUARDRAIL,
+EVALUATOR — each mapping to the same-named `SpanType`), fires only when
+`mlflow.spanType` is absent, and never overwrites an existing canonical value
+(including empty or non-string ones). Missing, unknown or non-string kinds stay
+unmapped; no `UNKNOWN` is synthesized. It is gated to removal once an upstream
+MLflow release derives the SQL span type from translated attributes. The
+opt-in behavioral test in
+`.config/dotfiles/tests/test_mlflow_span_type_compatibility.py`
+(`OTEL_SPAN_TYPE_BEHAVIORAL=1`) verifies Collector-side behavior only: that the
+pinned Collector 0.123.0 exports the expected `mlflow.spanType` attributes
+after the manifest transform runs. It does not itself exercise MLflow SQL
+ingestion. That ingestion behavior was measured separately in a local MLflow
+3.17.0 A/B comparison: spans carrying only `openinference.span.kind` were
+stored with a NULL SQL `spans.type` (absent from grouped `span_type` metrics),
+while spans that also carried the canonical `mlflow.spanType=TOOL` were stored
+with the indexed TOOL type. The default offline suite runs only the module's
+static consistency checks.
+
 ## Port Mapping
 
 | Container Port | Host Port | Service | Description |
@@ -173,7 +217,7 @@ be attached to the Collector rather than directly to OpenCode.
 Projects can configure OpenCode telemetry in their `.envrc`:
 
 ```bash
-export MLFLOW_EXPERIMENT_ID=7
+export MLFLOW_EXPERIMENT_ID=23
 
 export OPENCODE_ENABLE_TELEMETRY=1
 export OPENCODE_OTLP_ENDPOINT="https://otel.example.internal"
@@ -186,6 +230,18 @@ export OPENCODE_RESOURCE_ATTRIBUTES="service.name=opencode,service.namespace=dot
 # Keep logs/metrics disabled at plugin side until backends are added:
 export OPENCODE_DISABLE_LOGS=1
 ```
+
+The shared service configuration (`~/.config/opencode/opencode.jsonc`) already
+sends `x-mlflow-experiment-id: 23` through the plugin's `otlpHeaders` option,
+which takes precedence over `OPENCODE_OTLP_HEADERS`; exporting
+`OPENCODE_OTLP_HEADERS` from a project `.envrc` therefore does **not** change
+the header OpenCode actually sends while that plugin option is set. The
+environment variable only becomes effective if the `otlpHeaders` plugin option
+is removed or changed in the shared configuration (a supported configuration
+change requiring an OpenCode service restart). Experiment 23 is the fixed
+target for the shared service; to deviate per project, change the plugin
+option explicitly rather than relying on the environment variable to override
+it silently.
 
 The shared OpenCode service batches telemetry from concurrent sessions, so a
 fixed MLflow experiment is required. Filter traces by OpenCode session/trace
