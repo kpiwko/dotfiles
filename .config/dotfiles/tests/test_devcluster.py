@@ -35,6 +35,13 @@ def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str,
     )
     make_executable(
         stubs / "limactl",
+        'if [ -n "${KUBECTL_LOG:-}" ]; then printf "limactl %s\\n" "$*" >> "$KUBECTL_LOG"; fi\n'
+        'if [ "$1" = list ]; then\n'
+        '  if [ "${LIMACTL_VM_STATUS:-Running}" = missing ]; then exit 1; fi\n'
+        '  printf "%s\\n" "${LIMACTL_VM_STATUS:-Running}"\n'
+        '  exit 0\n'
+        'fi\n'
+        'if [ "$1" = start ] && [ -n "${LIMACTL_FAIL_START:-}" ]; then echo "limactl: start failed" >&2; exit 1; fi\n'
         'echo "limactl $*"\n'
         'if [ "$1" = shell ]; then printf "apiVersion: v1\\ncurrent-context: default\\ncontexts:\\n- name: default\\n"; fi\n',
     )
@@ -107,6 +114,57 @@ def test_create_uses_lima_config(devcluster_env: tuple[dict[str, str], Path]) ->
     result = run_script(SCRIPT, "create", env=env)
     assert result.returncode == 0, result.stderr
     assert f"start --name devcluster {config}" in result.stdout
+
+
+def test_up_starts_stopped_vm_before_dependent_operations(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "up", env=env | ai_factory_inputs() | {"LIMACTL_VM_STATUS": "Stopped"})
+    assert result.returncode == 0, result.stderr
+    assert "Starting stopped Lima instance: devcluster" in result.stdout
+    commands = kubectl_commands(env)
+    vm_start = command_index(commands, "limactl start devcluster")
+    namespace = command_index(commands, "create namespace ai-dev")
+    assert vm_start < namespace
+
+
+def test_up_with_running_vm_does_not_restart_it(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "up", env=env | ai_factory_inputs())
+    assert result.returncode == 0, result.stderr
+    assert "Starting stopped Lima instance" not in result.stdout
+    commands = kubectl_commands(env)
+    assert not any(command.startswith("limactl start") for command in commands)
+
+
+def test_up_without_instance_directs_to_create(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "up", env=env | ai_factory_inputs() | {"LIMACTL_VM_STATUS": "missing"})
+    assert result.returncode != 0
+    assert "Lima instance devcluster not found" in result.stderr
+    assert "Run: devcluster create" in result.stderr
+    commands = kubectl_commands(env)
+    assert all(command.startswith("limactl ") for command in commands)
+
+
+def test_up_start_failure_blocks_dependent_operations(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(
+        SCRIPT,
+        "up",
+        env=env | ai_factory_inputs() | {"LIMACTL_VM_STATUS": "Stopped", "LIMACTL_FAIL_START": "1"},
+    )
+    assert result.returncode != 0
+    assert "failed to start Lima instance devcluster" in result.stderr
+    commands = kubectl_commands(env)
+    assert all(command.startswith("limactl ") for command in commands)
 
 
 def test_up_sequences_safe_lifecycle_and_secrets_after_runtime(

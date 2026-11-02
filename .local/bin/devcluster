@@ -15,7 +15,7 @@ usage() {
   echo "" >&2
   echo "Commands:" >&2
   echo "  create    Create the Lima/k3s development cluster" >&2
-  echo "  up        Deploy kustomize manifests to cluster" >&2
+  echo "  up        Start the cluster if stopped, then deploy kustomize manifests" >&2
   echo "  status    Show cluster and pod status" >&2
   echo "  logs      Show logs for a pod (use: logs <pod> [container])" >&2
   echo "  down      Stop cluster (preserve state)" >&2
@@ -87,9 +87,32 @@ cmd_create() {
   sync_kubeconfig
 }
 
+ensure_cluster_running() {
+  check_lima
+
+  if ! instance_status=$(limactl list "$CLUSTER_NAME" --format '{{.Status}}'); then
+    echo "devcluster: error: Lima instance $CLUSTER_NAME not found" >&2
+    echo "Run: devcluster create" >&2
+    exit 1
+  fi
+
+  if [ "$instance_status" = "Running" ]; then
+    return 0
+  fi
+
+  echo "Starting stopped Lima instance: $CLUSTER_NAME"
+  # `limactl start` on an existing instance is idempotent and blocks until the
+  # instance's readiness probes (k3s API active) pass before returning.
+  if ! limactl start "$CLUSTER_NAME"; then
+    echo "devcluster: error: failed to start Lima instance $CLUSTER_NAME" >&2
+    exit 1
+  fi
+}
+
 cmd_up() {
+  ensure_cluster_running
+
   if [ ! -f "$DEVCLUSTER_KUBECONFIG" ]; then
-    check_lima
     echo "Synchronizing k3s kubeconfig to $DEVCLUSTER_KUBECONFIG..."
     sync_kubeconfig
   fi
