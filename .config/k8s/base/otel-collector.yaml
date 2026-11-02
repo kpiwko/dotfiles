@@ -47,6 +47,31 @@ data:
 
               # Handle root agent session span cost
               - 'set(attributes["mlflow.llm.cost"], Concat(["{\"input_cost\": 0, \"output_cost\": 0, \"total_cost\": ", attributes["session.total_cost_usd"], "}"], "")) where attributes["mlflow.llm.cost"] == nil and attributes["session.total_cost_usd"] != nil and attributes["session.total_cost_usd"] != 0 and attributes["session.total_cost_usd"] != "0"'
+
+              # MLflow 3.17.0 SQL span-type indexing workaround. In MLflow 3.17.0,
+              # SqlAlchemyStore writes the SQL spans.type column from the inbound
+              # canonical mlflow.spanType only, while openinference.span.kind is
+              # translated into stored display attributes. OpenInference-only spans
+              # therefore get a NULL SQL type and drop out of grouped span_type
+              # metrics even though the UI displays their translated kind. Copy the
+              # canonical attribute from the OpenInference kind using exactly the
+              # upstream OpenInferenceTranslator.SPAN_KIND_TO_MLFLOW_TYPE allowlist
+              # (mlflow/tracing/otel/translation/open_inference.py, v3.17.0), and
+              # only when the canonical attribute is absent: never overwrite an
+              # existing canonical value, and leave missing/unknown kinds unmapped
+              # rather than synthesizing UNKNOWN. Remove this block when a fixed
+              # upstream MLflow release derives the SQL type from translated
+              # attributes.
+              - set(attributes["mlflow.spanType"], "TOOL") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "TOOL"
+              - set(attributes["mlflow.spanType"], "CHAIN") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "CHAIN"
+              - set(attributes["mlflow.spanType"], "LLM") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "LLM"
+              - set(attributes["mlflow.spanType"], "RETRIEVER") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "RETRIEVER"
+              - set(attributes["mlflow.spanType"], "EMBEDDING") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "EMBEDDING"
+              - set(attributes["mlflow.spanType"], "AGENT") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "AGENT"
+              - set(attributes["mlflow.spanType"], "RERANKER") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "RERANKER"
+              - set(attributes["mlflow.spanType"], "UNKNOWN") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "UNKNOWN"
+              - set(attributes["mlflow.spanType"], "GUARDRAIL") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "GUARDRAIL"
+              - set(attributes["mlflow.spanType"], "EVALUATOR") where attributes["mlflow.spanType"] == nil and attributes["openinference.span.kind"] == "EVALUATOR"
       batch:
         metadata_keys: ["x-mlflow-experiment-id"]
 
