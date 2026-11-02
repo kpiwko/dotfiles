@@ -11,6 +11,7 @@
         "enabled": true,
         "protocol": "http/protobuf",
         "endpoint": "{env:OPENCODE_OTLP_ENDPOINT}",
+        "otlpHeaders": "x-mlflow-experiment-id=23",
         "tracePropagationProviders": [
           "agentgateway",
           "agentgateway-gemini"
