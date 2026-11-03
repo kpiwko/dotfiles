@@ -19,7 +19,8 @@
     "tps": true,
     "markdown": "rendered",
     "new_location": "launch",
-    "permissions": "prompt"
+    "permissions": "prompt",
+    "verbosity": "medium"
   },
   "scroll": {
     "speed": 3,

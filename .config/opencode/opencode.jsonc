@@ -136,6 +136,9 @@
             "input": ["text"],
             "output": ["text"]
           },
+          "body": {
+            "reasoning_effort": "low"
+          },
           "limit": {
             "context": 350000,
             "output": 32000
