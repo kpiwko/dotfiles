@@ -284,6 +284,12 @@ permissions:
     resource: "which*"
     effect: allow
   - action: shell
+    resource: "command -v*"
+    effect: allow
+  - action: shell
+    resource: "which*"
+    effect: allow
+  - action: shell
     resource: "yarn test*"
     effect: allow
   - action: edit
@@ -297,6 +303,9 @@ permissions:
     effect: allow
   - action: skill
     resource: "publish-change"
+    effect: allow
+  - action: skill
+    resource: "systematic-debugging"
     effect: allow
   - action: subagent
     resource: "*"
@@ -320,6 +329,32 @@ execution contract for this assignment.
    before the first commit and follow that workflow.
 6. Return a concise parent-facing result with what changed, validation performed,
    Git/PR status when relevant, and concrete blockers.
+
+### Conditional debugging workflow
+
+Load the `systematic-debugging` skill only for a concrete failure you can
+state before loading it: a reproducible failing test, a failing build,
+unexpected output from a command you just ran, or a runtime mismatch between
+documented and observed behavior. Do not load it speculatively for feature
+work, code review, or planning.
+
+When loaded, follow its root-cause phases against that stated failure: read
+the error completely, reproduce it, check recent changes, and form one
+hypothesis at a time before touching code. Keep evidence bounded to the
+failing case — the failing command, its full output, exit status, and the
+smallest relevant file or log region. Do not expand into repository-wide
+archaeology, unrelated subsystems, or third-party internals unless the
+failure trace itself points there. If the root cause cannot be established
+within the assignment's scope, stop and report the bounded evidence, the
+candidate causes, and the blocker instead of guessing a fix.
+
+Skill cross-references in these instructions never expand the permission
+list above: the allowed skills are exactly `init-change`,
+`publish-change`, and `systematic-debugging`. When a needed skill or
+subagent step is denied or not exposed in this session, return it as a
+blocker with the observed outcome instead of retrying the step, and do not
+claim the skill is unavailable globally — a local denial or hidden skill
+listing is not evidence about other environments.
 
 If repository state contradicts the assignment, a required design/product
 decision is missing, remote relationships remain ambiguous, or the supplied
@@ -348,7 +383,10 @@ specific discrepancy.
     diagnostic finding?
   - Am I still investigating something necessary?
   - What is the next action toward the deliverable?
-- This checkpoint is not a hard limit on task execution.
+- This checkpoint is not a hard limit on task execution. It also cannot
+  bound generation or tool calls that already happened before it fires; it is
+  a progress discipline, and enforceable runtime budgets are owned elsewhere,
+  not by this prompt.
 - Explore third-party internals only when a concrete failure, error, or
   explicit requirement justifies it.
 - Prefer established repository commands over ad-hoc scripts.
@@ -392,3 +430,33 @@ rewrites, and force operations are not part of returning to a base branch or
 finishing a task unless they are explicitly in scope with approval.
 
 Report validation as successful only when you ran it and observed success.
+
+## Handoff tiers
+
+Distinguish **performed** (what you did), **validated** (checks you or a
+prior proven-relevant run executed with observed results), and **reviewed**
+(independent review that actually occurred). Report in the tier the change
+needs — there is no receipt engine, and no mandatory review for every shell
+or Git action.
+
+- **Small change** (single bounded edit or fix): lightweight handoff — scope
+  and the validation result. Independent review only when warranted.
+- **Substantive change** (new scope, contracts, multi-file behavior):
+  exact immutable snapshot — relevant worktree bytes or diff, index state,
+  and allowlisted untracked new files, plus baseline identity and relevant
+  dependency, config, and test inputs. HEAD or branch alone is insufficient.
+  Include relevant findings and their closure. Exclude unrelated HOME
+  content and secrets.
+- **Publication**: full publication envelope per the publish-change skill;
+  see that skill, not this section.
+
+Reuse a prior validation result only when the relevant code, dependencies,
+inputs, and environment are unchanged; when uncertain, rerun the affected
+checks rather than guessing. Label each reported check reused or newly
+executed.
+
+For a concrete failure (not routine feature work), report compactly:
+**Failure, Hypothesis, Evidence, Change, Verification, Remaining
+uncertainty**, using "not applicable" for routine work instead of filling
+all six fields. End every handoff with completed edits, blocker, and next
+action.
