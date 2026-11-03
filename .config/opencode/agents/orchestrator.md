@@ -193,6 +193,19 @@ children can be resumed when possible.
 If execution reveals that the durable plan itself needs material revision,
 delegate that revision back to `@planner` rather than rewriting it here.
 
+## Review keying
+
+Key every review to the relevant scope and immutable content revision. Request
+only the tier the change needs: a small change needs a lightweight scope and
+validation result; a substantive change needs the substantive-change envelope
+(snapshot, findings/closure, validation inputs); publication needs the full
+publication envelope. Track reused versus newly executed validation, not just
+a final status.
+
+A relevant fix, an unclosed finding, or changed acceptance criteria triggers a
+focused review. Do not re-review unchanged content after a status or push
+update or irrelevant documentation changes.
+
 ## Planning ownership
 
 The planner owns the plan artifact under `docs/plans/`. This orchestrator owns

@@ -27,6 +27,7 @@ SKILLS_DIR = ROOT / ".config" / "opencode" / "skills"
 
 ORCHESTRATOR = (AGENTS_DIR / "orchestrator.md").read_text()
 WORKER = (AGENTS_DIR / "worker.md").read_text()
+REVIEWER = (AGENTS_DIR / "reviewer.md").read_text()
 PLANNER = (AGENTS_DIR / "planner.md").read_text()
 INIT_CHANGE = (SKILLS_DIR / "init-change" / "SKILL.md").read_text()
 PUBLISH_CHANGE = (SKILLS_DIR / "publish-change" / "SKILL.md").read_text()
@@ -574,7 +575,130 @@ def test_trailing_catch_all_ask_would_shadow_raw_git_deny() -> None:
         assert_worker_decision_table(reordered)
 
 
-def test_permission_ordering_is_not_brittle_for_irrelevant_moves() -> None:
+# --- Skill permission boundary: exact debugging allow, rest still denied -----
+
+# The exact effective skill ID advertised by the installed superpowers plugin
+# (resolved via the running OpenCode server's skill listing, not from local
+# config skill directories, whose contents say nothing about plugin skills).
+DEBUGGING_SKILL = '"systematic-debugging"'
+# Another skill advertised by the same plugin that must remain denied.
+UNRELATED_PLUGIN_SKILL = "test-driven-development"
+# A second real skill shipped by the same installed plugin (its SKILL.md
+# exists on this machine); it must remain denied — the allow is exact,
+# not plugin-wide.
+SECOND_UNRELATED_PLUGIN_SKILL = "verification-before-completion"
+
+
+def resolve_skill_permission(
+    rules: list[tuple[str, str, str]], skill_id: str
+) -> str | None:
+    """Resolve the skill-action effect for ``skill_id`` under last-match-wins.
+
+    Mirrors ``resolve_permission`` but for ``action == "skill"``. Skill
+    resources are exact IDs, so a rule matches on equality — except the
+    literal ``*`` wildcard, which matches any skill ID.
+    """
+    effect: str | None = None
+    for action, resource, rule_effect in rules:
+        if action != "skill":
+            continue
+        pattern = resource.strip('"')
+        if pattern == skill_id or pattern == "*":
+            effect = rule_effect
+    return effect
+
+
+def assert_worker_skill_decision_table(
+    rules: list[tuple[str, str, str]]
+) -> None:
+    """Production assertion: ordered skill decisions for the worker."""
+    for skill_id, expected in (
+        ("init-change", "allow"),
+        ("publish-change", "allow"),
+        ("systematic-debugging", "allow"),
+        (UNRELATED_PLUGIN_SKILL, "deny"),
+        (SECOND_UNRELATED_PLUGIN_SKILL, "deny"),
+        ("using-superpowers", "deny"),
+    ):
+        assert resolve_skill_permission(rules, skill_id) == expected, skill_id
+
+
+def test_worker_skill_allow_exact_debugging_after_wildcard_deny() -> None:
+    """The exact ``systematic-debugging`` allow must come after the wildcard
+    skill deny so last-match-wins resolves it to ``allow`` while every other
+    skill stays denied.
+    """
+    rules = frontmatter_permission_rules(WORKER)
+    assert_worker_skill_decision_table(rules)
+
+
+def test_worker_skill_wildcard_deny_precedes_exact_allows() -> None:
+    """The ``skill: "*" -> deny`` entry must precede each exact allow; the
+    wildcard is what keeps unrelated and nonexistent skills denied.
+    """
+    rules = frontmatter_permission_rules(WORKER)
+    wildcard = rule_index(rules, '"*"', action="skill")
+    assert rules[wildcard] == ("skill", '"*"', "deny"), rules[wildcard]
+    for allowed in ('"init-change"', '"publish-change"', DEBUGGING_SKILL):
+        assert wildcard < rule_index(rules, allowed, action="skill"), allowed
+
+
+def test_worker_skill_deny_shadows_misordered_exact_allow() -> None:
+    """Synthetic reorder fixture: moving the wildcard skill deny after the
+    exact ``systematic-debugging`` allow would shadow it back to ``deny``.
+    The production assertions must detect that reorder, proving the skill
+    tests are order-sensitive like the shell ones.
+    """
+    rules = frontmatter_permission_rules(WORKER)
+    wildcard = rule_index(rules, '"*"', action="skill")
+    reordered = move_rule_to_end(rules, wildcard)
+
+    assert resolve_skill_permission(reordered, "systematic-debugging") == "deny"
+    with pytest.raises(AssertionError):
+        assert_worker_skill_decision_table(reordered)
+
+
+def test_worker_skill_trailing_allow_would_widen_unrelated_skills() -> None:
+    """Synthetic widening fixture: appending a broad ``skill: "*" -> allow``
+    after the deny would flip unrelated real plugin skills to ``allow``.
+    The decision table must catch that widening, proving the skill tests
+    are sensitive to extra broad allows, not only to reorders.
+    """
+    rules = frontmatter_permission_rules(WORKER)
+    debugging_allow = rule_index(rules, DEBUGGING_SKILL, action="skill")
+    assert rules[debugging_allow][2] == "allow", rules[debugging_allow]
+
+    # Widening mutation: append a synthetic broad skill allow after the deny.
+    widened = list(rules) + [("skill", '"*"', "allow")]
+    assert resolve_skill_permission(widened, UNRELATED_PLUGIN_SKILL) == "allow"
+    with pytest.raises(AssertionError):
+        assert_worker_skill_decision_table(widened)
+
+
+def test_worker_skill_allows_are_exactly_the_three_approved_ids() -> None:
+    """The exact skill allows are precisely the three approved IDs.
+
+    An extra exact allow beyond ``init-change``, ``publish-change``, and
+    ``systematic-debugging`` would widen the skill boundary without a new
+    decision, so the allowed set is asserted exactly, not as a subset.
+    """
+    rules = frontmatter_permission_rules(WORKER)
+    allowed = {
+        resource
+        for action, resource, effect in rules
+        if action == "skill" and effect == "allow"
+    }
+    assert allowed == {'"init-change"', '"publish-change"', DEBUGGING_SKILL}
+
+
+def test_worker_subagents_remain_denied() -> None:
+    """All nested subagent use stays denied regardless of skill allows."""
+    rules = frontmatter_permission_rules(WORKER)
+    subagent_rules = [rule for rule in rules if rule[0] == "subagent"]
+    assert subagent_rules == [("subagent", '"*"', "deny")], subagent_rules
+
+
+def test_worker_permission_ordering_is_not_brittle_for_irrelevant_moves() -> None:
     """Ordering assertions track matching rules, not raw list position.
 
     Swapping two unrelated read-only allow entries between the catch-all ask
@@ -677,3 +801,164 @@ def test_prohibition_detection_still_flags_real_document_violations() -> None:
     assert prescribed_violations(PLANNER) == []
     assert prescribed_violations(INIT_CHANGE) == []
     assert prescribed_violations(PUBLISH_CHANGE) == []
+
+
+# --- Task 2: three-tier coordination, not universal receipts ----------------
+#
+# Plan lines 147-155 (PR-trace remediation, Phase 2 Task 2) require concise
+# agent instructions distinguishing performed, validated, and reviewed work in
+# three tiers (small / substantive / publication), a substantive snapshot
+# definition, review keying by relevant scope + immutable revision, compact
+# bounded worker debug fields, and no receipt engine. These are CONTRACT
+# assertions on instruction text: passing them does not mechanically enforce
+# runtime agent behavior.
+
+
+def test_worker_distinguishes_performed_validated_reviewed() -> None:
+    """The worker must separate what it did, checked, and had reviewed."""
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    for phrase in ("**performed**", "**validated**", "**reviewed**"):
+        assert phrase in section, phrase
+
+
+def test_worker_defines_three_handoff_tiers() -> None:
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    for tier in ("**Small change**", "**Substantive change**", "**Publication**"):
+        assert tier in section, tier
+
+
+def test_worker_tiering_has_no_receipt_engine_or_universal_review() -> None:
+    """No receipt framework and no mandatory review for every shell/Git action."""
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    assert "no receipt engine" in section
+    assert "Independent review only when warranted" in section
+
+
+def test_worker_substantive_snapshot_exact_contents() -> None:
+    """Substantive snapshot: relevant bytes/diff, index, allowlisted untracked,
+    baseline identity, relevant dependency/config/test inputs — HEAD/branch
+    alone insufficient; unrelated HOME content/secrets excluded."""
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    for phrase in (
+        "relevant worktree bytes or diff",
+        "index state",
+        "allowlisted untracked new files",
+        "baseline identity",
+        "relevant dependency, config, and test inputs",
+        "HEAD or branch alone is insufficient",
+        "Exclude unrelated HOME content and secrets",
+    ):
+        assert phrase in section, phrase
+
+
+def test_worker_validation_reuse_requires_unchanged_relevant_inputs() -> None:
+    """Reuse prior validation only when relevant code, dependencies, inputs,
+    and environment are unchanged; when uncertain, rerun affected checks and
+    label reused vs newly executed."""
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    for phrase in (
+        "Reuse a prior validation result only when the relevant code, dependencies, inputs, and environment are unchanged",
+        "rerun the affected checks",
+        "Label each reported check reused or newly executed",
+    ):
+        assert phrase in section, phrase
+
+
+def test_worker_compact_debug_fields_listed() -> None:
+    """Bounded worker fields: Failure, Hypothesis, Evidence, Change,
+    Verification, Remaining uncertainty; "not applicable" for routine work;
+    completed edits/blocker/next action ending."""
+    section = norm(markdown_section(WORKER, "Handoff tiers"))
+    for phrase in (
+        "Failure, Hypothesis, Evidence, Change, Verification, Remaining uncertainty",
+        "not applicable",
+        "completed edits, blocker, and next action",
+    ):
+        assert phrase in section, phrase
+
+
+def test_worker_checkpoint_keeps_prettool_limitation() -> None:
+    """The 6-8 call checkpoint stays and notes it cannot bound work already
+    performed before it fires."""
+    section = norm(markdown_section(WORKER, "Execution discipline"))
+    assert "6-8 tool calls" in section
+    assert "cannot bound generation or tool calls that already happened" in section
+
+
+def test_orchestrator_keys_reviews_to_scope_and_revision() -> None:
+    """Reviews are keyed by relevant scope + immutable revision; no repeat
+    review for unchanged content after status/push or irrelevant docs."""
+    section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
+    for phrase in (
+        "relevant scope and immutable content revision",
+        "Do not re-review unchanged content after a status or push update",
+        "irrelevant documentation",
+    ):
+        assert phrase in section, phrase
+
+
+def test_orchestrator_relevant_changes_trigger_focused_review() -> None:
+    section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
+    for phrase in (
+        "relevant fix",
+        "unclosed finding",
+        "changed acceptance criteria",
+    ):
+        assert phrase in section, phrase
+
+
+def test_orchestrator_distinguishes_handoff_tiers() -> None:
+    """The orchestrator requests only the tier the change needs: lightweight
+    for small, substantive envelope for substantive, full Task 3 publication
+    envelope for publication."""
+    section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
+    for phrase in (
+        "lightweight scope and validation result",
+        "substantive-change envelope",
+        "full publication envelope",
+    ):
+        assert phrase in section, phrase
+
+
+def test_orchestrator_distinguishes_reused_and_new_validation() -> None:
+    section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
+    assert "reused versus newly executed" in section
+
+
+def test_reviewer_returns_snapshot_findings_verdict_without_reruns() -> None:
+    """Reviewer output keyed to the reviewed revision: snapshot identity,
+    finding IDs/closure, verdict; never reruns implementer tests."""
+    section = norm(markdown_section(REVIEWER, "Output"))
+    for phrase in (
+        "reviewed revision",
+        "relevant scope",
+        "finding IDs",
+        "closure",
+    ):
+        assert phrase in section, phrase
+    boundaries = norm(markdown_section(REVIEWER, "Review boundaries"))
+    assert "rather than rerunning" in boundaries
+
+
+def test_reviewer_dependency_or_environment_change_is_not_automatic_review() -> None:
+    """Deps/env changes invalidate reported validation without automatically
+    triggering a review absent relevant code/criteria changes."""
+    section = norm(markdown_section(REVIEWER, "Review boundaries"))
+    for phrase in (
+        "invalidates reported validation",
+        "treat implementer checks as stale, not reusable",
+        "without automatically triggering a review absent a relevant code or criteria change",
+    ):
+        assert phrase in section, phrase
+
+
+def test_reviewer_no_duplicate_review_for_unchanged_revision() -> None:
+    """An unchanged relevant-scope revision must not trigger a duplicate
+    review; a relevant fix, unclosed finding, or changed criteria must."""
+    section = norm(markdown_section(REVIEWER, "Review boundaries"))
+    for phrase in (
+        "unchanged relevant-scope revision",
+        "must not trigger a duplicate review",
+        "A relevant fix, an unclosed finding, or changed acceptance criteria",
+    ):
+        assert phrase in section, phrase

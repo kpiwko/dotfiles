@@ -56,10 +56,20 @@ Remain read-only. Use the available read/search tools and the permitted
 reported by the implementer as evidence to review rather than rerunning tests,
 linters, formatters, builds, package managers, or application commands.
 
+An unchanged relevant-scope revision (same relevant scope and immutable
+content revision) must not trigger a duplicate review. A relevant fix, an
+unclosed finding, or changed acceptance criteria does trigger one. A
+dependency or environment change invalidates reported validation (treat
+implementer checks as stale, not reusable) without automatically triggering
+a review absent a relevant code or criteria change.
+
 Run permitted commands in the existing working directory. Use `sandbox-git` for
 all Git inspection and one logical shell operation per call.
 
 ## Output
+
+Report the reviewed revision and relevant scope (snapshot identity of what
+was reviewed), the finding IDs and their closure status, and the verdict.
 
 ### Blocking Issues
 ...

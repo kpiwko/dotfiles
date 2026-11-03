@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +27,513 @@ PROTECTED_BRANCHES = {
 def fail(message: str) -> NoReturn:
     print(f"sandbox-git: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+# --- Opt-in publication expectation gate (Task 3A) -------------------------
+#
+# Prefix-only interface: every expectation option must appear before the
+# Git subcommand. Any expectation option present requires ALL six exactly
+# once with well-formed, non-conflicting values; unknown, partial,
+# malformed, duplicated or conflicting options fail closed with NO Git
+# invocation. Guarded operations are publication only: `publish [REMOTE]`
+# or a restricted `push` form. Passing these flags is not approval; the
+# legacy unguarded invocation remains possible (documented residual).
+
+EXPECTATION_OPTIONS = (
+    "--expect-root",
+    "--expect-head",
+    "--expect-branch",
+    "--expect-upstream",
+    "--expect-destination",
+    "--expect-push-url",
+)
+
+def validate_branch_name(name: str) -> bool:
+    """Conservative check that NAME is a plausible short branch name.
+
+    Deliberately stricter than full git refname rules: reject anything the
+    gate cannot compare exactly (empty, dashed, spaces, control chars,
+    ref/spec-like forms and traversal/modifier characters).
+    """
+    if not name or name.startswith("-") or name.startswith("/"):
+        return False
+    if name.endswith("/") or name.endswith(".lock") or name.endswith("."):
+        return False
+    if "//" in name or ".." in name or "@{" in name:
+        return False
+    if name.startswith("refs/") or name == "HEAD":
+        return False
+    if any(ch in name for ch in " ~^:?*[\\") or "\t" in name:
+        return False
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7f for ch in name):
+        return False
+    return True
+
+
+def validate_remote_name(name: str) -> bool:
+    """Remote names cannot contain ':' (needed to split REMOTE:ref)."""
+    return (
+        bool(name)
+        and ":" not in name
+        and " " not in name
+        and not name.startswith("-")
+    )
+
+
+def validate_full_oid(oid: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", oid))
+
+
+def validate_url(url: str) -> bool:
+    return bool(url) and all(ord(ch) >= 0x20 and ch != "\x7f" for ch in url)
+
+
+def validate_push_url(url: str) -> bool:
+    return validate_url(url)
+
+
+def validate_remote_ref(value: str, allow_none: bool) -> tuple[str, str] | None:
+    """Parse 'REMOTE:refs/heads/NAME' (or literal 'none' when allowed).
+
+    Returns (remote, branch) or None for an accepted 'none'. Raises
+    ValueError on malformed input; the caller converts it to fail().
+    """
+    if allow_none and value == "none":
+        return None
+    if ":" not in value:
+        raise ValueError(f"expected REMOTE:refs/heads/NAME form, got '{value}'")
+    remote, ref = value.split(":", 1)
+    if not validate_remote_name(remote):
+        raise ValueError(f"invalid remote name '{remote}'")
+    branch = ref.removeprefix("refs/heads/")
+    if not ref.startswith("refs/heads/") or not validate_branch_name(branch):
+        raise ValueError(f"expected a refs/heads/NAME ref, got '{ref}'")
+    return remote, branch
+
+
+def parse_guarded_refspec(refspec: str) -> tuple[str, str] | None:
+    """Accept exactly one normal (non-force) 'HEAD:refs/heads/NAME' refspec.
+
+    The guarded explicit-refspec form is HEAD-only: a 'refs/heads/SOURCE'
+    form could push a different commit than --expect-head describes, so it
+    is rejected rather than silently allowed. Force/delete/tag/wildcard/
+    bare-name/source-only forms are likewise rejected, never guessed.
+    """
+    if refspec.startswith("+") or refspec.startswith("-"):
+        return None
+    if refspec.startswith(":") or refspec.endswith(":") or ":" not in refspec:
+        return None
+    source, destination = refspec.split(":", 1)
+    if source != "HEAD":
+        return None
+    if not destination.startswith("refs/heads/"):
+        return None
+    dest_branch = destination.removeprefix("refs/heads/")
+    if not validate_branch_name(dest_branch):
+        return None
+    return source, dest_branch
+
+
+def redact_url(url: str) -> str:
+    """Redact userinfo (user:password, percent-encoded tokens) from a URL.
+
+    Comparison always uses the raw URL; only output is sanitized. The
+    userinfo is removed by splitting the authority on its LAST '@' in the
+    raw string, preserving host, port and IPv6 brackets without any port
+    re-parsing (which urlsplit's .port can reject or corrupt).
+    """
+    scheme_sep = url.find("://")
+    authority_start = scheme_sep + 3 if scheme_sep != -1 else 0
+    # The authority ends at the first '/', '?' or '#' after its start.
+    authority_end = len(url)
+    for index in range(authority_start, len(url)):
+        if url[index] in "/?#":
+            authority_end = index
+            break
+    authority = url[authority_start:authority_end]
+    at_index = authority.rfind("@")
+    if at_index == -1:
+        return url  # no userinfo in the authority: nothing to redact
+    redacted_authority = authority[at_index + 1 :]
+    return url[:authority_start] + redacted_authority + url[authority_end:]
+
+
+def guard_resolved_destination(
+    git: list[str], remote: str, destination: str
+) -> None:
+    """Refuse a push whose ACTUAL resolved destination is protected.
+
+    Runs in the guard phase (execution only, never in --check-only): the
+    default branch is resolved for the ACTUAL push remote (not hardcoded
+    'origin'), so a config-driven destination such as
+    remote.<REMOTE>.push=HEAD:refs/heads/main is rejected before push even
+    when every expectation matches.
+    """
+    branch = destination.split(":", 1)[1].removeprefix("refs/heads/")
+    default = default_branch(git, remote)
+    if is_protected(branch, default):
+        fail(f"refusing to push protected/significant branch '{branch}'")
+
+
+class WideningConfigError(Exception):
+    """A push-widening configuration is present; guarded mode refuses it."""
+
+
+def check_push_widening_config(git: list[str]) -> None:
+    """Fail closed on local config that widens a normal push's effect.
+
+    mirror, followTags, any pushOption, recurseSubmodules != 'no'/'false'
+    and gpgSign != false/absent are rejected in BOTH execution and
+    check-only (it is a local observation, no network), including the
+    final pre-exec check so config drift between checks is detected.
+    This is an explicit profile, not a claim that every Git side effect is
+    contained; server-side hooks remain outside this contract.
+
+    Git config semantics (N2): a valueless (bare) key is TRUE; an
+    explicitly empty value (`key =`) is false/reset. The regexp read
+    alone cannot distinguish those reliably, so each matched key is
+    resolved with a local `git config --bool --get <key>` read (bare =>
+    'true', explicit empty => 'false', malformed => nonzero/absent).
+    """
+
+    def bool_of(key: str) -> bool | None:
+        out = git_output(git, "config", "--bool", "--get", key)
+        if out == "true":
+            return True
+        if out == "false":
+            return False
+        return None  # absent or malformed
+
+    def value_of(key: str) -> str:
+        out = git_output(git, "config", "--get", key)
+        return out
+
+    regexp = (
+        r"^(remote\..*\.mirror|push\.followtags|push\.pushoption|"
+        r"remote\..*\.pushoption|push\.recursesubmodules|push\.gpgsign)$"
+    )
+    matched = [
+        line.split(" ", 1)[0]
+        for line in git_output(git, "config", "--get-regexp", regexp).splitlines()
+        if line.strip()
+    ]
+    for key in matched:
+        # Git config keys are case-insensitive for the variable NAME but
+        # the remote SUBSECTION (between remote. and .<name>) is
+        # case-SENSITIVE: preserve the exact emitted key for every config
+        # query; use the lowercase form only for suffix/label comparison.
+        lowered = key.lower()
+        if lowered.endswith(".mirror"):
+            resolved = bool_of(key)
+            if resolved is True:
+                raise WideningConfigError(f"guarded push refuses {key} (mirror)")
+            if resolved is None:
+                raise WideningConfigError(f"malformed boolean for {key}")
+        elif lowered == "push.followtags":
+            resolved = bool_of(key)
+            if resolved is True:
+                raise WideningConfigError(f"guarded push refuses {key} (followTags)")
+            if resolved is None:
+                raise WideningConfigError(f"malformed boolean for {key}")
+        elif lowered == "push.pushoption" or lowered.endswith(".pushoption"):
+            # A push option is sent when the key exists with any value,
+            # including a bare valueless key (git TRUE); an explicitly
+            # empty value resets it. `--bool` is only meaningful for the
+            # empty/bare discrimination: a non-empty value is itself the
+            # rejection, never a boolean lookup.
+            value = value_of(key)
+            if value != "":
+                raise WideningConfigError(f"guarded push refuses {key} (pushOption)")
+            resolved = bool_of(key)
+            if resolved is True:
+                raise WideningConfigError(f"guarded push refuses {key} (pushOption)")
+            if resolved is None:
+                raise WideningConfigError(f"config lookup disappeared for {key}")
+            # resolved is False: explicitly empty value resets the option.
+        elif lowered == "push.recursesubmodules":
+            resolved = bool_of(key)
+            if resolved is True:
+                raise WideningConfigError(
+                    f"guarded push refuses {key} (recurseSubmodules)"
+                )
+            if resolved is None:
+                value = value_of(key)
+                normalized = value.strip().lower()
+                if normalized not in ("no", "false", "off", "0", ""):
+                    raise WideningConfigError(
+                        f"guarded push refuses {key}='{value}' (recurseSubmodules)"
+                    )
+        elif lowered == "push.gpgsign":
+            resolved = bool_of(key)
+            if resolved is True:
+                raise WideningConfigError(f"guarded push refuses {key} (gpgSign)")
+            if resolved is None:
+                value = value_of(key)
+                normalized = value.strip().lower()
+                if normalized not in ("false", "no", "off", "0", ""):
+                    raise WideningConfigError(
+                        f"guarded push refuses non-false {key}='{value}' (gpgSign)"
+                    )
+
+
+class ExpectationGate:
+    """Opt-in identity/destination enforcement for publication commands.
+
+    Built only after all six options validated. `check` observes actual
+    repository state and compares against expectations; it runs before the
+    existing (potentially networked) guards and is repeated immediately
+    before execvp. `check_only` performs the same local read-only
+    observations and reports JSON without claiming any authorization or
+    guard passed.
+    """
+
+    def __init__(
+        self,
+        expect_root: str,
+        expect_head: str,
+        expect_branch: str,
+        expect_upstream: str,
+        expect_destination: str,
+        expect_push_url: str,
+        check_only: bool,
+        remote: str,
+        refspec: str | None,
+        mode: str,
+        explicit_remote: bool,
+    ) -> None:
+        self.expect_root = expect_root
+        self.expect_head = expect_head
+        self.expect_branch = expect_branch
+        self.expect_upstream = expect_upstream
+        self.expect_destination = expect_destination
+        self.expect_push_url = expect_push_url
+        self.check_only = check_only
+        self.remote = remote
+        self.refspec = refspec
+        self.mode = mode
+        self.explicit_remote = explicit_remote
+        # Last ACTUAL resolved destination observed by observe(); consumed
+        # by the guard-phase destination protection (B1).
+        self.last_destination: str | None = None
+        parsed_upstream = validate_remote_ref(expect_upstream, allow_none=True)
+        self.upstream_remote, self.upstream_branch = (
+            parsed_upstream if parsed_upstream else (None, None)
+        )
+        parsed_dest = validate_remote_ref(expect_destination, allow_none=False)
+        assert parsed_dest is not None
+        self.dest_remote, self.dest_branch = parsed_dest
+
+    # -- observation helpers (local, read-only) -----------------------------
+
+    def _config_all(self, git: list[str], key: str) -> list[str]:
+        out = git_output(git, "config", "--get-all", key)
+        return [line for line in out.splitlines() if line] if out else []
+
+    def _config_first(self, git: list[str], key: str) -> str | None:
+        values = self._config_all(git, key)
+        if len(values) > 1:
+            fail(f"ambiguous push configuration: multiple {key} values")
+        return values[0] if values else None
+
+    def _config_regex(self, git: list[str], pattern: str) -> list[str]:
+        out = git_output(git, "config", "--get-regexp", pattern)
+        return [line for line in out.splitlines() if line] if out else []
+
+    def _effective_push_url(self, git: list[str], remote: str) -> str:
+        """Exactly one effective push URL as Git itself resolves it locally.
+
+        Uses the local `remote get-url --push --all` read (no network): Git
+        performs the actual URL resolution, including insteadOf/pushInsteadOf
+        rewriting and pushurl precedence. More than one effective URL or none
+        at all is rejected rather than guessed.
+        """
+        out = git_output(git, "remote", "get-url", "--push", "--all", remote)
+        urls = [line for line in out.splitlines() if line] if out else []
+        if len(urls) > 1:
+            fail(
+                f"ambiguous push configuration: remote '{remote}' has multiple "
+                "effective push URLs"
+            )
+        if not urls:
+            fail(f"no URL configured for remote '{remote}'")
+        return urls[0]
+
+    def _resolve_destination(
+        self, git: list[str], current: str, upstream: tuple[str, str] | None
+    ) -> str:
+        """Actual planned destination for the guarded form, never the expected value.
+
+        publish and the wrapper's no-refspec push forms always push an
+        explicit 'HEAD:refs/heads/<current>' refspec, so their destination is
+        the current branch and remote.push/push.default never redirect them.
+        For 'push REMOTE' without a refspec, the destination is resolved from
+        remote.<REMOTE>.push or push.default (simple/current/upstream only);
+        ambiguous or unsupported configuration is rejected, not guessed.
+        """
+        remote = self.remote
+        if self.mode == "publish":
+            return f"{remote}:refs/heads/{current}"
+
+        if self.refspec is not None:
+            return f"{remote}:refs/heads/{self.refspec[1]}"
+
+        if self.explicit_remote:
+            configured = self._config_all(git, f"remote.{remote}.push")
+            if configured:
+                if len(configured) != 1:
+                    fail(
+                        f"ambiguous push configuration: multiple remote.{remote}.push refspecs"
+                    )
+                parsed = parse_guarded_refspec(configured[0])
+                if parsed is None:
+                    fail(
+                        f"unsupported remote.{remote}.push refspec '{configured[0]}' "
+                        "in guarded mode"
+                    )
+                return f"{remote}:refs/heads/{parsed[1]}"
+
+            push_default = self._config_first(git, "push.default") or "simple"
+            if push_default not in ("simple", "current", "upstream", "tracking"):
+                fail(
+                    f"unsupported push.default '{push_default}' in guarded mode; "
+                    "refusing to guess the destination"
+                )
+            if push_default in ("upstream", "tracking"):
+                if upstream is None:
+                    fail("push.default 'upstream' with no upstream in guarded mode")
+                upstream_remote, upstream_branch = upstream
+                if upstream_remote != remote:
+                    fail(
+                        f"push.default 'upstream' points at remote '{upstream_remote}', "
+                        f"not the push remote '{remote}'"
+                    )
+                return f"{remote}:refs/heads/{upstream_branch}"
+            if push_default == "simple" and upstream is not None:
+                upstream_remote, upstream_branch = upstream
+                if upstream_remote == remote and upstream_branch != current:
+                    fail(
+                        "push.default 'simple' would refuse: upstream branch "
+                        f"'{upstream_branch}' differs from '{current}'"
+                    )
+            return f"{remote}:refs/heads/{current}"
+
+        # Bare guarded 'push' (no remote, no refspec): the wrapper always
+        # constructs the explicit refspec itself.
+        return f"origin:refs/heads/{current}"
+
+    def observe(self, git: list[str]) -> dict[str, object]:
+        """Observe the actual state with local, read-only Git calls only."""
+        # Local push-widening configuration check (no network): applies to
+        # both execution and check-only, including the final pre-exec check
+        # so config drift between the two comparisons is detected.
+        try:
+            check_push_widening_config(git)
+        except WideningConfigError as exc:
+            fail(str(exc))
+        toplevel = git_output(git, "rev-parse", "--show-toplevel")
+        if not toplevel:
+            fail("cannot determine worktree root (not inside a work tree?)")
+        head = git_output(git, "rev-parse", "HEAD")
+        if not head:
+            fail("cannot resolve HEAD")
+        branch = git_output(git, "symbolic-ref", "--quiet", "--short", "HEAD")
+        if not branch:
+            fail("detached HEAD")
+        upstream = upstream_for_current_branch(git)
+        observed_upstream = (
+            f"{upstream[0]}:refs/heads/{upstream[1]}" if upstream else None
+        )
+        destination = self._resolve_destination(git, branch, upstream)
+        push_url = self._effective_push_url(git, self.remote)
+        self.last_destination = destination
+        return {
+            "worktree_root": str(Path(toplevel).resolve()),
+            "head": head,
+            "branch": branch,
+            "upstream": observed_upstream,
+            "destination": destination,
+            "push_url": push_url,
+        }
+
+    def compare(self, observed: dict[str, object]) -> dict[str, bool]:
+        # Raw URLs compared; only reported output is redacted.
+        expected_root = str(Path(self.expect_root).resolve())
+        observed_upstream = observed["upstream"] if observed["upstream"] is not None else "none"
+        return {
+            "root": observed["worktree_root"] == expected_root,
+            "head": observed["head"] == self.expect_head,
+            "branch": observed["branch"] == self.expect_branch,
+            "upstream": observed_upstream == self.expect_upstream,
+            "destination": observed["destination"] == self.expect_destination,
+            "push_url": observed["push_url"] == self.expect_push_url,
+        }
+
+    # Reported names for observed values (distinct from comparison keys).
+    OBSERVED_NAMES = {
+        "root": "worktree_root",
+        "head": "head",
+        "branch": "branch",
+        "upstream": "upstream",
+        "destination": "destination",
+        "push_url": "push_url",
+    }
+
+    def check(self, git: list[str], phase: str) -> None:
+        """Full comparison; any mismatch fails closed without repair."""
+        self.compare_or_fail(self.observe(git), phase)
+
+    def compare_or_fail(self, observed: dict[str, object], phase: str) -> None:
+        matches = self.compare(observed)
+        if not all(matches.values()):
+            failed = [name for name, ok in matches.items() if not ok]
+            observed_bits = ", ".join(
+                f"{name}={self._redacted_observed(observed, self.OBSERVED_NAMES[name])!r}"
+                for name in failed
+            )
+            fail(
+                f"expectation mismatch ({phase}): {', '.join(failed)}; "
+                f"observed {observed_bits}"
+            )
+
+    def _redacted_observed(self, observed: dict[str, object], name: str) -> object:
+        value = observed[name]
+        if name == "push_url" and isinstance(value, str):
+            return redact_url(value)
+        return value
+
+    def report_check_only(self, git: list[str]) -> None:
+        """Local read-only comparison report; no publication, no guards run.
+
+        This is NOT an authorization result and does NOT claim the
+        publication guards passed; a local match is not remote freshness
+        evidence.
+        """
+        observed = self.observe(git)
+        matches = self.compare(observed)
+        reported_upstream = observed["upstream"] if observed["upstream"] is not None else "none"
+        reported_observed = {
+            **observed,
+            "upstream": reported_upstream,
+            "push_url": redact_url(str(observed["push_url"])),
+        }
+        payload = {
+            "check_only": True,
+            "authorization_claimed": False,
+            "observed": reported_observed,
+            "expected": {
+                "root": str(Path(self.expect_root).resolve()),
+                "head": self.expect_head,
+                "branch": self.expect_branch,
+                "upstream": self.expect_upstream,
+                "destination": self.expect_destination,
+                "push_url": redact_url(self.expect_push_url),
+            },
+            "matches": matches,
+            "all_match": all(matches.values()),
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        if not all(matches.values()):
+            raise SystemExit(1)
 
 
 def git_base() -> list[str]:
@@ -226,8 +735,26 @@ def validate_publish(git: list[str], remote: str) -> tuple[bool, str]:
     return upstream is None or upstream[1] != current, current
 
 
-def publish(git: list[str], remote: str) -> None:
+def publish(git: list[str], remote: str, gate: ExpectationGate | None = None) -> None:
+    if gate is not None:
+        gate.check(git, "before guards")
+        if gate.last_destination is not None:
+            guard_resolved_destination(git, remote, gate.last_destination)
     set_upstream, branch = validate_publish(git, remote)
+    if gate is not None:
+        # Final comparison immediately before execvp. ALL network-capable
+        # guards (resolved-destination protection and validate_publish,
+        # including the default_branch `remote show` fallback) have already
+        # run above; after this comparison only the push execs, so no
+        # network-capable guard opens a window after the last identity
+        # observation. State drift between the two comparisons fails
+        # without repair (residual TOCTOU between check and exec remains
+        # acknowledged; this is not atomic). The planned argv is recomputed
+        # from post-guard observations rather than reusing a branch
+        # captured before the guards ran.
+        observed = gate.observe(git)
+        gate.compare_or_fail(observed, "before exec")
+        branch = str(observed["branch"])
     args = ["push"]
     if set_upstream:
         args.extend(["--set-upstream", remote, f"HEAD:refs/heads/{branch}"])
@@ -333,6 +860,11 @@ Usage:
   sandbox-git start-branch <branch> [base] [remote]
   sandbox-git sync-base [base] [remote]
   sandbox-git publish [remote]
+  sandbox-git [--expect-root ABS --expect-head FULL_OID --expect-branch NAME]
+              [--expect-upstream REMOTE:refs/heads/NAME|none]
+              [--expect-destination REMOTE:refs/heads/NAME --expect-push-url URL]
+              [--check-only] publish [remote]
+  sandbox-git [same expectation prefix] push [REMOTE [HEAD:refs/heads/NAME]]
   sandbox-git <git-subcommand> [args...]
 
 Repository selection (from the current working directory):
@@ -358,6 +890,26 @@ Subcommands:
       Any other Git subcommand is passed through to Git unchanged,
       including its exit status ('push' destinations are still guarded).
 
+Opt-in publication expectation gate (prefix options):
+  All six options are required together, exactly once each, before the
+  subcommand; unknown, partial, duplicated, malformed or conflicting
+  options fail closed before any Git call. The canonical working
+  directory must equal --expect-root before any Git invocation. The full
+  set (worktree root, HEAD, branch, upstream, resolved destination,
+  single effective push URL) is compared before the existing guards and
+  again immediately before the push executes; drift fails without
+  repair. Guarded forms are 'publish [REMOTE]' and restricted 'push'
+  (no args, REMOTE only, or REMOTE with the single refspec
+  'HEAD:refs/heads/NAME'); force, delete, tag, wildcard, multiple
+  refspecs, non-HEAD sources, other subcommands and ambiguous
+  push.default/remote.<REMOTE>.push/multiple-URL configuration are
+  rejected. --check-only reports observed values and matches as JSON
+  using local read-only Git calls only, performs no publication and runs
+  no guards; it is not an authorization or freshness result. Passing
+  these flags is not approval, and unguarded legacy invocation remains
+  possible; a residual time-of-check/time-of-use window between the
+  final comparison and exec remains.
+
 Approvals versus wrapper guards:
   This wrapper only refuses unsafe branch targets (protected/significant
   branches, cross-remote upstreams). It does not approve anything.
@@ -369,6 +921,180 @@ Approvals versus wrapper guards:
 """
 
 
+def split_wrapper_options(argv: list[str]) -> tuple[dict[str, str], bool, list[str]]:
+    """Split prefix wrapper options from the Git invocation.
+
+    Returns (options, check_only, rest). Any expectation option anywhere in
+    argv must belong to the prefix (before the subcommand); options after
+    the subcommand, unknown --expect-* flags, duplicates, --check-only
+    without the complete set, or an empty invocation all raise ValueError
+    so the caller can fail closed with zero Git calls.
+    """
+    options: dict[str, str] = {}
+    check_only = False
+    index = 0
+
+    while index < len(argv):
+        arg = argv[index]
+        name: str | None = None
+        value: str | None = None
+        if arg == "--check-only":
+            if check_only:
+                raise ValueError("duplicate option '--check-only'")
+            check_only = True
+            index += 1
+            continue
+        if arg.startswith("--expect-"):
+            if "=" in arg:
+                name, value = arg.split("=", 1)
+            elif arg in EXPECTATION_OPTIONS:
+                if index + 1 >= len(argv) or argv[index + 1].startswith("--expect-"):
+                    raise ValueError(f"option '{arg}' requires a value")
+                name, value = arg, argv[index + 1]
+                index += 1
+            else:
+                raise ValueError(f"unknown option '{arg}'")
+            if name not in EXPECTATION_OPTIONS:
+                raise ValueError(f"unknown option '{name}'")
+            if name in options:
+                raise ValueError(f"duplicate option '{name}'")
+            options[name] = value
+            index += 1
+            continue
+        break
+
+    rest = argv[index:]
+    if not rest:
+        if options or check_only:
+            raise ValueError("missing Git subcommand after wrapper options")
+        raise ValueError("missing git subcommand")
+
+    # Wrapper options must be a prefix: reject them after the subcommand,
+    # but ONLY when this invocation actually carries wrapper options —
+    # unguarded legacy calls may pass the same tokens as literal Git data
+    # (e.g. `git log --check-only`), which must forward unchanged.
+    if options or check_only:
+        subcommand = rest[0]
+        for later in rest[1:]:
+            if later.startswith("--expect-") or later == "--check-only":
+                raise ValueError(
+                    "expectation options must be a prefix before the subcommand, "
+                    f"not after '{subcommand}'"
+                )
+
+    if options or check_only:
+        missing = [opt for opt in EXPECTATION_OPTIONS if opt not in options]
+        if missing:
+            raise ValueError(
+                "partial expectation set; all six options are required together: "
+                + ", ".join(missing)
+            )
+    return options, check_only, rest
+
+
+def build_gate(options: dict[str, str], check_only: bool, rest: list[str]) -> tuple[ExpectationGate, list[str]]:
+    """Validate values and the guarded operation shape; return gate + Git argv.
+
+    Fails closed (zero Git calls) on malformed values, non-publication
+    subcommands, unsupported push forms, or conflicting expectations.
+    """
+    expect_root = options["--expect-root"]
+    expect_head = options["--expect-head"]
+    expect_branch = options["--expect-branch"]
+    expect_upstream = options["--expect-upstream"]
+    expect_destination = options["--expect-destination"]
+    expect_push_url = options["--expect-push-url"]
+
+    if not expect_root.startswith("/"):
+        raise ValueError("--expect-root must be an absolute path")
+    if not validate_full_oid(expect_head):
+        raise ValueError("--expect-head must be a full 40/64-hex-char object id")
+    if not validate_branch_name(expect_branch):
+        raise ValueError("--expect-branch must be a short branch name")
+    if expect_upstream != "none":
+        validate_remote_ref(expect_upstream, allow_none=False)
+    validate_remote_ref(expect_destination, allow_none=False)
+    if not validate_push_url(expect_push_url):
+        raise ValueError("--expect-push-url must be a non-empty URL")
+
+    subcommand, args = rest[0], rest[1:]
+    remote = "origin"
+    refspec: tuple[str, str] | None = None
+    explicit_remote = False
+
+    if subcommand == "publish":
+        if len(args) > 1:
+            raise ValueError("usage: sandbox-git [--expect-* ...] [--check-only] publish [remote]")
+        if args:
+            remote = args[0]
+            explicit_remote = True
+    elif subcommand == "push":
+        if not args:
+            remote = "origin"
+        elif len(args) == 1:
+            if args[0].startswith("-"):
+                raise ValueError(f"unsupported guarded push option '{args[0]}'")
+            remote = args[0]
+            explicit_remote = True
+        elif len(args) == 2:
+            if args[0].startswith("-"):
+                raise ValueError(f"unsupported guarded push option '{args[0]}'")
+            remote = args[0]
+            explicit_remote = True
+            parsed = parse_guarded_refspec(args[1])
+            if parsed is None:
+                raise ValueError(
+                    f"unsupported guarded push refspec '{args[1]}'; only "
+                    "'HEAD:refs/heads/NAME' is supported"
+                )
+            refspec = parsed
+        else:
+            raise ValueError("unsupported guarded push form: too many arguments")
+    else:
+        raise ValueError(
+            f"expectation options guard publication only; '{subcommand}' is not "
+            "a supported guarded operation"
+        )
+
+    if not validate_remote_name(remote):
+        raise ValueError(f"invalid remote name '{remote}'")
+
+    dest = validate_remote_ref(expect_destination, allow_none=False)
+    assert dest is not None
+    dest_remote, dest_branch = dest
+    if dest_remote != remote:
+        raise ValueError(
+            f"conflicting expectations: --expect-destination remote '{dest_remote}' "
+            f"differs from the push remote '{remote}'"
+        )
+    if subcommand == "publish" and dest_branch != expect_branch:
+        raise ValueError(
+            "conflicting expectations: publish destination branch is the current "
+            f"branch, but --expect-destination says '{dest_branch}' while "
+            f"--expect-branch says '{expect_branch}'"
+        )
+    # Note: no parse-time destination protection. The actual resolved
+    # destination is protected during the guard phase (see
+    # guard_resolved_destination), so config-driven destinations
+    # (remote.<REMOTE>.push / push.default) are checked against the real
+    # default branch of the actual push remote, not guessed here.
+
+    gate = ExpectationGate(
+        expect_root=expect_root,
+        expect_head=expect_head,
+        expect_branch=expect_branch,
+        expect_upstream=expect_upstream,
+        expect_destination=expect_destination,
+        expect_push_url=expect_push_url,
+        check_only=check_only,
+        remote=remote,
+        refspec=refspec,
+        mode=subcommand,
+        explicit_remote=explicit_remote,
+    )
+    return gate, rest
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         fail("missing git subcommand")
@@ -377,9 +1103,34 @@ def main() -> None:
         print(HELP, end="")
         return
 
+    try:
+        options, check_only, rest = split_wrapper_options(sys.argv[1:])
+    except ValueError as exc:
+        fail(f"invalid wrapper options: {exc}")
+
+    gate = None
+    if options or check_only:
+        try:
+            gate, rest = build_gate(options, check_only, rest)
+        except ValueError as exc:
+            fail(f"invalid wrapper invocation: {exc}")
+
+    if gate is not None:
+        # Root identity check BEFORE any Git invocation: the canonical
+        # current directory must equal the canonical assigned root, so a
+        # project cannot be pushed through the HOME bare repository by
+        # mistake and no Git call runs from the wrong directory.
+        cwd = Path.cwd().resolve()
+        expected_root = Path(gate.expect_root).resolve()
+        if cwd != expected_root:
+            fail(
+                f"wrong working directory '{cwd}'; this invocation is assigned to "
+                f"'{expected_root}'"
+            )
+
     git = git_base()
-    subcommand = sys.argv[1]
-    args = sys.argv[2:]
+    subcommand = rest[0]
+    args = rest[1:]
 
     if subcommand == "status":
         args = guard_home_status_args(args)
@@ -395,11 +1146,35 @@ def main() -> None:
     if subcommand == "publish":
         if len(args) > 1:
             fail("usage: sandbox-git publish [remote]")
-        publish(git, args[0] if args else "origin")
+        if gate is not None:
+            if gate.check_only:
+                gate.report_check_only(git)
+                return
+            gate.check(git, "before guards")
+            guard_resolved_destination(git, args[0] if args else "origin", gate.last_destination)
+        publish(git, args[0] if args else "origin", gate)
         return
 
     if subcommand == "push":
-        set_upstream, branch = validate_push(git, args)
+        if gate is not None:
+            if gate.check_only:
+                gate.report_check_only(git)
+                return
+            gate.check(git, "before guards")
+            # B1: protect the ACTUAL resolved destination (explicit refspec
+            # or config-resolved) against the push remote's real default
+            # branch, in the guard phase — not in check-only.
+            guard_resolved_destination(git, gate.remote, gate.last_destination)
+            set_upstream, branch = validate_push(git, args)
+            # N1: ALL network-capable guards (resolved-destination
+            # protection and validate_push, including the default_branch
+            # `remote show` fallback) ran above. The final comparison is
+            # the last identity observation; after it only the push execs.
+            observed = gate.observe(git)
+            gate.compare_or_fail(observed, "before exec")
+            branch = str(observed["branch"])
+        else:
+            set_upstream, branch = validate_push(git, args)
 
         if not args:
             if set_upstream:

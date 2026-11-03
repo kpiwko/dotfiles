@@ -1,0 +1,89 @@
+{
+  "$comment": "Fixed OpenCode workflow scenario definitions (PR-trace remediation plan, common validation baseline). These SAME definitions are used before and after each affected phase. Offline deterministic fixtures only: every scenario runs against per-run disposable workspaces with NO model call, NO network, NO install, NO Git mutation and NO push. Any live execution requires the separately approved finite smoke envelope (plan lines 62-64). This file is scenario DEFINITION, not runtime proof of plugin hooks or worker budgets.",
+  "version": 1,
+  "global_invariants": {
+    "offline_only": true,
+    "model_calls_allowed": false,
+    "network_allowed": false,
+    "installs_allowed": false,
+    "git_mutations_allowed": false,
+    "push_allowed": false,
+    "requires_approved_envelope_before_any_model_run": true,
+    "worker_agent": "agentgateway/worker",
+    "worker_protocol_package": "openai-compatible",
+    "worker_uses_responses_protocol": false,
+    "worker_limit_output_tokens": 32000,
+    "worker_steps": 40,
+    "default_arms": ["baseline", "cap8000"],
+    "extended_arms_requiring_separate_envelope": ["cap4000", "cap12000"],
+    "numeric_budget_ceilings": null,
+    "$comment_numeric_budget_ceilings": "Aggregate token/monetary ceiling, per-run and whole-envelope wall deadlines, maximum actual HTTP attempts and the safe cancellation mechanism are deliberately unset: they require separate explicit approval (plan line 62) before any model run."
+  },
+  "scenarios": [
+    {
+      "id": "small-edit",
+      "title": "Small simple edit with a known offline assertion",
+      "description": "A single deterministic text edit inside a fresh per-run disposable workspace, verified by an offline assertion on file content. No repository file is touched.",
+      "workspace": {
+        "kind": "fresh_temp_dir",
+        "created_per_run": true,
+        "path": "${RUN_DIR}"
+      },
+      "edit": "append_one_fixed_line",
+      "edit_target": "notes.txt",
+      "offline_assertion": "target file ends with the single appended fixed line and contains exactly one occurrence of it",
+      "forbidden": ["model_call", "network", "install", "git_mutation", "push"],
+      "expected_outcome": "edit applied; offline assertion passes; no side effects outside the per-run workspace"
+    },
+    {
+      "id": "failing-test-debug",
+      "title": "Reproducible failing-test debugging with a known injected cause",
+      "description": "A synthetic test fails for exactly one known injected root cause inside the disposable workspace; the debug loop must locate that cause and reach the declared passing target without changing unrelated behavior.",
+      "workspace": {
+        "kind": "fresh_temp_dir",
+        "created_per_run": true,
+        "path": "${RUN_DIR}"
+      },
+      "injected_cause_kind": "single_known_root_cause",
+      "injected_cause": "off-by-one boundary constant in a pure helper function",
+      "passing_target": "the synthetic test passes after correcting only the injected cause",
+      "forbidden": ["model_call", "network", "install", "git_mutation", "push"],
+      "expected_outcome": "failing test reproduced, root cause identified, only the injected cause corrected, passing target observed"
+    },
+    {
+      "id": "reviewer-finding-unchanged-revision",
+      "title": "Reviewer finding fixed once, then unchanged-revision handoff with no duplicate review",
+      "description": "One relevant reviewer finding is fixed once; a handoff with an UNCHANGED relevant-scope revision must not trigger a duplicate review. A dependency/environment input is then deliberately changed to prove validation invalidation fires.",
+      "workspace": {
+        "kind": "fresh_temp_dir",
+        "created_per_run": true,
+        "path": "${RUN_DIR}"
+      },
+      "finding_fixed_once": true,
+      "unchanged_revision_rule": "an unchanged relevant-scope revision (same worktree bytes, same index state, same allowlisted untracked files, same relevant dependency and environment inputs) must NOT be re-reviewed",
+      "invalidation_trigger": "change one relevant dependency/environment input so prior validation results must be treated as invalidated rather than reused",
+      "forbidden": ["model_call", "network", "install", "git_mutation", "push"],
+      "expected_outcome": "finding closed once; unchanged-revision handoff accepted without duplicate review; changed input invalidates prior validation"
+    },
+    {
+      "id": "publication-dry-run",
+      "title": "Publication dry-run: expected state succeeds, mismatches stop with no push",
+      "description": "A fully synthetic publication preflight over fixture-local repositories: the expected state succeeds, while wrong root, wrong head, wrong destination or an unauthorized operation stops before any side effect. Push is never executed.",
+      "workspace": {
+        "kind": "fresh_temp_dir",
+        "created_per_run": true,
+        "path": "${RUN_DIR}"
+      },
+      "dry_run_only": true,
+      "synthetic_targets": {
+        "remote_url_pattern": "${RUN_DIR}/fixture-origin.git",
+        "head_branch": "fixture-head",
+        "base_branch": "fixture-main"
+      },
+      "expected_state_succeeds": true,
+      "stop_paths": ["wrong_root", "wrong_head", "wrong_destination", "unauthorized_operation"],
+      "forbidden": ["model_call", "network", "install", "git_mutation", "push"],
+      "expected_outcome": "expected state passes; every stop path blocks before side effects; zero push operations performed"
+    }
+  ]
+}
