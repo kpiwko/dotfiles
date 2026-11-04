@@ -13,6 +13,9 @@
         },
         "gpt-6-luna": {
           "rates": { "input": "0.10", "output": "0.50", "cacheRead": "0.01", "cacheWrite": "0.125" }
+        },
+        "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "rates": { "input": "0", "output": "0", "cacheRead": "0", "cacheWrite": "0" }
         }
       }
     },

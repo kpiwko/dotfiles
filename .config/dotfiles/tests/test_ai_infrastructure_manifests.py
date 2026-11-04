@@ -76,7 +76,13 @@ def test_agentgateway_config_uses_expected_models_and_secret_boundary() -> None:
     ):
         assert f"name: {model}" in config, model
     assert config.count("- type: responses") == 2
-    assert config.count("- type: completions") == 2
+    completions_blocks = config.split("- name: ")[1:]
+    assert len([block for block in completions_blocks if "- type: completions" in block]) == 3
+    assert any(
+        block.startswith("enmaas-deepseek-4-1-flash")
+        and "model: rits/deepseek-ai/DeepSeek-V4.1-Flash-1017" in block
+        for block in completions_blocks
+    )
     assert "finalTransformation:" not in config
     assert "- model: enmaas-gpt-6-1-sol" in config
     assert "- model: openai-gpt-5-6-terra" in config
@@ -109,6 +115,68 @@ def test_agentgateway_catalog_overlay_and_kustomization() -> None:
         assert any(model in provider.get("models", {}) for provider in catalog["providers"].values())
     assert "catalog-overlay.json" in kustomization
     assert "agentgateway-config" in kustomization
+
+
+ILLUSIONIST_UPSTREAM_MODEL = "rits/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+
+
+def test_agentgateway_catalog_prices_only_illusionist_upstream_as_free() -> None:
+    catalog = json.loads((BASE / "catalog-overlay.json").read_text())
+
+    custom_models = catalog["providers"]["custom"]["models"]
+    assert custom_models[ILLUSIONIST_UPSTREAM_MODEL]["rates"] == {
+        "input": "0",
+        "output": "0",
+        "cacheRead": "0",
+        "cacheWrite": "0",
+    }
+    assert [name for name in custom_models if "deepseek" in name.lower()] == [
+        ILLUSIONIST_UPSTREAM_MODEL
+    ]
+    # Existing priced routes are unchanged.
+    assert custom_models["gpt-6-luna"]["rates"] == {
+        "input": "0.10",
+        "output": "0.50",
+        "cacheRead": "0.01",
+        "cacheWrite": "0.125",
+    }
+    assert catalog["providers"]["anthropic"]["models"]["rits/zai-org/glm-5-3"][
+        "rates"
+    ] == {"input": "0", "output": "0", "cacheRead": "0", "cacheWrite": "0"}
+
+
+def test_mlflow_model_catalog_prices_illusionist_alias_as_free() -> None:
+    catalog_path = BASE / "mlflow-model-catalog" / "agentgateway.json"
+    catalog = json.loads(catalog_path.read_text())
+
+    assert catalog_path.is_file()
+    assert catalog["schema_version"] == "1"
+    assert list(catalog["models"]) == ["illusionist"]
+    illusionist = catalog["models"]["illusionist"]
+    assert illusionist["mode"] == "chat"
+    assert illusionist["pricing"] == {
+        "input_per_million_tokens": 0.0,
+        "output_per_million_tokens": 0.0,
+        "cache_read_per_million_tokens": 0.0,
+        "cache_write_per_million_tokens": 0.0,
+    }
+
+
+def test_mlflow_model_catalog_is_mounted_with_agentgateway_provider_file() -> None:
+    kustomization = (BASE / "kustomization.yaml").read_text()
+    deployment = (BASE / "mlflow.yaml").read_text()
+
+    assert "name: mlflow-model-catalog" in kustomization
+    assert "mlflow-model-catalog/agentgateway.json" in kustomization
+    assert "name: MLFLOW_MODEL_CATALOG_URI" in deployment
+    assert "value: file:///etc/mlflow/model-catalog" in deployment
+    assert "mountPath: /etc/mlflow/model-catalog" in deployment
+    assert "readOnly: true" in deployment
+    assert "name: mlflow-model-catalog" in deployment
+    # Preserve the existing server, database, and storage boundary.
+    assert "--backend-store-uri" in deployment
+    assert "sqlite:////mlflow/mlflow.db" in deployment
+    assert "claimName: mlflow-pvc" in deployment
 
 
 def test_opencode_agents_reference_only_agentgateway_models() -> None:
@@ -173,6 +241,7 @@ def test_opencode_agents_reference_only_agentgateway_models() -> None:
         assert model in {
             "agentgateway/architect",
             "agentgateway/architect#high",
+            "agentgateway/illusionist",
             "agentgateway/omnipower",
             "agentgateway/reviewer",
             "agentgateway/worker",

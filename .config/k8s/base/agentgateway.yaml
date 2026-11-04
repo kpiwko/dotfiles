@@ -91,9 +91,12 @@ llm:
         baseUrl: $ENMAAS_URL
     - name: enmaas-deepseek-4-1-flash
       visibility: internal
-      provider: anthropic
+      provider:
+        custom:
+          formats:
+            - type: completions
       params:
-        model: rits/zai-org/deepseek-ai/DeepSeek-V4.1-Flash-1017
+        model: rits/deepseek-ai/DeepSeek-V4.1-Flash-1017
         apiKey: $ENMAAS_KEY
         baseUrl: $ENMAAS_URL
     - name: gemini

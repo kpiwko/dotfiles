@@ -1,7 +1,7 @@
 ---
 description: Primary cloud implementation specialist using AgentGateway for coding, tests, refactors, docs, configuration, builds, and execution of orchestrator-owned plans.
 mode: subagent
-model: agentgateway/worker
+model: agentgateway/illusionist
 steps: 40
 permissions:
   - action: shell

@@ -58,12 +58,20 @@ spec:
             # Local development may be reached from any configured origin.
             - --cors-allowed-origins
             - "*"
+          env:
+            # The repository-managed catalog prices AgentGateway alias models
+            # that the bundled MLflow catalog does not know.
+            - name: MLFLOW_MODEL_CATALOG_URI
+              value: file:///etc/mlflow/model-catalog
           ports:
             - containerPort: 5000
               name: http
           volumeMounts:
             - name: mlflow-data
               mountPath: /mlflow
+            - name: mlflow-model-catalog
+              mountPath: /etc/mlflow/model-catalog
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -97,6 +105,9 @@ spec:
         - name: mlflow-data
           persistentVolumeClaim:
             claimName: mlflow-pvc
+        - name: mlflow-model-catalog
+          configMap:
+            name: mlflow-model-catalog
 ---
 apiVersion: v1
 kind: Service

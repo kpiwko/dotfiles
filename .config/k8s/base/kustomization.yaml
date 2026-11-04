@@ -12,6 +12,9 @@ configMapGenerator:
     files:
       - agentgateway.yaml
       - catalog-overlay.json
+  - name: mlflow-model-catalog
+    files:
+      - mlflow-model-catalog/agentgateway.json
 labels:
   - pairs:
       app.kubernetes.io/managed-by: dotfiles
