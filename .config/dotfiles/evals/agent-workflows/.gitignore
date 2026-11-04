@@ -1,0 +1,41 @@
+# Git runtime/generated state is never tracked (P0.2 relocation rule):
+.venv/
+vendor/
+runs/
+logs/
+cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.*
+*credentials*
+
+# Secret key material (F5):
+*.pem
+*.key
+
+# Alternate generator output dirs (F2/F5 — operator examples like cases-fresh):
+cases-*/
+
+# Generated task-package payload (regenerate via harbor/git_pilot_package.py; P0.3):
+cases/*/environment/
+cases/*/tests/seed-state.json
+cases/*/tests/provenance.json
+cases/*/tests/test.sh
+cases/*/solution/
+cases/*/task.toml
+cases/*/instruction.md
+
+# Generated image payload (generator re-vendors from canonical sources):
+harbor/image/bin/sandbox-git
+harbor/image/bin/verifier.py
+harbor/image/bin/opencode-*
+harbor/image/git_pilot_fixture.py
+harbor/image/records/
+harbor/image/cases/
+
+# Images/binaries (~211 MB runtime binary etc.):
+*.tar
+*.tgz
+*.bin

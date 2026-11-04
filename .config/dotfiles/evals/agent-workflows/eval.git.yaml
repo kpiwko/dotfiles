@@ -1,0 +1,76 @@
+# agent-eval-harness config for the Harbor packaging of the return-main-no-cleanup
+# pilot (basic Git-task END-STATE pilot). Relocated 2026-11-03 (P0.2) from
+# git-pilot-v1/eval.harbor.yaml; renamed eval.harbor.yaml -> eval.git.yaml per
+# the approved dotfiles agent-workflows layout. The packaged case's
+# task.toml config_chain is ["eval.git.yaml"] (kept consistent by
+# harbor/git_pilot_package.py TASK_TOML).
+#
+# Purpose: the Harbor path reuses the SAME fixture recipe and the SAME pure
+# final-state verifier (git_pilot_fixture.verify_fixture) but drives Harbor's
+# NATIVE execution: self-contained task package + stock agent (opencode) +
+# in-image deterministic final-state verifier writing reward.json.
+#
+# Honest scope labels (do not remove):
+#   * judge_mode: deterministic-final-state-only — no model judge.
+#   * procedure_attempt_coverage: not_measured — this path does NOT observe
+#     which commands the agent attempted; no denied-destructive-attempt
+#     coverage, no holdout survival, no golden-history fidelity is claimed.
+#   * The Harbor stock agent does NOT automatically load the original
+#     orchestrator config; model-instruction fidelity is limited to
+#     instruction.md (see harbor/README-operator.md).
+#
+# Fields were verified against the pinned upstream source (historical source
+# environment; harness 1.57.1 commit b041d5a6db0b1181d51d95190faf8f2c0808c38d)
+# for EvalConfig.from_yaml + agent_eval/harbor/run.py:
+#   * runner.type "cli" is accepted by _parse_runner_config and maps to
+#     Harbor agent None — the operator passes --agent opencode explicitly.
+#   * execution.prompt with {{ input.prompt }} (prompt mode) is the pinned
+#     path for direct prompt transport to Harbor instruction.md.
+#   * dataset.path points at the packaged case dir (flat destination root:
+#     cases/return-main-no-cleanup-v1); dataset.workspace.files carries files
+#     inside the package — the fixture travels as a directory tree in
+#     environment/ via the package generator, so no workspace.files entry is
+#     needed here.
+#   * No hooks: block — the original before_each/after_each hooks belong to
+#     the local adapter contract and do NOT automatically apply on Harbor.
+#     The Harbor lifecycle is: environment/ uploaded at trial start (fixture
+#     present), verifier runs from the image after the agent (test.sh ->
+#     /opt/git-pilot/bin/verify.sh).
+#
+# Intentionally ABSENT (unchanged from source policy): generation,
+# optimization, LLM judge settings, inputs.tools, mlflow, reward collapsing.
+
+execution:
+  mode: case
+  prompt: '{{ input.prompt }}'
+  parallelism: 1
+  project_hooks: false
+  timeout: 900
+  max_budget_usd: 1.0
+
+runner:
+  type: cli
+
+dataset:
+  path: cases/return-main-no-cleanup-v1
+
+outputs:
+  - path: output
+    schema: >
+      Harbor path: no per-case adapter evidence directory is produced.
+      The deterministic final-state verifier writes
+      /logs/verifier/reward.json (and reward.txt, judges.json) into the
+      Harbor job dir; procedure_attempt_coverage is not_measured on this
+      path.
+    types:
+      reward.json: json
+
+traces:
+  stdout: true
+  stderr: true
+  events: true
+  metrics: true
+
+judges: []
+
+thresholds: {}

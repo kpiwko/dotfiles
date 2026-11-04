@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "recorded_by": "git-pilot-v1 bounded Harbor build unit (2026-10-26)",
+  "purpose": "Pinned, actually-provisioned Harbor 0.25.0 runtime for the git-pilot return-main-no-cleanup END-STATE pilot: persistent venv, task package, local trial image, and the non-model proofs. No entry here authorizes model calls; no agent was launched.",
+  "host_provision": {
+    "python": {
+      "interpreter": "/Users/kpiwko/devel/adlc/experiments/02-git-operations/git-pilot-v1/.venv/bin/python",
+      "version": "3.12.13 (mise)",
+      "venv_path": "git-pilot-v1/.venv (persistent experiment venv; not temp)"
+    },
+    "harness": {
+      "name": "agent-eval-harness",
+      "version": "1.57.1",
+      "pinned_commit": "b041d5a6db0b1181d51d95190faf8f2c0808c38d",
+      "install": "pip install agent-eval-harness[harbor] from the vendored source tree (no global install)"
+    },
+    "key_packages": {
+      "harbor": "0.25.0 (wheel sha256 51923ac567fc57b03279e93468b105f689628bcac2cd3d541d4e44aa5c0ec309)",
+      "litellm": "1.106.4 (respects the harness pyproject cap litellm<1.107)",
+      "kubernetes": "36.0.3",
+      "pyyaml": "6.0.3",
+      "jinja2": "3.1.6",
+      "truststore": "0.10.5"
+    },
+    "full_freeze": "harbor/runtime-lock-pypi.txt (pip freeze, sorted)",
+    "container_runtime": "podman 6.0.2 at /opt/podman/bin/podman (machine podman-machine-default, linux/arm64)"
+  },
+  "task_package": {
+    "case_id": "return-main-no-cleanup-v1",
+    "path": "git-pilot-v1/harbor/cases/return-main-no-cleanup-v1",
+    "schema_version": "1.4 (Harbor 0.25.0 TaskConfig default)",
+    "task_name": "git-pilot/return-main-no-cleanup-v1",
+    "validated_by": "harbor.models.task.task.Task (installed harbor 0.25.0) — construction succeeded",
+    "agent_user": "1001",
+    "verifier_user": "root",
+    "reward_contract": "reward.json numeric only ({reward: 0.0|1.0}); rich verdict sidecars verdict.json/judges.json/reward.txt",
+    "tests": "62 PASS (54 core + 8 trusted-startup isolation/poison tests; 2026-10-27 trusted-startup unit)",
+    "test_sh_sha256": "bae79c31bfaca8e3a88d50e95b64462a05b0fecbf55dd1c89a506525d8faba8a (trusted-startup shim)"
+  },
+  "images": {
+    "base": {
+      "reference": "registry.access.redhat.com/ubi9/python-312:latest",
+      "digest": "sha256:0de6d32041b892248ce39c2ebbddd6d4ad8884d78a88869c576f3de25ce524d3",
+      "image_id": "c02b9e1edb667ee81f3be56d097ee97d453bb08f260b9ea8bb31a192c01ad7fb",
+      "observed": "git 2.52.0, Python 3.12.15 preinstalled (dnf step removed: Red Hat CDN returned 403 without entitlements)"
+    },
+    "final": {
+      "reference": "localhost/git-pilot-harbor:1.0.0",
+      "image_id": "8a6a2d4c0a06e01ae940bd1fa4663c4f11f0d0242f481df9b753aae086f6c731",
+      "digest": "sha256:6059c19399ba1481b11d6803dc7dde34070cb75ecb0bada484b0e20f2519bca7",
+      "build_command": "podman build -f harbor/image/Containerfile -t localhost/git-pilot-harbor:1.0.0 . (context = git-pilot-v1 root)"
+    }
+  },
+  "agent_pin": {
+    "stock_harbor_agent": "opencode (harbor.agents.installed.opencode, harbor 0.25.0)",
+    "harbor_install_command": "npm i -g opencode-ai@<version> (setup-time npm install; version from --agent-version, default @latest)",
+    "version_choice": {
+      "npm_opencode-ai_2.1.4": "DOES NOT EXIST (registry.npmjs.org/opencode-ai: latest 1.19.4; no 2.1.x versions at all)",
+      "host_inspected_opencode": "2.1.4 was the Homebrew/tap distribution (anomalyco/tap/opencode-v2), not the npm stock package",
+      "decision": "pin opencode-ai@1.19.4 — the official stock npm package Harbor's agent installs; NOT the original orchestrator stack version 2.1.4 (recorded per contract, no silent change)",
+      "opencode_linux_arm64_1_19_4": {
+        "source": "https://registry.npmjs.org/opencode-linux-arm64/-/opencode-linux-arm64-1.19.4.tgz (official npm optional-dependency of opencode-ai@1.19.4; postinstall copies these exact bytes)",
+        "tarball_sha256": "019c374e3eb3af5d2c2cdf1d2d6e1f9eee0bc9f3289e02570e4310d25df0a991",
+        "binary_sha256": "eba0da50d9cc22f2dd062c32e0e7e58d7ece301aa50aabdad1e9dba4ffbf25b4",
+        "format": "ELF 64-bit ARM aarch64, dynamically linked (gnu), 211340421 bytes unpacked",
+        "baked_at": "/usr/local/bin/opencode (mode 0755, root:root) in harbor/image/bin/opencode-linux-arm64-1.19.4"
+      }
+    },
+    "permission_bypass_disclosure": "Harbor 0.25.0's stock OpenCode agent launch command includes --dangerously-skip-permissions (harbor/agents/installed/opencode.py run()); it cannot be disabled through stock task config. The baked opencode 1.19.4 binary accepts the flag (CLI options --auto/--yolo/--dangerously-skip-permissions, hidden). Container-level containment is therefore the enforced boundary: agent UID 1001 cannot write the trusted verifier/records; no host secrets are forwarded into trial containers on this pilot.",
+    "compat_check_method": "npm registry metadata (registry.npmjs.org) + tarball extraction + postinstall.mjs source read + binary strings for CLI flags. No model, auth, or LLM calls; no opencode session started."
+  },
+  "image_permission_proofs": {
+    "agent_user": "uid=1001(default) gid=0(root)",
+    "trusted_stack": "/opt/git-pilot root:root, dirs 0755, files 0644, binaries 0755 (sandbox-git, verify.sh 0755; verifier.py 0644; records 0644)",
+    "agent_write_probe": "/opt/git-pilot/bin and /opt/git-pilot/records NOT writable as UID 1001 (Permission denied, observed); /workspace writable as 1001 (observed)",
+    "verifier_root_write_probe": "/logs/verifier writable as root (observed); pyyaml 6.0.3 importable",
+    "binary_version_proof": "opencode --version -> 1.19.4 (observed in container); /opt/git-pilot/bin/sandbox-git --help -> usage output (observed)"
+  },
+  "non_model_oracle_proof": {
+    "method": "fresh disposable container (podman create/cp/start, name gitpilot-proof, removed after): uploaded the task package environment/ to /workspace and tests/ to /tests-uploaded exactly as Harbor does, then ran the in-image verifier via test.sh",
+    "pristine_state": "verifier exit 1, reward.json {reward: 0.0} with 3 expected final-state failures (HEAD on feature/keep-history; main not fast-forwarded; old main not ancestor)",
+    "after_wrapper_ff": "via /opt/git-pilot/bin/sandbox-git (agent UID 1001): checkout main + merge --ff-only origin/main -> verifier exit 0, reward.json {reward: 1.0}, failures []",
+    "nature": "explicit deterministic oracle, not agent-eval; no model, no Harbor run, no LLM/auth/MLflow requests",
+    "note": "the full native Harbor pipeline oracle remains the next assignment"
+  },
+  "native_harbor_oracle_run": {
+    "recorded_by": "git-pilot-v1 bounded native Harbor ORACLE smoke unit (2026-10-27)",
+    "purpose": "Prove the NATIVE Harbor pipeline end-to-end with NO model: stock Harbor OracleAgent executing the task's own trusted solution, the in-container deterministic verifier, and the agent-eval-harness result mapping/report — actual framework execution, not a custom simulation.",
+    "scope_labels": {
+      "judge_mode": "deterministic-only (framework-accepted; end-state-only meaning retained in task description)",
+      "procedure_attempt_coverage": "not_measured",
+      "quality_claim": "deterministic ORACLE only — NOT an OpenCode/LLM quality claim"
+    },
+    "three_edits": {
+      "image_pin": "git_pilot_package.py DEFAULT_IMAGE localhost/git-pilot-harbor:latest -> localhost/git-pilot-harbor:1.0.0 (task.toml [environment] docker_image now the exact built tag; digest sha256:6059c19399ba1481b11d6803dc7dde34070cb75ecb0bada484b0e20f2519bca7, image NOT rebuilt)",
+      "judge_mode": "task.toml metadata.judge_mode deterministic-final-state-only -> deterministic-only (agent-eval-harness _validate_task_package_reuse accepts only None|full|deterministic-only); end-state-only + not_measured labels retained in [task].description and procedure_attempt_coverage",
+      "solution_asset": "git_pilot_package.py SOLVE_SH -> solution/solve.sh package asset: wrapper-only Git (fixed /opt/git-pilot/bin/sandbox-git), fixed repo /workspace/fixture/repo via git -C (no directory change), exactly 3 ops one per line (fetch origin; switch main; merge --ff-only origin/main), isolated mock HOME + neutralized Git env, no raw git / no cleanup / no expected-state anchors; sha256 6680a9f7270a09ec230334746c920c77881bfe9d9b3a8bf706aa5d0c684b8a4d; recorded in tests/provenance.json solution record"
+    },
+    "concrete_failure_fixed": {
+      "symptom": "first oracle run (oracle-20261027, mean_reward 0.0): verifier UNSCORABLE 'after-snapshot refused: fixture setup git step failed (rev-parse HEAD): fatal: detected dubious ownership in repository at /workspace/fixture/repo' — the oracle itself succeeded (oracle.txt: Switched to branch 'main', Fast-forward 9aa0c7b..408309b)",
+      "cause": "Harbor's environment upload leaves the fixture owned by the agent UID 1001; the root verifier's read-only git snapshot refuses foreign-owned repositories (git dubious-ownership protection)",
+      "fix": "package-level only (no image edit): tests/test.sh (the verifier shim Harbor uploads fresh each trial) runs 'chown -R 0:0 $FIXTURE_ROOT' before invoking the in-image verifier; ownership is not part of the measured contract (refs/object ids/digests/bytes are), verifier-user root boundary unchanged; test.sh sha256 0d1a4b4aaa0189e6c0ecb286a4a483b25953c0389b604329956466b1fdf71564 (superseded by trusted_startup_fix below)",
+      "durable_log": "harbor/runs/oracle-20261027-jobs/2026-10-27__08-25-31/return-main-no-cleanup-v1__N7uuceA/verifier/verdict.json"
+    },
+    "trusted_startup_fix": {
+      "recorded_by": "git-pilot-v1 package-level trusted-verifier-startup unit (2026-10-27, review blocker fix)",
+      "blocker": "the image ENV is HOME=/workspace (agent-writable) and the verifier's wrapper subprocesses use fixture/mock-home as HOME, so an agent-planted usercustomize/sitecustomize module under either .local/lib/pythonX.Y/site-packages tree could execute inside a trusted Python whose user site is enabled (demonstrated in-image: /usr/bin/python3.12 as root with PYTHONUSERBASE=/workspace/<agent tree> imported the planted usercustomize and wrote marker files)",
+      "fix": "package-level only (image, vendored wrapper/lib and verifier bytes unchanged): tests/test.sh now (1) resets the environment BEFORE any Python — PATH pinned to the trusted fixed image paths with /opt/app-root/bin FIRST (the UBI scl Python 3.12 carrying the image's PyYAML; never /usr/bin/python3.9), PYTHONPATH/PYTHONHOME/PYTHONUSERBASE unset, PYTHONNOUSERSITE=1, HOME=/root; (2) runs an isolated '/opt/app-root/bin/python3 -I' stdlib-only prelude that lstat-validates the fixture root and its repo/origin.git/mock-home components (links and non-directories refused, never followed), refuses anything not strictly inside /workspace, then replaces ONLY fixture/mock-home with a fresh empty real 0755 dir via rename+mkdir+trusted shutil.rmtree on the validated path (no shell rm -rf, no host paths); (3) on any prelude failure writes flat numeric reward 0 + reward.txt 0.0 + UNSCORABLE verdict.json sidecar and exits nonzero — the real verifier never starts; (4) only then runs the existing chown -R 0:0 ownership normalization and bash /opt/git-pilot/bin/verify.sh",
+      "prelude_imports": "json, os, shutil, stat, sys, pathlib only; no agent code, no subprocess, no network",
+      "test_sh_sha256_old": "0d1a4b4aaa0189e6c0ecb286a4a483b25953c0389b604329956466b1fdf71564",
+      "test_sh_sha256_new": "bae79c31bfaca8e3a88d50e95b64462a05b0fecbf55dd1c89a506525d8faba8a",
+      "poison_probe_in_container": "fresh disposable container (podman create/cp/start, name gitpilot-poison-probe, removed after): planted usercustomize.py + sitecustomize.py sentinels under BOTH /workspace/.local/lib/python3.12/site-packages and /workspace/fixture/mock-home/.local/lib/python3.12/site-packages (agent-uid-owned), invoked the packaged tests/test.sh as root WITH hostile PYTHONUSERBASE=/workspace/.local and PYTHONPATH carryover — pristine state: prelude ok, mock-home reset to fresh empty root-owned 0755 dir, NO poison marker files, reward 0.0 with the 3 expected final-state failures; after the wrapper oracle run (fetch/switch/merge --ff-only as root with mock HOME) plus re-planted poison: reward 1.0, failures [], TEST_SH_EXIT=0, NO poison markers",
+      "old_package_preserved": "$TMPDIR/opencode/git-pilot-pre-trusted-startup-backup/return-main-no-cleanup-v1 (moved, not rm -rf)",
+      "image_unchanged": "localhost/git-pilot-harbor:1.0.0 NOT rebuilt (package-only fix; the shim travels in tests/, which Harbor uploads fresh per trial)"
+    },
+    "successful_run": {
+      "run_id": "oracle-20261027c",
+      "superseded_runs": "oracle-20261027 (failure receipt: dubious-ownership, preserved) and oracle-20261027b (pre-trusted-startup success receipt, preserved)",
+      "trial_name": "return-main-no-cleanup-v1__7NMTr9x",
+      "job_dir": "git-pilot-v1/harbor/runs/oracle-20261027c-jobs/2026-10-27__11-36-39",
+      "result_dir": "git-pilot-v1/harbor/runs/oracle-20261027c",
+      "trial_dir": "harbor/runs/oracle-20261027c-jobs/2026-10-27__11-36-39/return-main-no-cleanup-v1__7NMTr9x",
+      "agent": "oracle (stock harbor.agents.oracle.OracleAgent, harbor 0.25.0; model_name 'oracle' metadata only)",
+      "environment": "agent_eval.harbor.podman:PodmanEnvironment (podman 6.0.2, --network none, image localhost/git-pilot-harbor:1.0.0)",
+      "reward": 1.0,
+      "mean_reward": 1.0,
+      "trials": "1 completed, 0 exceptions, 0 infra errors, 0 trial errors, 0 unjudged",
+      "runtime": "8s (2026-10-27T11:36:39Z -> 2026-10-27T11:36:47Z)",
+      "in_container_shim_proof": "trial verifier/test-stdout.txt begins with the prelude receipt {\"prelude\": \"ok\", \"mock_home\": \"/workspace/fixture/mock-home\"} followed by the reward-1.0 verdict — the new trusted-startup shim ran inside the real Harbor trial container",
+      "artifacts": [
+        "trial verifier/reward.json {\"reward\": 1.0} + reward.txt 1.0 (parsed by the actual harbor.verifier.verifier.Verifier numeric contract)",
+        "trial verifier/verdict.json + judges.json (reason: expected final state reached; failures [])",
+        "trial verifier/test-stdout.txt (prelude ok receipt + final verdict)",
+        "trial agent/oracle.txt (stdout transcript of the wrapper solution run: Switched to branch 'main', Fast-forward 9aa0c7b..408309b)",
+        "result run_result.json (agent harbor:oracle, model oracle, num_cases 1, mean_reward 1.0, cost_usd null, token_usage null — written by agent_eval.providers.reconcile.write_run_result)",
+        "result summary.yaml (run_id oracle-20261027c, run_eval.harbor.run build_summary mapping)",
+        "result report.html (agent_eval/harbor/run.py _write_report via skills/eval-run/scripts/report.py)"
+      ]
+    },
+    "exact_commands": {
+      "regenerate_canonical_case": "git-pilot-v1/.venv/bin/python git-pilot-v1/harbor/git_pilot_package.py --out git-pilot-v1/harbor/cases  (all fixture Git through sandbox-git with mock HOME; old packages preserved: $TMPDIR/opencode/git-pilot-pre-oracle-backup/ and $TMPDIR/opencode/git-pilot-pre-trusted-startup-backup/; NOTE a --regenerate framework attempt failed on the dataset path and deleted the case dir — the package was then regenerated with the generator directly, which is the recorded safe path)",
+      "focused_tests": "git-pilot-v1/.venv/bin/python -m unittest discover -s experiments/02-git-operations/tests -p test_git_pilot_harbor.py  -> Ran 62 tests, OK (54 original + 8 new trusted-startup isolation/poison tests)",
+      "framework_run": "cwd git-pilot-v1: env -i HOME=/Users/kpiwko PATH=/opt/podman/bin:/usr/bin:/bin:/usr/sbin:/sbin TMPDIR=$TMPDIR/opencode PYTHONPATH=<vendored harness>:<experiments dir> PODMAN_BINARY=/opt/podman/bin/podman .venv/bin/python -m agent_eval.harbor.run --config eval.harbor.yaml --agent oracle --model oracle --env podman --tasks-dir harbor/cases --jobs-dir harbor/runs/oracle-20261027c-jobs --output harbor/runs/oracle-20261027c --n-concurrent 1 --no-llm-judges  (config path MUST match the package's config_chain entry 'eval.harbor.yaml': relative from the pilot root, not 'git-pilot-v1/eval.harbor.yaml' from the EXP root, or _validate_task_package_reuse rejects the pre-generated package)",
+      "no_llm_judges_note": "--no-llm-judges is REQUIRED with judge_mode=deterministic-only for pre-generated package reuse (agent-eval-harness _validate_task_package_reuse rejects mode mismatch); it skips no judges that exist (judges: []) and never regenerates (--regenerate not passed)",
+      "exit": "0 (REGRESSIONS: 0; INFRA-ERRORS: 0; TRIAL-ERRORS: 0; UNJUDGED: 0)"
+    },
+    "exact_versions": {
+      "python": "3.12.13 (git-pilot-v1/.venv, mise)",
+      "harbor": "0.25.0 (.venv/bin/harbor --version)",
+      "agent_eval_harness": "1.57.1 vendored commit b041d5a6db0b1181d51d95190faf8f2c0808c38d (on PYTHONPATH, shadows the identical site-packages install)",
+      "podman": "6.0.2 at /opt/podman/bin/podman (machine podman-machine-default, linux/arm64)",
+      "image": "localhost/git-pilot-harbor:1.0.0 (digest sha256:6059c19399ba1481b11d6803dc7dde34070cb75ecb0bada484b0e20f2519bca7; NOT rebuilt this unit)"
+    },
+    "no_model_proof": {
+      "agent_class": "harbor.agents.oracle.OracleAgent (read in full, 159 lines): setup() is a no-op, run() only uploads solution/ + executes solve.sh + captures oracle.txt; no model_name use, no auth, no network client",
+      "invocation": "--agent oracle --model oracle ('oracle' is metadata only; OracleAgent accepts and ignores model_name); no provider SDK, no gateway, no API key",
+      "environment_allowlist": "framework invoked via env -i with only HOME/PATH/TMPDIR/PYTHONPATH/PODMAN_BINARY; no ANTHROPIC_*/OPENAI_*/OPENROUTER_*/MLflow vars existed in the child or could be forwarded (harness podman _FORWARD_ENV forwards only from its own process env; none set); no .env in the cwd chain (checked)",
+      "credentials_class": "harbor lists oracle in _NO_CREDENTIAL_AGENTS (cli/hosted_jobs.py)",
+      "run_result": "cost_usd null, token_usage null, message_ids [] — no model spend possible",
+      "git_host_operations": "none: no staging, no commit, no push, no PR, no MLflow requests; rm of the old generated case dir was permission-denied and replaced by mv into the approved temp root"
+    },
+    "pristine_zero_evidence": "runtime-lock.json non_model_oracle_proof.pristine_state (earlier container receipt: verifier exit 1, reward 0.0, 3 expected final-state failures) remains valid; the 2026-10-27 trusted-startup poison probe re-observed the same pristine receipt (reward 0.0, same 3 failures) inside a disposable container with planted usercustomize/sitecustomize sentinels",
+    "readiness_remaining": [
+      "future agent-model runs (--agent opencode) remain NOT approved and NOT run; the baked opencode binary and --dangerously-skip-permissions disclosure stand as recorded",
+      "full_regression_20261027_docs_unit (OBSERVED, replaces the earlier 'not run this unit' note): git-pilot-v1/.venv/bin/python -m unittest discover -s experiments/02-git-operations/tests -p 'test_git_pilot_*.py' -> Ran 316 tests in 182.522s, OK (config 39 + fixture 82 + judges 133 + harbor 62); -p test_prepare_git_eval.py -> Ran 64 tests, OK; total 380 green (earlier receipts for context: 54 then 62 harbor-focused, 308+64=372 in the prior unit — counts grew with the trusted-startup tests)"
+    ]
+  },
+  "readiness_remaining": [
+    "native Harbor run (harbor run -p harbor/cases/return-main-no-cleanup-v1 --agent opencode ...) with the approved model gateway: NOT done in this unit by contract",
+    "agent-version flag: pass --agent-version 1.19.4 (or rely on the baked binary) so the stock npm install matches the image; the README-operator documents this",
+    "task.toml docker_image is pinned to localhost/git-pilot-harbor:1.0.0 (stale ':latest' note from the previous unit is resolved: git_pilot_package.py DEFAULT_IMAGE and the generated task.toml reference the digest-bearing tag)",
+    "no --auto anywhere; --dangerously-skip-permissions is upstream stock Harbor behavior (disclosed above, not added by us)"
+  ]
+}
