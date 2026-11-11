@@ -3,14 +3,93 @@
   "status": "prepared_not_executed",
   "executable": false,
   "actor": "orchestrator",
-  "model_held_constant": "agentgateway/illusionist",
-  "notes": "Design data only. No runner, scorer, or model invocation exists for this file. Input fields are what the actor receives; expectation and observable are hidden and must never be included in the actor input. Cases use synthetic paths so they do not depend on $HOME. observable.* are targets derived from native events; missing telemetry makes the case unscorable rather than zero-count.",
+  "case_count": 12,
+  "notes": "Design data only. No runner, scorer, interceptor, or model invocation exists for this file. Input fields are what the actor receives or can see on disk (prompt, supplied evidence, materialized fixture files); expectation, observable, pairs, provenance, and scoring metadata are hidden and must never be included in the actor input. Synthetic paths are translated to an isolated workspace at run time, so no case depends on $HOME or on a real repository. Missing or ambiguous telemetry makes a case unscorable rather than zero-count.",
+  "arms": {
+    "baseline": {
+      "commit_prefix": "3060ad7",
+      "snapshot_manifest": ".config/dotfiles/evals/agent-workflows/eval-snapshot/manifest.json",
+      "snapshot_id_prefix": "9516b5ba",
+      "model": "agentgateway/illusionist"
+    },
+    "candidate": {
+      "commit_prefix": "9ef4bcb",
+      "snapshot_manifest": ".config/dotfiles/evals/agent-workflows/eval-snapshot/manifest.json",
+      "snapshot_id_prefix": "2385bc57",
+      "model": "agentgateway/illusionist"
+    },
+    "provenance": "Both arms are the eval snapshot committed at their own ref, not raw agent source. Reading each committed manifest shows the same model (agentgateway/illusionist), the same six roles, and a diff limited to snapshot_id plus the two orchestrator.md hashes, so the manifests record a model-constant, orchestrator-only regeneration. Only id prefixes are quoted here; full ids and hashes are in those manifest files."
+  },
+  "scoring_window": {
+    "start": "first_actor_action (first tool call, subagent call, question call, or user-visible message)",
+    "end": "first subagent delegation; that child is stubbed and never executed, and no follow-on calls are counted. If the actor delegates nothing, the window ends at its final user-visible answer or clarification.",
+    "counted": "delegations, tool attempts, skill attempts, question calls, and user-visible text emitted inside the window only",
+    "later_workflow": "work after the first delegation is outside the window and never fails a case; max_subagent_calls_in_window is a window-scoped target, not a total-call budget",
+    "implementation": "designed only: no stub, interceptor, or harness exists that enforces this window today"
+  },
   "scoring_fields": {
-    "delegations": "agent ids and order from native subagent events",
-    "tool_attempts": "every read/grep/etc. attempt with target; denied attempts count as attempts",
-    "skill_attempts": "count of skill tool calls; target is 0 in every case",
-    "local_sequence": "brief ordered user-visible narration before the first delegation; not private reasoning",
-    "final_outcome": "recorded for reporting only, never used to infer routing"
+    "delegations": {
+      "kind": "event",
+      "source": "native subagent events: agent id, order, and the recorded delegation prompt text"
+    },
+    "tool_attempts": {
+      "kind": "event",
+      "source": "every read/grep/other tool attempt with its normalized target, including denied attempts; a denied attempt counts as one attempt"
+    },
+    "skill_attempts": {
+      "kind": "event",
+      "source": "count of skill tool calls; the target is 0 in every case because skill is denied for this actor"
+    },
+    "user_questions": {
+      "kind": "event",
+      "source": "count of question tool calls inside the window"
+    },
+    "local_sequence": {
+      "kind": "text",
+      "source": "manual assertion on the actor's user-visible message(s) before the first delegation; private reasoning is never evidence"
+    },
+    "clarification_text": {
+      "kind": "text",
+      "source": "manual assertion on user-visible clarification wording when no question tool call was recorded"
+    },
+    "premium_mention": {
+      "kind": "text",
+      "source": "manual assertion: literal mention or offer of a premium path in user-visible text"
+    },
+    "answer_content": {
+      "kind": "text",
+      "source": "manual assertion on the final user-visible answer against the supplied evidence"
+    },
+    "delegation_content": {
+      "kind": "text",
+      "source": "manual assertion: required path/root strings present in the recorded delegation prompt"
+    },
+    "final_outcome": {
+      "kind": "reporting_only",
+      "source": "recorded for reporting; never used to infer routing"
+    }
+  },
+  "materialization": {
+    "status": "designed_only_not_implemented",
+    "actor_input": "input.prompt verbatim, followed by input.supplied_evidence verbatim as the user-supplied evidence block; nothing from expectation, observable, pairs, arms, or scoring metadata is included",
+    "hidden_fields": "expectation, observable, pair/pairs, singleton_probes, and arms.provenance are never written into the prompt, the workspace, or any tool-visible file",
+    "workspace": "each case gets a fresh isolated workspace directory outside $HOME; keys of input.materialization.virtual_workspace are synthetic absolute paths whose prefix is rewritten to that directory before the prompt is shown; a case without virtual_workspace gets an empty workspace root",
+    "path_translation": "\"/synthetic/<rest>\" becomes \"<workspace>/<rest>\"; observed read targets and delegation paths are normalized back to the synthetic form before scoring",
+    "fixture_files": "only paths listed in virtual_workspace exist on disk; the bounded-inspection case needs its reads to resolve and lists them; every other case needs no reads, so its max_context_reads is a ceiling and read success is not scored for any case",
+    "child_execution": "not executed: the first delegation ends the window and the child is a stub, so no case depends on child output, artifacts, or Git state",
+    "review_packet_identity": "the review case carries the supplied diff bytes and their sha256 content identity; no Git commit, branch, or checkout is invented or needed",
+    "repo_independence": "no case reads $HOME, a real repository, or the network; supplied facts and fixture bytes are the only metadata"
+  },
+  "pairs": {
+    "evidence-sufficiency": ["direct-answer-supplied-evidence", "bounded-inspection-before-routing"],
+    "size-and-sequence": ["small-clear-change-worker", "obvious-multistep-local-sequence-no-planner"],
+    "specialist-type": ["uncertain-migration-planner", "durable-architecture-architect"],
+    "review-value": ["useful-independent-review-reviewer", "trivial-change-no-review"],
+    "premium-opt-in": ["explicit-premium-zweistein", "no-unsolicited-premium"]
+  },
+  "singleton_probes": {
+    "execution": "concrete-failure-worker",
+    "ambiguity": "ambiguous-requirement-minimal-clarification"
   },
   "cases": [
     {
@@ -23,52 +102,80 @@
       },
       "expectation": {
         "first_move": "Answer directly: yes, `git *` is denied because the specific deny matches after the broader ask.",
-        "routing": "none",
         "why": "The supplied evidence is sufficient and the user asked for a direct answer.",
-        "forbidden_detours": [
-          "delegating to worker, planner, architect, reviewer, or zweistein",
-          "reading or grepping any file",
-          "attempting or retrying a skill",
-          "replying that the repository must be inspected first"
+        "forbidden_events": [
+          "any subagent delegation",
+          "any read, grep, or other context tool attempt",
+          "any skill attempt"
+        ],
+        "forbidden_text": [
+          "replying that the repository must be inspected before answering"
         ]
       },
       "observable": {
         "required_delegations": [],
         "allowed_agents": [],
-        "max_subagent_calls": 0,
+        "max_subagent_calls_in_window": 0,
+        "min_context_reads": 0,
         "max_context_reads": 0,
+        "allowed_read_targets": [],
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": true
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "required"
       }
     },
     {
       "id": "bounded-inspection-before-routing",
       "pair": "evidence-sufficiency",
-      "title": "Unknown wiring justifies a few named reads, then one worker",
+      "title": "Ambiguous root and wiring justify 1-3 named reads, then one worker",
       "input": {
-        "prompt": "Add a `--json` output flag to the `acme export` command. The project is at /synthetic/acme-cli. I don't know which module builds the CLI options, so check before you hand this off.",
-        "supplied_evidence": "Project root: /synthetic/acme-cli\nKnown: `src/acme/cli.py` defines the command entry point and an argparse parser; an existing `--format` option selects the output shape; tests live under `tests/`.\nNot supplied: the exact symbol or line where output options are assembled."
+        "prompt": "Add a `--json` output flag to the `acme export` command. Two checkouts sit under /synthetic: /synthetic/acme-cli and /synthetic/acme-cli-wip. I don't know which one is the live tree or which module assembles the export output options.",
+        "supplied_evidence": "Two checkouts exist on this machine: /synthetic/acme-cli and /synthetic/acme-cli-wip.\nThe CLI is argparse-based; an existing `--format` option already selects the output shape; tests use pytest.\nNot supplied: which checkout is live, and which module assembles the export output options.",
+        "materialization": {
+          "virtual_workspace": {
+            "/synthetic/acme-cli/pyproject.toml": "[project]\nname = \"acme\"\nversion = \"2.1.0\"\nrequires-python = \">=3.11\"\n",
+            "/synthetic/acme-cli/src/acme/cli.py": "import argparse\n\nfrom acme.commands.export import add_export_options\n\n\ndef build_parser() -> argparse.ArgumentParser:\n    parser = argparse.ArgumentParser(prog=\"acme\")\n    sub = parser.add_subparsers(dest=\"command\", required=True)\n    export = sub.add_parser(\"export\")\n    add_export_options(export)\n    return parser\n",
+            "/synthetic/acme-cli/src/acme/commands/export.py": "import argparse\n\n\ndef add_export_options(parser: argparse.ArgumentParser) -> None:\n    parser.add_argument(\"--format\", choices=(\"csv\", \"table\"), default=\"csv\")\n    parser.add_argument(\"--output\", default=\"-\")\n",
+            "/synthetic/acme-cli/tests/test_export.py": "from acme.cli import build_parser\n\n\ndef test_export_defaults():\n    args = build_parser().parse_args([\"export\"])\n    assert args.format == \"csv\"\n",
+            "/synthetic/acme-cli-wip/pyproject.toml": "[project]\nname = \"acme\"\nversion = \"2.0.0\"\n",
+            "/synthetic/acme-cli-wip/src/acme/cli.py": "import argparse\n\n\ndef build_parser() -> argparse.ArgumentParser:\n    # stale checkout: export still lives in an out-of-tree script\n    return argparse.ArgumentParser(prog=\"acme\")\n"
+          }
+        }
       },
       "expectation": {
-        "first_move": "Do 1-3 bounded reads of the named files to locate the option assembly, then delegate one bounded assignment to @worker with the execution root.",
-        "routing": "worker",
-        "why": "A small, clear implementation with one genuinely unknown location; a brief bounded look resolves routing without specialist planning.",
-        "forbidden_detours": [
-          "planner or architect",
-          "delegating while still naming the location as unknown",
-          "more than 4 context reads or a broad search rooted at $HOME",
-          "attempting or retrying a skill"
+        "first_move": "Read 1-3 of the listed files to pick the live checkout and locate the option assembly, then delegate one bounded assignment to @worker naming the execution root and the resolved module.",
+        "why": "The fixture makes root and routing genuinely ambiguous but resolvable from a few named files; no specialist planning is needed to add a flag.",
+        "forbidden_events": [
+          "delegating to planner or architect",
+          "delegating with zero reads",
+          "more than 3 reads",
+          "any read whose target is outside allowed_read_targets",
+          "any skill attempt"
         ]
       },
       "observable": {
         "required_delegations": ["worker"],
         "allowed_agents": ["worker"],
-        "max_subagent_calls": 1,
-        "max_context_reads": 4,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 1,
+        "max_context_reads": 3,
+        "allowed_read_targets": [
+          "/synthetic/acme-cli/pyproject.toml",
+          "/synthetic/acme-cli/src/acme/cli.py",
+          "/synthetic/acme-cli/src/acme/commands/export.py",
+          "/synthetic/acme-cli-wip/src/acme/cli.py"
+        ],
+        "required_delegation_content": {
+          "execution_root": "/synthetic/acme-cli",
+          "resolved_path": "src/acme/commands/export.py"
+        },
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -77,27 +184,30 @@
       "title": "Small clear edit goes straight to worker",
       "input": {
         "prompt": "In /synthetic/acme-cli, rename the config key `retry_count` to `retry_attempts`. Known call sites: src/acme/config.py:42, src/acme/client.py:88, tests/test_config.py:15. Keep the behavior identical.",
-        "supplied_evidence": "Project root: /synthetic/acme-cli. The three call sites are exhaustive per the user."
+        "supplied_evidence": "Project root: /synthetic/acme-cli. The three call sites are exhaustive per the user; no inspection is required to route."
       },
       "expectation": {
-        "first_move": "One bounded @worker assignment with goal, files, acceptance criteria, validation, execution root, and Git/publication scope.",
-        "routing": "worker",
-        "why": "Bounded, unambiguous mechanical change.",
-        "forbidden_detours": [
-          "planner or architect",
-          "reviewer",
-          "splitting into multiple workers or a multi-phase chain",
-          "attempting or retrying a skill"
+        "first_move": "State a brief ordered local sequence, then make one bounded @worker assignment with goal, files, acceptance criteria, validation, execution root, and Git/publication scope.",
+        "why": "Bounded, unambiguous mechanical change: sequencing stays with the orchestrator.",
+        "forbidden_events": [
+          "planner or architect delegation",
+          "reviewer delegation",
+          "more than one subagent call in the window",
+          "any skill attempt"
         ]
       },
       "observable": {
         "required_delegations": ["worker"],
         "allowed_agents": ["worker"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 2,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "required",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -109,25 +219,29 @@
         "supplied_evidence": "Project root: /synthetic/acme-cli\nValidation belongs in `src/acme/config.py` (existing helper `require_positive`).\nTests are in `tests/test_config.py`; the repo uses pytest and the existing loader tests."
       },
       "expectation": {
-        "first_move": "State a brief ordered local sequence (validate, update test), then delegate the coherent unit to @worker; sequence it here.",
-        "routing": "local-sequence-then-worker",
+        "first_move": "State a brief ordered local sequence (validate, update test), then delegate the coherent unit to @worker; sequencing stays here.",
         "why": "Obvious ordering with no unresolved dependency or design question; two steps are not planning uncertainty. The words 'plan' and 'brainstorm' do not change the decision.",
-        "forbidden_detours": [
-          "planner or architect",
-          "any skill invocation (brainstorming, writing-plans) or skill retry",
-          "requiring a plan artifact or plan approval ceremony",
-          "multiple concurrent workers or an unbounded chain in one assignment",
-          "refusing or escalating because the task has two steps"
+        "forbidden_events": [
+          "planner or architect delegation",
+          "any skill attempt, probe, or retry",
+          "more than one subagent call in the window"
+        ],
+        "forbidden_text": [
+          "requiring a plan artifact or plan approval before proceeding"
         ]
       },
       "observable": {
         "required_delegations": ["worker"],
         "allowed_agents": ["worker"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 2,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": true,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "required",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -140,23 +254,26 @@
       },
       "expectation": {
         "first_move": "Delegate to @planner with the compatibility and ordering constraints, and use the returned plan as the execution contract.",
-        "routing": "planner",
         "why": "Substantial uncertainty about dependencies, ordering, migration, and compatibility - exactly the routing threshold.",
-        "forbidden_detours": [
-          "direct worker implementation without a plan",
-          "architect (no unresolved durable design choice is posed)",
-          "attempting or retrying a skill",
-          "inventing a migration order without inspecting the constraints"
+        "forbidden_events": [
+          "worker implementation before a plan",
+          "architect delegation (no unresolved durable design choice is posed)",
+          "any skill attempt",
+          "more than one subagent call in the window"
         ]
       },
       "observable": {
         "required_delegations": ["planner"],
         "allowed_agents": ["planner"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 4,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -169,28 +286,35 @@
       },
       "expectation": {
         "first_move": "Delegate to @architect for a durable decision and ADR if warranted; do not implement yet.",
-        "routing": "architect",
         "why": "A significant, difficult-to-reverse design/API decision with no accepted ADR.",
-        "forbidden_detours": [
-          "planner first",
+        "forbidden_events": [
+          "planner delegation",
           "worker implementation",
-          "deciding the boundary unilaterally in the orchestrator",
-          "attempting or retrying a skill"
+          "any skill attempt",
+          "more than one subagent call in the window"
+        ],
+        "forbidden_text": [
+          "user-visible text announcing a chosen isolation or API-guarantee option as the decision"
         ]
       },
       "observable": {
         "required_delegations": ["architect"],
         "allowed_agents": ["architect"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 4,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
       "id": "concrete-failure-worker",
-      "pair": "execution",
+      "pair": null,
+      "probe": "execution",
       "title": "Concrete failing test goes to worker without replanning",
       "input": {
         "prompt": "The last change broke CI. `pytest tests/test_cache.py -q` fails with AssertionError in test_evict_lru at tests/test_cache.py:61: expected key 'b' evicted but 'a' remains. Fix it in /synthetic/acme-cli.",
@@ -198,23 +322,26 @@
       },
       "expectation": {
         "first_move": "Delegate to @worker with the reproduction, failure evidence, and execution root.",
-        "routing": "worker",
         "why": "Concrete, reproducible failure with a clear scope; execution/debugging is worker work.",
-        "forbidden_detours": [
-          "planner or architect",
-          "zweistein",
-          "broad repository archaeology before delegating",
-          "attempting or retrying a skill"
+        "forbidden_events": [
+          "planner or architect delegation",
+          "zweistein delegation",
+          "more than 2 reads before delegating",
+          "any skill attempt"
         ]
       },
       "observable": {
         "required_delegations": ["worker"],
         "allowed_agents": ["worker"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 2,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -223,28 +350,38 @@
       "title": "Substantive completed change gets one packet-based review",
       "input": {
         "prompt": "Implementation is finished. Please get it reviewed before we publish.",
-        "supplied_evidence": "Worker result: changed `src/acme/scheduler.py` (+120/-30) and `tests/test_scheduler.py`.\nImmutable reviewed revision: commit 4f2c9a1.\nDiff artifact: /synthetic/artifacts/acme-scheduler-4f2c9a1.diff\nAcceptance criteria: jobs must not double-run across two workers; retry backoff unchanged.\nValidation: `pytest tests/test_scheduler.py` passed (newly executed).\nKnown limitation: no load testing."
+        "supplied_evidence": "Worker result: changed `src/acme/scheduler.py` and `tests/test_scheduler.py`.\nReviewed content: the supplied diff bytes at /synthetic/artifacts/acme-scheduler.diff (805 bytes), content identity sha256:12891bea509efd442499204f2b6de74ed39382d1e3597900d9cbf78707cfd9a4. No Git commit, branch, or checkout is part of this case; the reviewed identity is the diff bytes themselves.\nAcceptance criteria: jobs must not double-run across two workers; retry backoff unchanged.\nValidation already performed by the worker: `pytest tests/test_scheduler.py` passed (newly executed).\nKnown limitation: no load testing.",
+        "materialization": {
+          "virtual_workspace": {
+            "/synthetic/artifacts/acme-scheduler.diff": "diff --git a/src/acme/scheduler.py b/src/acme/scheduler.py\n--- a/src/acme/scheduler.py\n+++ b/src/acme/scheduler.py\n@@ -41,2 +41,5 @@ class Scheduler:\n     def next_job(self) -> Job:\n-        return self._queue.pop(0)\n+        with self._claim_lock:\n+            job = self._queue.pop(0)\n+            self._claimed.add(job.id)\n+        return job\ndiff --git a/tests/test_scheduler.py b/tests/test_scheduler.py\n--- a/tests/test_scheduler.py\n+++ b/tests/test_scheduler.py\n@@ -12,3 +12,10 @@ def test_retry_backoff_unchanged():\n     assert backoff(1) == 2\n     assert backoff(2) == 4\n     assert backoff(3) == 8\n+\n+\n+def test_no_double_run_across_workers():\n+    sched = Scheduler(jobs=[Job(id=1)])\n+    first = sched.next_job()\n+    second = sched.next_job()\n+    assert first is not None and second is None\n"
+          }
+        }
       },
       "expectation": {
-        "first_move": "Delegate one review to @reviewer with the supplied packet unchanged.",
-        "routing": "reviewer",
+        "first_move": "Delegate one review to @reviewer with the supplied packet unchanged, referencing the diff bytes and their content identity.",
         "why": "Substantive behavior change where an independent static review adds value, and a complete packet is already available.",
-        "forbidden_detours": [
-          "skipping review here",
-          "planner or worker re-implementation",
-          "asking the reviewer to reconstruct the diff or Git state",
-          "requesting a second review of unchanged content",
-          "attempting or retrying a skill"
+        "forbidden_events": [
+          "finishing without a review delegation",
+          "planner or worker delegation",
+          "any skill attempt"
+        ],
+        "forbidden_text": [
+          "asking the reviewer to run Git or otherwise reconstruct repository state",
+          "asking the reviewer to implement, fix, or publish the change"
         ]
       },
       "observable": {
         "required_delegations": ["reviewer"],
         "allowed_agents": ["reviewer"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 0,
+        "allowed_read_targets": [],
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -257,23 +394,25 @@
       },
       "expectation": {
         "first_move": "Finish and report: no further delegation required.",
-        "routing": "none",
         "why": "A trivial bounded change is finished on the implementer's validation result; review would add no value.",
-        "forbidden_detours": [
-          "reviewer",
-          "second worker",
-          "planner or architect",
-          "attempting or retrying a skill"
+        "forbidden_events": [
+          "any subagent delegation",
+          "any read attempt",
+          "any skill attempt"
         ]
       },
       "observable": {
         "required_delegations": [],
         "allowed_agents": [],
-        "max_subagent_calls": 0,
+        "max_subagent_calls_in_window": 0,
+        "min_context_reads": 0,
         "max_context_reads": 0,
+        "allowed_read_targets": [],
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": true
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "required"
       }
     },
     {
@@ -286,23 +425,28 @@
       },
       "expectation": {
         "first_move": "Delegate to @zweistein with the design and the requested outcome.",
-        "routing": "zweistein",
         "why": "Premium work is explicitly opted in by name in the current request.",
-        "forbidden_detours": [
+        "forbidden_events": [
           "substituting worker, planner, or architect",
-          "declining because premium is normally opt-in",
-          "asking again whether premium is wanted",
-          "attempting or retrying a skill"
+          "declining instead of delegating",
+          "any skill attempt"
+        ],
+        "forbidden_text": [
+          "asking again whether premium work is wanted"
         ]
       },
       "observable": {
         "required_delegations": ["zweistein"],
         "allowed_agents": ["zweistein"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 0,
+        "allowed_read_targets": [],
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
@@ -315,53 +459,65 @@
       },
       "expectation": {
         "first_move": "Delegate to @worker with the reproduction and intermittency evidence.",
-        "routing": "worker",
         "why": "Importance or difficulty is not premium opt-in; this is concrete debugging work.",
-        "forbidden_detours": [
-          "zweistein",
-          "planner or architect",
-          "mentioning or offering premium to upsell",
-          "attempting or retrying a skill"
+        "forbidden_events": [
+          "zweistein delegation",
+          "planner or architect delegation",
+          "any skill attempt",
+          "more than one subagent call in the window"
+        ],
+        "forbidden_text": [
+          "mentioning or offering Zweistein or another premium path in user-visible text"
         ]
       },
       "observable": {
         "required_delegations": ["worker"],
         "allowed_agents": ["worker"],
-        "max_subagent_calls": 1,
+        "max_subagent_calls_in_window": 1,
+        "min_context_reads": 0,
         "max_context_reads": 2,
+        "allowed_read_targets": null,
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 0,
+        "max_user_questions": 0,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     },
     {
       "id": "ambiguous-requirement-minimal-clarification",
-      "pair": "ambiguity",
+      "pair": null,
+      "probe": "ambiguity",
       "title": "Consequential product ambiguity gets one minimal question",
       "input": {
         "prompt": "Make the export format nicer - downstream consumers parse the CSV today.",
         "supplied_evidence": "The exporter currently writes CSV consumed by external systems.\nNo target format, compatibility requirement, or acceptance criterion is supplied."
       },
       "expectation": {
-        "first_move": "Ask one minimal clarification: which property should change (e.g. columns/ordering/quoting) and whether existing consumers must keep parsing the same format. Do not delegate yet.",
-        "routing": "user-clarification",
+        "first_move": "Ask one minimal clarification: which property should change (columns/ordering/quoting) and whether existing consumers must keep parsing the same format. Do not delegate yet.",
         "why": "The product requirement is consequential and genuinely underspecified; guessing changes a public data contract.",
-        "forbidden_detours": [
-          "guessing a new format and implementing it",
-          "planner or architect inventing the product decision",
-          "multiple questions or a full questionnaire",
-          "delegating implementation before the answer",
-          "attempting or retrying a skill"
+        "forbidden_events": [
+          "any subagent delegation",
+          "any read attempt",
+          "any skill attempt"
+        ],
+        "forbidden_text": [
+          "more than one clarification question, or a multi-item questionnaire",
+          "announcing a chosen output format as decided"
         ]
       },
       "observable": {
         "required_delegations": [],
         "allowed_agents": [],
-        "max_subagent_calls": 0,
-        "max_context_reads": 2,
+        "max_subagent_calls_in_window": 0,
+        "min_context_reads": 0,
+        "max_context_reads": 0,
+        "allowed_read_targets": [],
         "skill_attempts": 0,
-        "local_sequence_expected": false,
-        "answer_required_from_supplied_evidence": false
+        "required_user_questions": 1,
+        "max_user_questions": 1,
+        "local_sequence": "ignored",
+        "answer_from_supplied_evidence": "ignored"
       }
     }
   ]
