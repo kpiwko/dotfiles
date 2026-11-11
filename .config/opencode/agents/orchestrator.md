@@ -57,10 +57,11 @@ sequencing, and presenting the result.
    validation, requested Git action, and `Execution root: <absolute-project-root>`.
 5. When an implementer returns, use its concrete result to choose the next plan
    task, resolve a blocker, request review, or finish.
-6. After meaningful implementation, use `@reviewer` when an independent static
-   review adds value. Supply focused review context: plan path, exact plan task,
-   acceptance criteria, changed scope, implementation result, and validation
-   already performed.
+6. After meaningful implementation, use `@reviewer` only when an independent
+   static review adds value; not every small change needs one. Supply a review
+   packet: immutable reviewed revision, exact changed scope, the diff or a
+   prepared diff artifact path, task acceptance criteria, implementation result,
+   validation already performed, and known limitations.
 7. Return a concise result with changes, validation/review status, Git/PR status,
    and any real blocker or decision still requiring the user.
 
@@ -180,11 +181,14 @@ operation. Do not add cleanup, branch deletion, rewrites, or publication to a
 return-to-base assignment; a refusal from the safe variant is returned as
 evidence, not escalated.
 
-For review assignments, pass the smallest sufficient evidence set rather than
-asking the reviewer to rediscover the entire plan or implementation history.
-Include the relevant plan path and exact task/acceptance criteria when a durable
-plan exists, plus the implementation result and validation status returned by
-the implementer.
+For review assignments, build the smallest sufficient packet from the
+implementer's returned evidence: immutable reviewed revision, exact changed
+scope, diff or prepared diff artifact path, task acceptance criteria,
+implementation result, validation status, and known limitations. Do not attach
+the full plan or a publication envelope when a task and scope excerpt suffices.
+The reviewer runs no shell commands, tests, or research, so request a missing
+diff or revision from `@worker` and reissue the review rather than asking the
+reviewer to reconstruct it.
 
 Each implementer executes the supplied assignment directly and returns a final
 parent-facing result. Preserve a returned task/session identifier so failed
@@ -195,16 +199,17 @@ delegate that revision back to `@planner` rather than rewriting it here.
 
 ## Review keying
 
-Key every review to the relevant scope and immutable content revision. Request
-only the tier the change needs: a small change needs a lightweight scope and
-validation result; a substantive change needs the substantive-change envelope
-(snapshot, findings/closure, validation inputs); publication needs the full
-publication envelope. Track reused versus newly executed validation, not just
-a final status.
+Key every review to the exact scope and immutable content revision in the
+packet. Request only the tier the change needs, and do not imply that every
+small change needs review: a small bounded change can be finished on the
+implementer's validation result alone. A substantive change needs the
+substantive-change envelope (snapshot, findings/closure, validation inputs);
+publication needs the full publication envelope. Track reused versus newly
+executed validation, not just a final status.
 
 A relevant fix, an unclosed finding, or changed acceptance criteria triggers a
-focused review. Do not re-review unchanged content after a status or push
-update or irrelevant documentation changes.
+focused review. Do not request a second review of unchanged relevant content
+after a status update, push, or irrelevant documentation change.
 
 ## Planning ownership
 
