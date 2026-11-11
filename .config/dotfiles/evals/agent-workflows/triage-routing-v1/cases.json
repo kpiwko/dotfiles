@@ -1,0 +1,368 @@
+{
+  "suite": "triage-routing-v1",
+  "status": "prepared_not_executed",
+  "executable": false,
+  "actor": "orchestrator",
+  "model_held_constant": "agentgateway/illusionist",
+  "notes": "Design data only. No runner, scorer, or model invocation exists for this file. Input fields are what the actor receives; expectation and observable are hidden and must never be included in the actor input. Cases use synthetic paths so they do not depend on $HOME. observable.* are targets derived from native events; missing telemetry makes the case unscorable rather than zero-count.",
+  "scoring_fields": {
+    "delegations": "agent ids and order from native subagent events",
+    "tool_attempts": "every read/grep/etc. attempt with target; denied attempts count as attempts",
+    "skill_attempts": "count of skill tool calls; target is 0 in every case",
+    "local_sequence": "brief ordered user-visible narration before the first delegation; not private reasoning",
+    "final_outcome": "recorded for reporting only, never used to infer routing"
+  },
+  "cases": [
+    {
+      "id": "direct-answer-supplied-evidence",
+      "pair": "evidence-sufficiency",
+      "title": "Simple factual question answered from inline evidence",
+      "input": {
+        "prompt": "Quick question: is shell access to `git *` denied for the worker agent? Answer from what I'm pasting here; don't go inspect the repo.",
+        "supplied_evidence": "worker.md frontmatter excerpt (authoritative):\npermissions:\n  - action: shell\n    resource: \"*\"\n    effect: ask\n  - action: shell\n    resource: \"git *\"\n    effect: deny\n\nRule semantics: permissions resolve in order, last match wins."
+      },
+      "expectation": {
+        "first_move": "Answer directly: yes, `git *` is denied because the specific deny matches after the broader ask.",
+        "routing": "none",
+        "why": "The supplied evidence is sufficient and the user asked for a direct answer.",
+        "forbidden_detours": [
+          "delegating to worker, planner, architect, reviewer, or zweistein",
+          "reading or grepping any file",
+          "attempting or retrying a skill",
+          "replying that the repository must be inspected first"
+        ]
+      },
+      "observable": {
+        "required_delegations": [],
+        "allowed_agents": [],
+        "max_subagent_calls": 0,
+        "max_context_reads": 0,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": true
+      }
+    },
+    {
+      "id": "bounded-inspection-before-routing",
+      "pair": "evidence-sufficiency",
+      "title": "Unknown wiring justifies a few named reads, then one worker",
+      "input": {
+        "prompt": "Add a `--json` output flag to the `acme export` command. The project is at /synthetic/acme-cli. I don't know which module builds the CLI options, so check before you hand this off.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nKnown: `src/acme/cli.py` defines the command entry point and an argparse parser; an existing `--format` option selects the output shape; tests live under `tests/`.\nNot supplied: the exact symbol or line where output options are assembled."
+      },
+      "expectation": {
+        "first_move": "Do 1-3 bounded reads of the named files to locate the option assembly, then delegate one bounded assignment to @worker with the execution root.",
+        "routing": "worker",
+        "why": "A small, clear implementation with one genuinely unknown location; a brief bounded look resolves routing without specialist planning.",
+        "forbidden_detours": [
+          "planner or architect",
+          "delegating while still naming the location as unknown",
+          "more than 4 context reads or a broad search rooted at $HOME",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["worker"],
+        "allowed_agents": ["worker"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 4,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "small-clear-change-worker",
+      "pair": "size-and-sequence",
+      "title": "Small clear edit goes straight to worker",
+      "input": {
+        "prompt": "In /synthetic/acme-cli, rename the config key `retry_count` to `retry_attempts`. Known call sites: src/acme/config.py:42, src/acme/client.py:88, tests/test_config.py:15. Keep the behavior identical.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli. The three call sites are exhaustive per the user."
+      },
+      "expectation": {
+        "first_move": "One bounded @worker assignment with goal, files, acceptance criteria, validation, execution root, and Git/publication scope.",
+        "routing": "worker",
+        "why": "Bounded, unambiguous mechanical change.",
+        "forbidden_detours": [
+          "planner or architect",
+          "reviewer",
+          "splitting into multiple workers or a multi-phase chain",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["worker"],
+        "allowed_agents": ["worker"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 2,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "obvious-multistep-local-sequence-no-planner",
+      "pair": "size-and-sequence",
+      "title": "Obvious multi-step change with plan/brainstorm wording stays local",
+      "input": {
+        "prompt": "Please plan this out and brainstorm edge cases first: in /synthetic/acme-cli add validation that `timeout` must be positive in the config loader, then update its unit test. Both files are known; it's a two-file change.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nValidation belongs in `src/acme/config.py` (existing helper `require_positive`).\nTests are in `tests/test_config.py`; the repo uses pytest and the existing loader tests."
+      },
+      "expectation": {
+        "first_move": "State a brief ordered local sequence (validate, update test), then delegate the coherent unit to @worker; sequence it here.",
+        "routing": "local-sequence-then-worker",
+        "why": "Obvious ordering with no unresolved dependency or design question; two steps are not planning uncertainty. The words 'plan' and 'brainstorm' do not change the decision.",
+        "forbidden_detours": [
+          "planner or architect",
+          "any skill invocation (brainstorming, writing-plans) or skill retry",
+          "requiring a plan artifact or plan approval ceremony",
+          "multiple concurrent workers or an unbounded chain in one assignment",
+          "refusing or escalating because the task has two steps"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["worker"],
+        "allowed_agents": ["worker"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 2,
+        "skill_attempts": 0,
+        "local_sequence_expected": true,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "uncertain-migration-planner",
+      "pair": "specialist-type",
+      "title": "Migration with unresolved order, compatibility, and reader inventory needs a plan",
+      "input": {
+        "prompt": "Move /synthetic/acme-cli session storage from JSON files to the SQLite layer. Two legacy file formats must stay readable during rollout. Not all readers are enumerated in the repo, and the cache-invalidation order is unclear.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nThere is an existing SQLite abstraction under `src/acme/store/`.\nLegacy readers are not exhaustively identified; rollout compatibility is a requirement.\nNo accepted ADR governs storage."
+      },
+      "expectation": {
+        "first_move": "Delegate to @planner with the compatibility and ordering constraints, and use the returned plan as the execution contract.",
+        "routing": "planner",
+        "why": "Substantial uncertainty about dependencies, ordering, migration, and compatibility - exactly the routing threshold.",
+        "forbidden_detours": [
+          "direct worker implementation without a plan",
+          "architect (no unresolved durable design choice is posed)",
+          "attempting or retrying a skill",
+          "inventing a migration order without inspecting the constraints"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["planner"],
+        "allowed_agents": ["planner"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 4,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "durable-architecture-architect",
+      "pair": "specialist-type",
+      "title": "Unresolved durable isolation/API boundary goes to architect",
+      "input": {
+        "prompt": "Decide whether /synthetic/acme-cli plugins should run in a subprocess sandbox or in-process with capability checks, and whether that isolation boundary becomes a public plugin API guarantee. There is no ADR for it.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nPlugins currently run in-process.\nAccepted ADRs cover logging and storage only; neither addresses plugin isolation or API guarantees."
+      },
+      "expectation": {
+        "first_move": "Delegate to @architect for a durable decision and ADR if warranted; do not implement yet.",
+        "routing": "architect",
+        "why": "A significant, difficult-to-reverse design/API decision with no accepted ADR.",
+        "forbidden_detours": [
+          "planner first",
+          "worker implementation",
+          "deciding the boundary unilaterally in the orchestrator",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["architect"],
+        "allowed_agents": ["architect"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 4,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "concrete-failure-worker",
+      "pair": "execution",
+      "title": "Concrete failing test goes to worker without replanning",
+      "input": {
+        "prompt": "The last change broke CI. `pytest tests/test_cache.py -q` fails with AssertionError in test_evict_lru at tests/test_cache.py:61: expected key 'b' evicted but 'a' remains. Fix it in /synthetic/acme-cli.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nReproduction command and exact failing test/line/traceback supplied.\nThe change that introduced it is the most recent commit on the current feature branch."
+      },
+      "expectation": {
+        "first_move": "Delegate to @worker with the reproduction, failure evidence, and execution root.",
+        "routing": "worker",
+        "why": "Concrete, reproducible failure with a clear scope; execution/debugging is worker work.",
+        "forbidden_detours": [
+          "planner or architect",
+          "zweistein",
+          "broad repository archaeology before delegating",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["worker"],
+        "allowed_agents": ["worker"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 2,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "useful-independent-review-reviewer",
+      "pair": "review-value",
+      "title": "Substantive completed change gets one packet-based review",
+      "input": {
+        "prompt": "Implementation is finished. Please get it reviewed before we publish.",
+        "supplied_evidence": "Worker result: changed `src/acme/scheduler.py` (+120/-30) and `tests/test_scheduler.py`.\nImmutable reviewed revision: commit 4f2c9a1.\nDiff artifact: /synthetic/artifacts/acme-scheduler-4f2c9a1.diff\nAcceptance criteria: jobs must not double-run across two workers; retry backoff unchanged.\nValidation: `pytest tests/test_scheduler.py` passed (newly executed).\nKnown limitation: no load testing."
+      },
+      "expectation": {
+        "first_move": "Delegate one review to @reviewer with the supplied packet unchanged.",
+        "routing": "reviewer",
+        "why": "Substantive behavior change where an independent static review adds value, and a complete packet is already available.",
+        "forbidden_detours": [
+          "skipping review here",
+          "planner or worker re-implementation",
+          "asking the reviewer to reconstruct the diff or Git state",
+          "requesting a second review of unchanged content",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["reviewer"],
+        "allowed_agents": ["reviewer"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 0,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "trivial-change-no-review",
+      "pair": "review-value",
+      "title": "Trivial docs fix finishes on worker validation",
+      "input": {
+        "prompt": "Worker fixed the typo 'recieve' -> 'receive' in docs/usage.md and reported that the docs spellcheck passed. Anything else needed before we're done?",
+        "supplied_evidence": "Changed scope: one word in `docs/usage.md`.\nValidation already performed by the worker: docs spellcheck passed.\nNo behavior, API, or configuration change."
+      },
+      "expectation": {
+        "first_move": "Finish and report: no further delegation required.",
+        "routing": "none",
+        "why": "A trivial bounded change is finished on the implementer's validation result; review would add no value.",
+        "forbidden_detours": [
+          "reviewer",
+          "second worker",
+          "planner or architect",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": [],
+        "allowed_agents": [],
+        "max_subagent_calls": 0,
+        "max_context_reads": 0,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": true
+      }
+    },
+    {
+      "id": "explicit-premium-zweistein",
+      "pair": "premium-opt-in",
+      "title": "Explicit Zweistein request is honored",
+      "input": {
+        "prompt": "Use Zweistein to pressure-test this concurrency design before we implement it.",
+        "supplied_evidence": "Design summary: a single writer plus lock-free readers over a shared ring buffer; the user asks specifically for Zweistein."
+      },
+      "expectation": {
+        "first_move": "Delegate to @zweistein with the design and the requested outcome.",
+        "routing": "zweistein",
+        "why": "Premium work is explicitly opted in by name in the current request.",
+        "forbidden_detours": [
+          "substituting worker, planner, or architect",
+          "declining because premium is normally opt-in",
+          "asking again whether premium is wanted",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["zweistein"],
+        "allowed_agents": ["zweistein"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 0,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "no-unsolicited-premium",
+      "pair": "premium-opt-in",
+      "title": "Hard-sounding but ordinary debugging does not trigger premium",
+      "input": {
+        "prompt": "Debug this flaky integration test. It fails maybe 1 in 20 runs. It's important, so do a thorough job.",
+        "supplied_evidence": "Project root: /synthetic/acme-cli\nFailing test: tests/integration/test_sync.py::test_eventual_consistency, intermittent.\nThe user did not name Zweistein or any premium path."
+      },
+      "expectation": {
+        "first_move": "Delegate to @worker with the reproduction and intermittency evidence.",
+        "routing": "worker",
+        "why": "Importance or difficulty is not premium opt-in; this is concrete debugging work.",
+        "forbidden_detours": [
+          "zweistein",
+          "planner or architect",
+          "mentioning or offering premium to upsell",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": ["worker"],
+        "allowed_agents": ["worker"],
+        "max_subagent_calls": 1,
+        "max_context_reads": 2,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    },
+    {
+      "id": "ambiguous-requirement-minimal-clarification",
+      "pair": "ambiguity",
+      "title": "Consequential product ambiguity gets one minimal question",
+      "input": {
+        "prompt": "Make the export format nicer - downstream consumers parse the CSV today.",
+        "supplied_evidence": "The exporter currently writes CSV consumed by external systems.\nNo target format, compatibility requirement, or acceptance criterion is supplied."
+      },
+      "expectation": {
+        "first_move": "Ask one minimal clarification: which property should change (e.g. columns/ordering/quoting) and whether existing consumers must keep parsing the same format. Do not delegate yet.",
+        "routing": "user-clarification",
+        "why": "The product requirement is consequential and genuinely underspecified; guessing changes a public data contract.",
+        "forbidden_detours": [
+          "guessing a new format and implementing it",
+          "planner or architect inventing the product decision",
+          "multiple questions or a full questionnaire",
+          "delegating implementation before the answer",
+          "attempting or retrying a skill"
+        ]
+      },
+      "observable": {
+        "required_delegations": [],
+        "allowed_agents": [],
+        "max_subagent_calls": 0,
+        "max_context_reads": 2,
+        "skill_attempts": 0,
+        "local_sequence_expected": false,
+        "answer_required_from_supplied_evidence": false
+      }
+    }
+  ]
+}
