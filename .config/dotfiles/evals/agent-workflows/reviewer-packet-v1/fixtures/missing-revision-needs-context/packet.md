@@ -11,7 +11,9 @@ Acceptance criteria:
 - `allowed(active, requested=1)` is true only when the requested slots fit
   under `MAX_CONCURRENCY`.
 - `MAX_CONCURRENCY` is `4`.
-- A zero or negative `requested` value is treated as no additional load.
+- A zero or negative `requested` adds no load: the result depends only on
+  whether `active` already fits under `MAX_CONCURRENCY`, so `allowed(10, 0)`
+  is false while `allowed(4, 0)` is true.
 
 Implementation result: added `src/limits.py` with `MAX_CONCURRENCY` and
 `allowed`.

@@ -1,6 +1,6 @@
 """Page-boundary helper exercised by the legacy export path."""
 
-DEFAULT_LIMIT = 50
+DEFAULT_LIMIT = 25
 
 
 def page_bounds(offset, limit=None, total=0):
@@ -8,5 +8,7 @@ def page_bounds(offset, limit=None, total=0):
     if limit is None:
         limit = DEFAULT_LIMIT
     start = max(0, offset)
-    end = min(start + limit, total)
+    end = start + limit
+    if total > 0:
+        end = min(end, total)
     return start, end

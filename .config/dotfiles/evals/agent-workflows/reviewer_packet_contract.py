@@ -13,6 +13,7 @@ not that a live agent follows it. See reviewer-packet-v1/README.md.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import re
@@ -132,6 +133,49 @@ def _permissions(document: dict) -> list[dict]:
     return permissions
 
 
+def _matches(value: str, pattern: str) -> bool:
+    """Glob match for permission action/resource patterns."""
+    return fnmatch.fnmatchcase(value, pattern)
+
+
+def _resource_probe(pattern: str) -> str:
+    """Concrete resource name a permission pattern can match."""
+    return pattern.replace("*", "probe").replace("?", "p")
+
+
+def shell_permission_violations(permissions: list[dict]) -> list[str]:
+    """Return shell access violations under ordered permission semantics.
+
+    A reviewer/orchestrator definition only denies shell safely when a rule
+    denies action ``shell`` for the universal resource ``"*"``. Because
+    permission rules are evaluated in order with the last match winning, an
+    earlier allow overridden by a later universal deny is harmless; an allow
+    that survives the ordering (including a wildcard action such as ``*`` or an
+    action glob such as ``she*``) is effective shell access and a violation.
+    Allows for unrelated actions are ignored rather than forbidden.
+    """
+    shell_rules = [
+        entry for entry in permissions if _matches("shell", str(entry["action"]))
+    ]
+    violations: list[str] = []
+    if not any(
+        entry["effect"] == "deny" and entry["resource"] == "*"
+        for entry in shell_rules
+    ):
+        violations.append("shell_not_denied")
+
+    probes = {"probe-command"}
+    probes.update(_resource_probe(str(entry["resource"])) for entry in shell_rules)
+    for probe in sorted(probes):
+        applicable = [
+            entry for entry in shell_rules if _matches(probe, str(entry["resource"]))
+        ]
+        if applicable and applicable[-1]["effect"] != "deny":
+            violations.append("shell_allow")
+            break
+    return violations
+
+
 def reviewer_violations(document: dict, body: str) -> list[str]:
     """Return contract violation codes for the reviewer definition."""
     violations: list[str] = []
@@ -147,12 +191,7 @@ def reviewer_violations(document: dict, body: str) -> list[str]:
     elif steps > 12:
         violations.append("steps_above_12")
 
-    shell = [entry for entry in permissions if entry["action"] == "shell"]
-    if not shell:
-        violations.append("shell_not_denied")
-    for entry in shell:
-        if entry["effect"] != "deny":
-            violations.append("shell_allow")
+    violations.extend(shell_permission_violations(permissions))
     for action in ("edit", "subagent"):
         entries = [entry for entry in permissions if entry["action"] == action]
         if not entries:
@@ -245,9 +284,11 @@ def orchestrator_violations(document: dict, body: str) -> list[str]:
     if not reviewer_allow:
         violations.append("reviewer_subagent_not_allowed")
 
-    shell = [entry for entry in permissions if entry["action"] == "shell"]
-    if not shell or any(entry["effect"] != "deny" for entry in shell):
+    shell_issues = shell_permission_violations(permissions)
+    if "shell_not_denied" in shell_issues:
         violations.append("orchestrator_shell_not_denied")
+    if "shell_allow" in shell_issues:
+        violations.append("orchestrator_shell_allow")
 
     if "qodo" in json.dumps(document).lower():
         violations.append("qodo_present")

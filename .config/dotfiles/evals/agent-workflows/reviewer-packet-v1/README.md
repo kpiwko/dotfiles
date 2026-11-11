@@ -35,11 +35,17 @@ appears under `fixtures/`.
 | `missing-diff-needs-context` | reviewer | revision + scope, no diff | `NEEDS_CONTEXT` ("diff or diff artifact") |
 | `missing-revision-needs-context` | reviewer | diff + scope, mutable working tree | `NEEDS_CONTEXT` ("immutable reviewed revision") |
 | `single-lookup-defect` | reviewer | diff looks correct; defect needs one source read | `CHANGES_REQUIRED` at `src/labels.py:8` using `src/text_utils.py` (`max_lookups: 4`) |
-| `beyond-budget-needs-context` | reviewer | diff + scope; legacy evidence absent | `NEEDS_CONTEXT`, never `PASS` |
+| `beyond-budget-needs-context` | reviewer | diff + scope; legacy caller compatibility evidence absent | `NEEDS_CONTEXT`, never `PASS` |
 | `orchestrator-missing-artifact` | orchestrator | worker result without diff/artifact/revision | request artifact from `@worker`; do not invoke reviewer |
 
 Every case is `status: prepared_not_executed`. There are no saved runs and no
 saved model output in this suite.
+
+`beyond-budget-needs-context` is deliberately additive: the visible diff keeps
+`DEFAULT_LIMIT` at `25` and clamps only when a caller passes a positive `total`,
+so the diff alone justifies neither `PASS` nor a finding. The unresolved
+legacy-caller compatibility question needs caller source or recorded validation
+that the packet does not supply and the lookup allowance cannot reach.
 
 ## Revision identity
 
@@ -74,7 +80,11 @@ What the definition checks assert (against `~/.config/opencode/agents/`; overrid
 the directory with `OPENCODE_AGENTS_DIR`):
 
 - reviewer frontmatter is `mode: subagent`, ≤ 12 steps, `edit`/`subagent` deny,
-  and shell deny with **no shell allow exception**;
+  and shell deny for the universal resource `"*"` with **no effective shell
+  allow exception**: rules are resolved in order with the last match winning, so
+  a wildcard action (`*`) or an action glob (`she*`) that matches `shell` and
+  survives a later deny fails the check, while allows for unrelated actions do
+  not;
 - no Qodo surface anywhere in the reviewer definition;
 - the required packet concepts are stated (immutable revision, exact scope,
   diff, acceptance criteria, implementation result, validation, known
@@ -94,12 +104,15 @@ validator to report the matching code, so the checks fail on regressions rather
 than merely passing on today's prose. They do not compare whole-prose snapshots.
 
 Fixture checks assert: expectation/fixture sets match; declared content
-identities match real bytes; every diff path exists in `scope/` and every added
-and context line appears in the supplied post-image; each expected finding's
-`path:line` exists and contains its token; lookup requirements point at supplied
-files within four lookups; `PASS`/`CHANGES_REQUIRED`/`NEEDS_CONTEXT` findings
-and `missing` fields are mutually consistent; expectations never leak into agent
-inputs.
+identities match real bytes; every diff declares the correct old/new hunk counts,
+hunks are ordered and non-overlapping, and each hunk's new side reconstructs the
+supplied post-image at its declared `+start` position (a new-file diff must
+cover the whole post-image); each expected finding's `path:line` exists and
+contains its token; lookup requirements point at supplied files within four
+lookups; `PASS`/`CHANGES_REQUIRED`/`NEEDS_CONTEXT` findings and `missing` fields
+are mutually consistent; expectations never leak into agent inputs. Removed
+lines are not required to be globally absent, because repeated or moved content
+is legitimate.
 
 These checks do **not** prove an agent follows the contract. They cannot detect
 a live reviewer that ignores the packet, invents findings, or exceeds its lookup

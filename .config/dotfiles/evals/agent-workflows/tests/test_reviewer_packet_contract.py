@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
 
 import reviewer_packet_contract as contract
@@ -73,27 +75,169 @@ def post_image_lines(scope_root: Path, relative: str) -> list[str]:
     return (scope_root / relative).read_text(encoding="utf-8").splitlines()
 
 
-def parse_diff(text: str) -> tuple[list[str], list[tuple[str, str]], list[tuple[str, str]]]:
-    """Return (paths, added, context) with exact (path, line content) pairs."""
-    paths: list[str] = []
-    added: list[tuple[str, str]] = []
-    context: list[tuple[str, str]] = []
-    path = None
-    in_hunk = False
-    for line in text.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[len("+++ b/") :]
-            paths.append(path)
-            in_hunk = False
-        elif line.startswith("--- ") or line.startswith("diff --git "):
-            in_hunk = False
-        elif line.startswith("@@"):
-            in_hunk = True
-        elif in_hunk and line.startswith("+"):
-            added.append((path, line[1:]))
-        elif in_hunk and line.startswith(" "):
-            context.append((path, line[1:]))
-    return paths, added, context
+HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+DIFF_GIT = re.compile(r"^diff --git a/(.+) b/(.+)$")
+
+
+@dataclass(frozen=True)
+class Hunk:
+    old_start: int
+    old_count: int
+    new_start: int
+    new_count: int
+    lines: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class FileDiff:
+    path: str
+    old_path: str | None
+    hunks: tuple[Hunk, ...]
+
+    @property
+    def is_new_file(self) -> bool:
+        return self.old_path is None
+
+
+def parse_diff(text: str) -> list[FileDiff]:
+    """Parse a unified diff, keeping hunk headers and body lines in order.
+
+    Raises ``AssertionError`` on malformed structure instead of dropping
+    lines, so integrity checks cannot silently pass on a truncated or
+    mislabelled diff.
+    """
+    files: list[FileDiff] = []
+    path: str | None = None
+    old_path: str | None = None
+    raw_hunks: list[dict] = []
+    hunk: dict | None = None
+
+    def finish_file() -> None:
+        nonlocal path, old_path, raw_hunks
+        if path is not None:
+            files.append(
+                FileDiff(
+                    path=path,
+                    old_path=old_path,
+                    hunks=tuple(
+                        Hunk(
+                            old_start=item["old_start"],
+                            old_count=item["old_count"],
+                            new_start=item["new_start"],
+                            new_count=item["new_count"],
+                            lines=tuple(item["lines"]),
+                        )
+                        for item in raw_hunks
+                    ),
+                )
+            )
+        path = None
+        old_path = None
+        raw_hunks = []
+
+    for raw in text.splitlines():
+        if raw.startswith("diff --git "):
+            finish_file()
+            match = DIFF_GIT.match(raw)
+            if not match or match.group(1) != match.group(2):
+                raise AssertionError(f"malformed diff header: {raw!r}")
+            path = match.group(2)
+            hunk = None
+        elif raw.startswith("--- "):
+            source = raw[4:]
+            old_path = None if source == "/dev/null" else source[2:]
+            hunk = None
+        elif raw.startswith("+++ "):
+            destination = raw[4:]
+            if path is None or destination[2:] != path:
+                raise AssertionError(f"mismatched diff paths: {raw!r}")
+            hunk = None
+        elif raw.startswith("@@"):
+            match = HUNK_HEADER.match(raw)
+            if not match:
+                raise AssertionError(f"malformed hunk header: {raw!r}")
+            hunk = {
+                "old_start": int(match.group(1)),
+                "old_count": int(match.group(2) or 1),
+                "new_start": int(match.group(3)),
+                "new_count": int(match.group(4) or 1),
+                "lines": [],
+            }
+            raw_hunks.append(hunk)
+        elif hunk is not None and raw[:1] in (" ", "+", "-"):
+            hunk["lines"].append((raw[0], raw[1:]))
+        elif raw.startswith("\\"):
+            continue
+        else:
+            hunk = None
+    finish_file()
+    if not files:
+        raise AssertionError("diff contains no file section")
+    return files
+
+
+def validate_diff_against_post_image(
+    diff_text: str, scope_root: Path, expected_paths: list[str]
+) -> None:
+    """Prove hunk counts, order, positions and post-image reconstruction.
+
+    A context or added line merely appearing *somewhere* in the post-image is
+    not enough: a hunk must declare the right old/new counts, hunks must be
+    ordered and non-overlapping, and each hunk's new side must equal the
+    post-image lines at its declared ``+start`` position. A new-file diff must
+    cover the whole post-image. Removed lines are deliberately not required to
+    be globally absent, because repeated or moved content is legitimate.
+    """
+    files = parse_diff(diff_text)
+    paths = sorted(file_diff.path for file_diff in files)
+    if paths != sorted(expected_paths):
+        raise AssertionError(
+            f"diff paths {paths} != declared scope {sorted(expected_paths)}"
+        )
+    for file_diff in files:
+        if not file_diff.is_new_file and file_diff.old_path != file_diff.path:
+            raise AssertionError(
+                f"{file_diff.path}: unexpected old path {file_diff.old_path!r}"
+            )
+        if not (scope_root / file_diff.path).is_file():
+            raise AssertionError(f"missing post-image for {file_diff.path}")
+        post = post_image_lines(scope_root, file_diff.path)
+        previous_old_end = 0
+        previous_new_end = 0
+        covered_end = 0
+        for position, hunk in enumerate(file_diff.hunks):
+            old_body = sum(1 for sign, _ in hunk.lines if sign in (" ", "-"))
+            new_body = [content for sign, content in hunk.lines if sign in (" ", "+")]
+            if hunk.old_count != old_body:
+                raise AssertionError(
+                    f"{file_diff.path}: hunk {position} header says -{hunk.old_count} "
+                    f"but body has {old_body}"
+                )
+            if hunk.new_count != len(new_body):
+                raise AssertionError(
+                    f"{file_diff.path}: hunk {position} header says +{hunk.new_count} "
+                    f"but body has {len(new_body)}"
+                )
+            if hunk.old_start < previous_old_end or hunk.new_start < previous_new_end:
+                raise AssertionError(
+                    f"{file_diff.path}: hunk {position} overlaps or is out of order"
+                )
+            previous_old_end = hunk.old_start + hunk.old_count
+            previous_new_end = hunk.new_start + hunk.new_count
+            offset = hunk.new_start - 1
+            actual = post[offset : offset + len(new_body)]
+            if actual != new_body:
+                raise AssertionError(
+                    f"{file_diff.path}: hunk {position} does not reconstruct the "
+                    f"post-image at +{hunk.new_start}"
+                )
+            covered_end = max(covered_end, offset + len(new_body))
+        if file_diff.is_new_file and (
+            file_diff.hunks[0].new_start != 1 or covered_end != len(post)
+        ):
+            raise AssertionError(
+                f"{file_diff.path}: new-file diff does not cover the whole post-image"
+            )
 
 
 def mutate(text: str, old: str, new: str) -> str:
@@ -140,7 +284,14 @@ class DefinitionContractTests(unittest.TestCase):
         permissions = self.reviewer_document["permissions"]
         shell = [entry for entry in permissions if entry["action"] == "shell"]
         self.assertTrue(shell, "reviewer must deny shell explicitly")
-        self.assertEqual({entry["effect"] for entry in shell}, {"deny"})
+        self.assertTrue(
+            any(
+                entry["effect"] == "deny" and entry["resource"] == "*"
+                for entry in shell
+            ),
+            "reviewer must deny shell for the universal resource '*'",
+        )
+        self.assertEqual(contract.shell_permission_violations(permissions), [])
         for action in ("edit", "subagent"):
             effects = {
                 entry["effect"]
@@ -202,50 +353,128 @@ class ReviewerDefinitionMutationTests(unittest.TestCase):
         return contract.reviewer_violations(*contract.split_frontmatter(text))
 
     def test_mutations_are_detected(self):
-        shell_block = (
-            '  - action: shell\n    resource: "*"\n    effect: deny'
-        )
+        shell_block = '  - action: shell\n    resource: "*"\n    effect: deny'
         cases = {
-            "shell_allow": mutate(self.text, shell_block, shell_block.replace("deny", "allow")),
-            "shell_not_denied": mutate(self.text, shell_block + "\n", ""),
-            "qodo_present": mutate(
-                self.text,
-                '  - action: subagent\n    resource: "*"\n    effect: deny',
-                '  - action: subagent\n    resource: "*"\n    effect: deny\n'
-                '  - action: "Qodo_*"\n    resource: "*"\n    effect: allow',
+            "shell_allow": (
+                mutate(self.text, shell_block, shell_block.replace("deny", "allow")),
+                ["shell_not_denied", "shell_allow"],
             ),
-            "verdict_missing:CHANGES_REQUIRED": mutate(
-                self.text, "`CHANGES_REQUIRED`", "`CHANGES`"
+            "shell_not_denied": (
+                mutate(self.text, shell_block + "\n", ""),
+                ["shell_not_denied"],
             ),
-            "lookup_budget_above_4": mutate(
-                self.text, "four additional context", "ten additional context"
+            "shell_not_denied_narrow_deny": (
+                mutate(
+                    self.text,
+                    shell_block,
+                    '  - action: shell\n    resource: "git status"\n    effect: deny',
+                ),
+                ["shell_not_denied"],
             ),
-            "packet_field_missing:acceptance_criteria": mutate_all(
-                self.text, "acceptance criteria", "task goals"
+            "shell_allow_after_deny": (
+                mutate(
+                    self.text,
+                    shell_block,
+                    shell_block
+                    + '\n  - action: shell\n    resource: "*"\n    effect: allow',
+                ),
+                ["shell_allow"],
             ),
-            "shell_prohibition_missing": mutate(
-                self.text,
-                "Run no shell commands of any kind",
-                "Prefer not to run shell commands",
+            "shell_allow_wildcard_after_deny": (
+                mutate(
+                    self.text,
+                    shell_block,
+                    shell_block
+                    + '\n  - action: "*"\n    resource: "*"\n    effect: allow',
+                ),
+                ["shell_allow"],
             ),
-            "retry_prohibition_missing": mutate(
-                self.text,
-                "Never retry a denied action",
-                "Avoid unnecessary retries",
+            "shell_allow_glob_after_deny": (
+                mutate(
+                    self.text,
+                    shell_block,
+                    shell_block
+                    + '\n  - action: "she*"\n    resource: "*"\n    effect: allow',
+                ),
+                ["shell_allow"],
             ),
-            "subagent_allow": mutate(
-                self.text,
-                '  - action: subagent\n    resource: "*"\n    effect: deny',
-                '  - action: subagent\n    resource: "*"\n    effect: allow',
+            "qodo_present": (
+                mutate(
+                    self.text,
+                    '  - action: subagent\n    resource: "*"\n    effect: deny',
+                    '  - action: subagent\n    resource: "*"\n    effect: deny\n'
+                    '  - action: "Qodo_*"\n    resource: "*"\n    effect: allow',
+                ),
+                ["qodo_present"],
             ),
-            "steps_above_12": mutate(self.text, "steps: 12", "steps: 20"),
-            "description_no_shell_missing": mutate(
-                self.text, "with no shell execution", "with shell execution once"
+            "verdict_missing:CHANGES_REQUIRED": (
+                mutate(self.text, "`CHANGES_REQUIRED`", "`CHANGES`"),
+                ["verdict_missing:CHANGES_REQUIRED"],
+            ),
+            "lookup_budget_above_4": (
+                mutate(self.text, "four additional context", "ten additional context"),
+                ["lookup_budget_above_4"],
+            ),
+            "packet_field_missing:acceptance_criteria": (
+                mutate_all(self.text, "acceptance criteria", "task goals"),
+                ["packet_field_missing:acceptance_criteria"],
+            ),
+            "shell_prohibition_missing": (
+                mutate(
+                    self.text,
+                    "Run no shell commands of any kind",
+                    "Prefer not to run shell commands",
+                ),
+                ["shell_prohibition_missing"],
+            ),
+            "retry_prohibition_missing": (
+                mutate(
+                    self.text,
+                    "Never retry a denied action",
+                    "Avoid unnecessary retries",
+                ),
+                ["retry_prohibition_missing"],
+            ),
+            "subagent_allow": (
+                mutate(
+                    self.text,
+                    '  - action: subagent\n    resource: "*"\n    effect: deny',
+                    '  - action: subagent\n    resource: "*"\n    effect: allow',
+                ),
+                ["subagent_allow"],
+            ),
+            "steps_above_12": (
+                mutate(self.text, "steps: 12", "steps: 20"),
+                ["steps_above_12"],
+            ),
+            "description_no_shell_missing": (
+                mutate(
+                    self.text,
+                    "with no shell execution",
+                    "with shell execution once",
+                ),
+                ["description_no_shell_missing"],
             ),
         }
-        for expected, mutated in cases.items():
+        for expected, (mutated, codes) in cases.items():
             with self.subTest(expected=expected):
-                self.assertEqual(self.violations(mutated), [expected])
+                self.assertEqual(self.violations(mutated), codes)
+
+    def test_unrelated_allows_after_shell_deny_are_not_shell_exceptions(self):
+        shell_block = '  - action: shell\n    resource: "*"\n    effect: deny'
+        mutated = mutate(
+            self.text,
+            shell_block,
+            shell_block
+            + '\n  - action: "Atlassian_*"\n    resource: "*"\n    effect: allow',
+        )
+        self.assertEqual(self.violations(mutated), [])
+
+    def test_shell_allow_before_universal_deny_is_overridden(self):
+        shell_block = '  - action: shell\n    resource: "*"\n    effect: deny'
+        allow_block = '  - action: shell\n    resource: "*"\n    effect: allow'
+        mutated = mutate(self.text, shell_block, allow_block + "\n" + shell_block)
+        self.assertEqual(self.violations(mutated), [])
 
     def test_baseline_definition_is_clean(self):
         self.assertEqual(self.violations(self.text), [])
@@ -282,6 +511,17 @@ class OrchestratorDefinitionMutationTests(unittest.TestCase):
                 self.text,
                 '  - action: subagent\n    resource: "reviewer"\n    effect: allow',
                 '  - action: subagent\n    resource: "reviewer"\n    effect: deny',
+            ),
+            "orchestrator_shell_not_denied": mutate(
+                self.text,
+                '  - action: shell\n    resource: "*"\n    effect: deny',
+                '  - action: shell\n    resource: "git status"\n    effect: deny',
+            ),
+            "orchestrator_shell_allow": mutate(
+                self.text,
+                '  - action: shell\n    resource: "*"\n    effect: deny',
+                '  - action: shell\n    resource: "*"\n    effect: deny\n'
+                '  - action: shell\n    resource: "*"\n    effect: allow',
             ),
         }
         for expected, mutated in cases.items():
@@ -361,7 +601,7 @@ class FixtureIntegrityTests(unittest.TestCase):
                 else:
                     self.assertNotIn("content-sha256:", packet)
 
-    def test_diff_matches_supplied_post_image(self):
+    def test_diff_hunk_headers_and_order_are_consistent(self):
         for case in expectation_ids():
             expectation = load_expectation(case)
             fixture = FIXTURES / case
@@ -374,22 +614,148 @@ class FixtureIntegrityTests(unittest.TestCase):
                     self.assertNotIn("@@", packet)
                     continue
                 self.assertTrue(diff_path.exists())
-                diff_text = diff_path.read_text(encoding="utf-8")
-                paths, added, context = parse_diff(diff_text)
-                self.assertEqual(sorted(paths), sorted(expectation["scope"]))
-                scope_root = fixture / "scope"
-                for relative in paths:
-                    self.assertTrue((scope_root / relative).is_file(), relative)
-                cache = {path: post_image_lines(scope_root, path) for path in paths}
-                for path, content in added + context:
-                    stripped = content.rstrip()
-                    if not stripped:
-                        continue
-                    self.assertIn(
-                        stripped,
-                        [line.rstrip() for line in cache[path]],
-                        f"{case}: diff line not in supplied post-image: {content!r}",
+                files = parse_diff(diff_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    sorted(file.path for file in files), sorted(expectation["scope"])
+                )
+                for file_diff in files:
+                    self.assertTrue(
+                        (fixture / "scope" / file_diff.path).is_file(),
+                        file_diff.path,
                     )
+                    previous_old_end = 0
+                    previous_new_end = 0
+                    for position, hunk in enumerate(file_diff.hunks):
+                        old_body = sum(
+                            1 for sign, _ in hunk.lines if sign in (" ", "-")
+                        )
+                        new_body = sum(
+                            1 for sign, _ in hunk.lines if sign in (" ", "+")
+                        )
+                        self.assertEqual(hunk.old_count, old_body, case)
+                        self.assertEqual(hunk.new_count, new_body, case)
+                        self.assertGreaterEqual(
+                            hunk.old_start, previous_old_end, (case, position)
+                        )
+                        self.assertGreaterEqual(
+                            hunk.new_start, previous_new_end, (case, position)
+                        )
+                        previous_old_end = hunk.old_start + hunk.old_count
+                        previous_new_end = hunk.new_start + hunk.new_count
+
+    def test_diff_reconstructs_supplied_post_image(self):
+        for case in expectation_ids():
+            expectation = load_expectation(case)
+            fixture = FIXTURES / case
+            diff_path = fixture / "diff.patch"
+            with self.subTest(case=case):
+                if not expectation["has_diff"]:
+                    continue
+                validate_diff_against_post_image(
+                    diff_path.read_text(encoding="utf-8"),
+                    fixture / "scope",
+                    expectation["scope"],
+                )
+
+    def test_diff_integrity_rejects_corrupted_hunk_counts(self):
+        case = "beyond-budget-needs-context"
+        expectation = load_expectation(case)
+        diff_text = (FIXTURES / case / "diff.patch").read_text(encoding="utf-8")
+        shorter = re.sub(
+            r"(?m)^@@ -(\d+),(\d+)",
+            lambda match: f"@@ -{match.group(1)},{int(match.group(2)) - 1}",
+            diff_text,
+            count=1,
+        )
+        self.assertNotEqual(diff_text, shorter)
+        with self.assertRaises(AssertionError):
+            validate_diff_against_post_image(
+                shorter, FIXTURES / case / "scope", expectation["scope"]
+            )
+
+    def test_diff_integrity_rejects_wrong_hunk_position(self):
+        case = "beyond-budget-needs-context"
+        expectation = load_expectation(case)
+        diff_text = (FIXTURES / case / "diff.patch").read_text(encoding="utf-8")
+        shifted = re.sub(
+            r"(?m)^(@@ -\d+(?:,\d+)? \+)(\d+)",
+            lambda match: match.group(1) + str(int(match.group(2)) + 1),
+            diff_text,
+            count=1,
+        )
+        self.assertNotEqual(diff_text, shifted)
+        with self.assertRaises(AssertionError):
+            validate_diff_against_post_image(
+                shifted, FIXTURES / case / "scope", expectation["scope"]
+            )
+
+    def test_diff_integrity_rejects_reordered_lines(self):
+        case = "clean-packet-pass"
+        expectation = load_expectation(case)
+        diff_text = (FIXTURES / case / "diff.patch").read_text(encoding="utf-8")
+        reordered = diff_text.replace(
+            "+MAX_PERCENT = 100\n+\n", "+\n+MAX_PERCENT = 100\n", 1
+        )
+        self.assertNotEqual(diff_text, reordered)
+        with self.assertRaises(AssertionError):
+            validate_diff_against_post_image(
+                reordered, FIXTURES / case / "scope", expectation["scope"]
+            )
+
+    def test_beyond_budget_case_closes_visible_criteria(self):
+        case = "beyond-budget-needs-context"
+        expectation = load_expectation(case)
+        packet = load_input(case, expectation)
+        diff_text = (FIXTURES / case / "diff.patch").read_text(encoding="utf-8")
+        files = parse_diff(diff_text)
+        self.assertEqual([file_diff.path for file_diff in files], ["src/paging.py"])
+        for file_diff in files:
+            for hunk in file_diff.hunks:
+                for sign, content in hunk.lines:
+                    if sign == "-":
+                        self.assertNotIn("DEFAULT_LIMIT", content)
+                        self.assertNotIn("def page_bounds", content)
+                    if sign == "+":
+                        self.assertNotIn("DEFAULT_LIMIT =", content)
+                        self.assertNotIn("def page_bounds", content)
+        post = post_image_lines(FIXTURES / case / "scope", "src/paging.py")
+        self.assertIn("DEFAULT_LIMIT = 25", post)
+        namespace: dict = {}
+        exec(
+            compile("\n".join(post) + "\n", "paging.py", "exec"),
+            namespace,
+        )
+        page_bounds = namespace["page_bounds"]
+        self.assertEqual(page_bounds(0), (0, 25))
+        self.assertEqual(page_bounds(0, total=0), (0, 25))
+        self.assertEqual(page_bounds(0, total=10), (0, 10))
+        self.assertEqual(page_bounds(5, limit=10, total=12), (5, 12))
+        self.assertEqual(expectation["expected"]["verdict"], "NEEDS_CONTEXT")
+        self.assertEqual(expectation["expected"]["findings"], [])
+        self.assertTrue(expectation["expected"]["missing"])
+        self.assertIn("not part of the reviewed revision material", packet)
+
+    def test_missing_revision_fixture_matches_its_criteria(self):
+        case = "missing-revision-needs-context"
+        expectation = load_expectation(case)
+        packet = load_input(case, expectation)
+        source = (
+            "\n".join(
+                post_image_lines(FIXTURES / case / "scope", "src/limits.py")
+            )
+            + "\n"
+        )
+        namespace: dict = {}
+        exec(compile(source, "limits.py", "exec"), namespace)
+        self.assertEqual(namespace["MAX_CONCURRENCY"], 4)
+        allowed = namespace["allowed"]
+        self.assertTrue(allowed(1, 3))
+        self.assertFalse(allowed(1, 4))
+        self.assertTrue(allowed(4, 0))
+        self.assertFalse(allowed(10, 0))
+        self.assertTrue(allowed(4, -2))
+        self.assertIn("adds no load", packet)
+        self.assertEqual(expectation["expected"]["findings"], [])
 
     def test_expected_findings_point_at_real_locations(self):
         for case in expectation_ids():

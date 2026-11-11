@@ -2,7 +2,7 @@
   "case": "beyond-budget-needs-context",
   "actor": "reviewer",
   "input_file": "packet.md",
-  "purpose": "Required evidence is outside the packet and beyond the lookup allowance: the reviewer must return NEEDS_CONTEXT, never PASS.",
+  "purpose": "Required legacy-compatibility evidence is outside the packet and cannot be obtained within the lookup allowance: the visible diff preserves the legacy default and only clamps on an opt-in positive total, so the reviewer must return NEEDS_CONTEXT, never PASS and never a finding justified only by the diff.",
   "immutable_revision": true,
   "has_diff": true,
   "packet_fields": [

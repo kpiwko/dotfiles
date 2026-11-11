@@ -1,11 +1,10 @@
 diff --git a/src/paging.py b/src/paging.py
 --- a/src/paging.py
 +++ b/src/paging.py
-@@ -1,10 +1,10 @@
+@@ -1,12 +1,14 @@
  """Page-boundary helper exercised by the legacy export path."""
  
--DEFAULT_LIMIT = 25
-+DEFAULT_LIMIT = 50
+ DEFAULT_LIMIT = 25
  
  
  def page_bounds(offset, limit=None, total=0):
@@ -13,6 +12,7 @@ diff --git a/src/paging.py b/src/paging.py
      if limit is None:
          limit = DEFAULT_LIMIT
      start = max(0, offset)
--    end = start + limit
-+    end = min(start + limit, total)
+     end = start + limit
++    if total > 0:
++        end = min(end, total)
      return start, end
