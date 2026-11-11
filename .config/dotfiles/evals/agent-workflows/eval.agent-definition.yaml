@@ -1,0 +1,172 @@
+# agent-eval-harness config — NEUTRAL agent-definition evaluation (Task 2).
+#
+# This is the checked-in reference template for a two-arm (baseline/candidate)
+# agent-definition comparison. It is NOT production configuration: nothing here
+# is registered in `~/.config/opencode/opencode.jsonc`, and no user agent,
+# provider or plugin is modified.
+#
+# Neutral means: no worker-budget policy module, no arm bootstrap, no observer /
+# SSE staging and no external (`~/.config/opencode`) source-root allowance. The
+# only evaluation-only companions are the checked-in `eval-snapshot/` config and
+# its six role agents. Scope is end state only; failure to enforce a budget is
+# not in scope because no budget instrument is configured here.
+#
+# `prepare` in `agent_definition_eval.py` ("agent-definition eval", "prepare_arms")
+# copies this document into each prepared arm and rewrites ONLY the locations
+# that name an arm snapshot (dataset.workspace.files sources + the snapshot
+# source root) plus the dataset path, all as explicit absolute paths, so a
+# prepared config resolves from any caller cwd. The non-arm remainder is hashed
+# (`nonarm_sha256`) and must match between arms for a comparison to be eligible.
+#
+# Runner: the pinned 1.57.1 opaque CLI runner (`runner.type: cli`,
+# `agent_eval/agent/cli_runner.py`) driving the host's OpenCode 2.1.4 binary.
+# `runner.permission_mode` is IGNORED by this runner, so ordered permissions come
+# only from the staged config/agents.
+#
+# Documented argv only:
+#   run              non-interactive prompt run (subcommand first).
+#   --standalone     AFTER `run`: private server instead of the shared
+#                    background service, so an existing global server is never
+#                    reused.
+#   --agent <name>   select the orchestrator; it delegates to worker/reviewer.
+#   --model <p/m>    EXPLICIT primary request model, a literal constant. Every
+#                    role and auxiliary request in the snapshot is already
+#                    agentgateway/illusionist, so the constant is consistent with
+#                    the approved route; it is never `{model}`/`{subagent_model}`
+#                    and never an env-derived paid model.
+#   --format json    raw JSON event stream on stdout (a real native artifact).
+#   positional       the rendered prompt (`{args}`), one argv element.
+#
+# Deliberately NOT used:
+#   --auto — auto-approves permissions that are not explicitly denied; that is a
+#       bypass and does not reproduce ordered agent permissions.
+#   --pure / OPENCODE_PURE — runs WITHOUT external plugins, i.e. it would
+#       silently disable anything the arm stages under `.opencode/`.
+#   No `execution.max_budget_usd`: this evaluation measures end state, not spend.
+#       A finite cost/time envelope is a separate run-approval gate.
+#
+# Honest scope labels (do not remove):
+#   * ALL-ILLUSIONIST evaluation stack, not the production
+#     architect-orchestrator stack.
+#   * judge_mode: deterministic-end-state-only — no model judge, no rubric.
+#   * procedure_attempt_coverage: not_measured — no review/delegation/attempt
+#     accounting exists on this runner. Optional `output/metrics.json` is the
+#     only usage source; absent fields are UNKNOWN, never 0.
+#   * Runtime plugin/global-config isolation is NOT claimed: OpenCode merges the
+#     user's global config underneath a project config.
+
+execution:
+  mode: case
+  prompt: '{{ input.prompt }}'
+  parallelism: 1
+  project_hooks: false
+  timeout: 900
+
+# Model metadata for the harness itself (NOT a paid binding): the native argv
+# carries the real model constant; this only keeps harness-reported metadata from
+# defaulting to a non-illusionist id.
+models:
+  skill: agentgateway/illusionist
+
+runner:
+  type: cli
+  # argv list: each element is one token, so prompts with spaces/newlines stay
+  # intact (string commands are shlex-split by the runner).
+  command:
+    # `/usr/bin/env -u PWD` drops the stale inherited PWD so the CLI resolves its
+    # project from the real process cwd (the harness already sets cwd to the case
+    # workspace).
+    - /usr/bin/env
+    - -u
+    - PWD
+    - opencode
+    - run
+    - --standalone
+    - --agent
+    - orchestrator
+    - --model
+    - agentgateway/illusionist
+    - --format
+    - json
+    - '{args}'
+  env:
+    # Documented, non-secret environment switches. They keep the run offline-ish
+    # (no update check, no remote model catalog fetch) without touching
+    # permissions, plugins or model routing. PYTHONDONTWRITEBYTECODE is defense in
+    # depth only; it does not replace the judge's binary-artifact handling.
+    OPENCODE_DISABLE_AUTOUPDATE: '1'
+    OPENCODE_DISABLE_MODELS_FETCH: '1'
+    PYTHONDONTWRITEBYTECODE: '1'
+  # No `plugin_dirs` here: the checked-in `eval-snapshot/` sources live inside the
+  # project root, which is always a materializer source root. Prepared arm configs
+  # add exactly one entry — that arm's snapshot directory — and no external root.
+
+dataset:
+  path: cases/worker-budget-v1
+  schema: >
+    One directory per fixed subscenario: small-edit, failing-test-debug,
+    reviewer-unchanged-handoff, publication-dry-run. Each case carries
+    input.yaml (prompt + declared goal/assertions), annotations.yaml (expectations
+    consumed by the deterministic end-state judge) and the seed fixture files the
+    agent works on. Expected values live in annotations.yaml so raw facts and
+    derived assertions stay separate. The `bootstrap/` subdirectory holds
+    evaluation-only policy/observer TypeScript from the earlier budget research; it
+    is not a case input and is never staged by this config.
+  workspace:
+    files:
+      # --- shared native companions (real-file `{dest, source}` copies) -------
+      # Evaluation-only ALL-ILLUSIONIST snapshot: self-contained native config,
+      # not the production global config. Every model reference in this file and
+      # in the staged agent frontmatter is agentgateway/illusionist; provider use
+      # is deny-by-default with a single agentgateway allow. Built by
+      # `eval-snapshot/build_snapshot.py`.
+      - dest: opencode.jsonc
+        source: eval-snapshot/opencode.jsonc
+      # V2 project discovery layout. Staged agents are model-only rewrites of the
+      # current role agents: ordered tool/shell/skill/subagent permissions are
+      # preserved byte-for-byte.
+      - dest: .opencode/agents
+        source: eval-snapshot/agents
+      # --- per-case seed inputs (plain strings, relative to the case dir) -----
+      # `_copy_input_files` copies each listed path from THAT case's directory
+      # and silently skips it when the case does not have it. Evaluation
+      # metadata (input.yaml/annotations.yaml/answers.yaml) is never listed.
+      - notes.txt
+      - boundary.py
+      - test_boundary.py
+      - unrelated.py
+      - decision_table.py
+      - state.json
+      - preflight.py
+      - repos.json
+
+outputs:
+  - path: output
+    schema: >
+      Optional, produced by the command itself. Only `metrics.json` has a
+      defined shape (the runner's own parser): token_usage, cost_usd, num_turns,
+      model, models_used, per_model_usage, per_model_turns — all optional. Any
+      absent field is reported as UNKNOWN, never 0. No normalized event stream
+      or OpenCode usage export is parsed here.
+    types:
+      metrics.json: json
+
+traces:
+  stdout: true
+  stderr: true
+  events: true
+  metrics: true
+
+judges:
+  - name: end-state
+    # Deterministic end-state assertion only, over the COLLECTED case record.
+    # The neutral judge reconstructs the pristine case from this trusted,
+    # module-relative in-project dataset and overlays only the in-place edits the
+    # collector observed — never the host cwd, never an arm snapshot.
+    module: agent_workflow_checks
+    function: judge_scenario
+    arguments:
+      dataset_root: cases/worker-budget-v1
+    feedback_type: bool
+
+thresholds: {}

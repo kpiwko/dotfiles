@@ -1,0 +1,13 @@
+# End-state expectations for the failing-test-debug case.
+scenario: failing-test-debug
+module: boundary.py
+function: page_bounds
+expected_calls:
+  0: []
+  3: [0, 1, 2]
+  5: [0, 1, 2, 3, 4]
+# The reproduction and the sentinel must keep their seed bytes (sha256 of the
+# case fixture files in this directory).
+unchanged_files:
+  test_boundary.py: sha256:9bc2ca914d515ea5302295363f6d35290bbec1abad89cfddff4f6e6b48059292
+  unrelated.py: sha256:2964316ecac4ad78f1909e3a84493e770408a04288e1c7fb5a59014f58b2d698

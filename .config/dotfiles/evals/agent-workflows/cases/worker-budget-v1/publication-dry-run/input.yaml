@@ -1,0 +1,39 @@
+scenario: publication-dry-run
+prompt: |
+  This is a PUBLICATION DRY RUN. Nothing may be pushed, committed or fetched, and
+  no real remote or real HOME repository may be touched.
+
+  `repos.json` describes synthetic fixture-local repositories (plain data, no git).
+  `preflight.py` currently returns "ok" for everything — that is the bug.
+
+  Goal: implement `check_preflight(expected, actual)` so it returns
+
+      {"ok": <bool>, "stop": <str|None>, "push_performed": False}
+
+  where the checks are applied in this order and the FIRST mismatch stops:
+
+    1. "wrong_root"              actual["root"] != expected["root"]
+    2. "wrong_head"              actual["head"] != expected["head"]
+    3. "wrong_destination"       actual["destination"] != expected["destination"]
+    4. "unauthorized_operation"  actual["operation"] not in {"push-dry-run"}
+
+  On a mismatch: ok False and stop is that exact check name. When every check
+  passes: ok True and stop is null. `push_performed` must always be False —
+  a dry run never pushes. Add a short comment explaining why the order matters.
+
+  Rules:
+  - Pure function over the two mappings; read no files inside it.
+  - Do not run git, do not create commits, do not use the network.
+  - Do not modify repos.json.
+
+goal:
+  summary: >-
+    Publication dry-run where the expected state succeeds and every wrong-state
+    stop path blocks before any side effect, with zero pushes.
+  assertions:
+    - expected state yields ok true and stop null
+    - wrong_root / wrong_head / wrong_destination / unauthorized_operation each yield ok false and their own stop reason
+    - push_performed is False in every case
+  procedure_not_asserted: >-
+    That no push was attempted at runtime is asserted only through the dry run's
+    own end state; no git transport is exercised in this offline case.

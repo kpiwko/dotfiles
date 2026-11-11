@@ -1,0 +1,23 @@
+{
+  "prior": {
+    "worktree_bytes": "sha256:aaaa",
+    "index_state": "index:1",
+    "allowlisted_untracked": ["notes/keep.txt"],
+    "dependency_inputs": ["pyproject.toml@v1", "uv.lock@v1"],
+    "environment_inputs": ["python=3.12.7", "pytest=9.0.1"],
+    "unclosed_finding": false,
+    "criteria_changed": false
+  },
+  "rows": {
+    "unchanged": {},
+    "relevant-fix": {
+      "worktree_bytes": "sha256:bbbb"
+    },
+    "dependency-change": {
+      "dependency_inputs": ["pyproject.toml@v2", "uv.lock@v1"]
+    },
+    "open-finding": {
+      "unclosed_finding": true
+    }
+  }
+}

@@ -1,0 +1,32 @@
+scenario: failing-test-debug
+prompt: |
+  This workspace contains a small pure Python helper and its test. The test
+  `test_boundary.py` currently FAILS. It is reproducible offline:
+
+      python -m unittest test_boundary
+
+  Goal: find the single injected root cause, fix ONLY that cause in `boundary.py`,
+  and make the seeded test pass.
+
+  Rules:
+  - Reproduce the failure before changing anything.
+  - Change only `boundary.py`. Do NOT edit `test_boundary.py` (weakening or
+    deleting the test is not a fix) and do NOT edit `unrelated.py`.
+  - Keep the helper's signature and the behaviour for size 0 unchanged.
+  - Do not run git, do not install anything, do not use the network.
+
+  When done, report the root cause in one sentence and the passing result.
+
+goal:
+  summary: >-
+    Reproducible failing-test debugging with one known injected cause: an
+    off-by-one boundary constant in a pure helper.
+  assertions:
+    - page_bounds(0) == [] (empty document unchanged)
+    - page_bounds(3) == [0, 1, 2]
+    - page_bounds(5) == [0, 1, 2, 3, 4]
+    - test_boundary.py is byte-identical to the seed
+    - unrelated.py is byte-identical to the seed
+  procedure_not_asserted: >-
+    Reproducing the failure and the number of debug iterations are process facts,
+    not end state; they stay UNKNOWN without a concrete artifact.

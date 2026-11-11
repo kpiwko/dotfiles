@@ -1,0 +1,92 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "agentgateway/illusionist",
+  "small_model": "agentgateway/illusionist",
+  "default_agent": "orchestrator",
+  "agent": {
+    "orchestrator": {
+      "model": "agentgateway/illusionist"
+    },
+    "worker": {
+      "model": "agentgateway/illusionist"
+    },
+    "reviewer": {
+      "model": "agentgateway/illusionist"
+    },
+    "architect": {
+      "model": "agentgateway/illusionist"
+    },
+    "planner": {
+      "model": "agentgateway/illusionist"
+    },
+    "zweistein": {
+      "model": "agentgateway/illusionist"
+    }
+  },
+  "permissions": [
+    {
+      "action": "Atlassian_*",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "context7_*",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "experimental": {
+    "policies": [
+      {
+        "effect": "deny",
+        "action": "provider.use",
+        "resource": "*"
+      },
+      {
+        "effect": "allow",
+        "action": "provider.use",
+        "resource": "agentgateway"
+      }
+    ]
+  },
+  "enabled_providers": [
+    "agentgateway"
+  ],
+  "compaction": {
+    "auto": true,
+    "keep": {
+      "tokens": 8000
+    },
+    "buffer": 8000
+  },
+  "providers": {
+    "agentgateway": {
+      "name": "AgentGateway",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "{env:AGENTGATEWAY_BASE_URL}",
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
+      },
+      "models": {
+        "illusionist": {
+          "modelID": "illusionist",
+          "name": "Illusionist (DeepSeek V4.1 Flash)",
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 350000,
+            "output": 32000
+          }
+        }
+      }
+    }
+  }
+}

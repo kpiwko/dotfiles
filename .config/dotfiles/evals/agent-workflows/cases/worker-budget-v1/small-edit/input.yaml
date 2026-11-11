@@ -1,0 +1,40 @@
+scenario: small-edit
+# The rendered prompt is passed to the native CLI as ONE argv element (`{args}`).
+prompt: |
+  You are the orchestrator for a small implementation handoff in the current case
+  workspace. Use your current working directory as the execution root; do not
+  assume or hardcode any other absolute path.
+
+  Delegate the edit to the `worker` subagent and have it perform exactly this
+  change in that same case workspace: append one line at the end of `notes.txt`
+  worker-budget small edit applied
+
+  Rules (apply to you and to the worker):
+  - Preserve the existing content of notes.txt byte for byte; do not rewrite it.
+  - The appended line must appear exactly once.
+  - Do not create, delete or modify any other file.
+  - Do not run git, do not install anything, do not use the network.
+  - Do not apply the edit yourself: the worker must perform it.
+
+  When done, reply with a one-line summary naming the worker as the agent that
+  made the edit.
+
+goal:
+  summary: >-
+    Small implementation handoff: apply one fixed appended line and nothing else,
+    so the result is verifiable from the end state alone.
+  assertions:
+    - notes.txt ends with the fixed line
+    - the fixed line occurs exactly once in notes.txt
+    - the pre-existing prefix is preserved byte for byte
+    - no other file in the workspace changes
+  procedure_not_asserted: >-
+    Whether the finding was delegated to a worker, how many attempts were made and
+    how many tokens were spent are NOT observable from end state; they are UNKNOWN
+    unless a matching native session trace or output/metrics.json is available.
+  procedure_goal: >-
+    DECLARED procedure goal (not an end-state proof): the orchestrator must
+    delegate this edit to the `worker` agent, so a future run exercises the
+    worker-budget predicate (worker AND agentgateway AND illusionist). Worker
+    presence is validated from the run's own assistant/span records, never
+    inferred from the goal text or from this file.

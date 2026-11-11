@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "816acf8c508d45ac26d4503ca290cc5f0d9fb5bd291cfba9aca0fa3855df7d86",
+  "model": "agentgateway/illusionist",
+  "roles": [
+    "orchestrator",
+    "worker",
+    "reviewer",
+    "architect",
+    "planner",
+    "zweistein"
+  ],
+  "source_sha256": {
+    "orchestrator.md": "a0c9a34984578ea22795112b87cfed3a4f61b7e29a8edaa174e3e177e12ecc4e",
+    "worker.md": "3db53ff4c2855cdb759bc9f6cfb01009da53bc824ba9cd46c51b309299552aea",
+    "reviewer.md": "1afce987b066bfe766bc77cc7dde5aec99a27752606fe672d2c3cd3309d3142f",
+    "architect.md": "7de4d4d4abc94b9dd00b89facc8717e1d5f8508c9772485e4010f913e3b90209",
+    "planner.md": "d3432864492f04cb2f65c355f25314fcf5b11ba2a40b70056ca808e07cd308a1",
+    "zweistein.md": "f0bdcee850aa52fc06b668646bf95404f71c6da1d421177dea68f3f771fac166"
+  },
+  "files_sha256": {
+    "agents/architect.md": "363986dba480d9c549613e6aa59e4f5fb25b67c0547f502fcf9e338774009beb",
+    "agents/orchestrator.md": "e1bae5156cae131574007ff518087d39e5005264aa14fa9132242a2886e74502",
+    "agents/planner.md": "3c5c107349a5440eab386fe3898768397f092dcbad5e8a0ccdbf8c0396833dcf",
+    "agents/reviewer.md": "b260269c48c13a05b5592318a2027aba163b73221ddf41425eb8c9509d41b16b",
+    "agents/worker.md": "3db53ff4c2855cdb759bc9f6cfb01009da53bc824ba9cd46c51b309299552aea",
+    "agents/zweistein.md": "6971deb0837108411732ef01cd127458cc69b92942691b67db091eb6a5012dd1",
+    "opencode.jsonc": "b679b31586a9a25d8ca8bd334c9cf1260d78d3b3e7e914e0e68e7ceb6a1bbfc4"
+  }
+}

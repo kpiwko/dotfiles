@@ -1,0 +1,15 @@
+{
+  "$comment": "Synthetic, fixture-local publication targets. Plain data: this case never runs git and never contacts a remote.",
+  "expected": {
+    "root": "/fixture/workspace",
+    "head": "fixture-head",
+    "destination": "fixture-origin.git",
+    "operation": "push-dry-run"
+  },
+  "variants": {
+    "wrong_root": {"root": "/fixture/other-workspace"},
+    "wrong_head": {"head": "fixture-other-head"},
+    "wrong_destination": {"destination": "unexpected-origin.git"},
+    "unauthorized_operation": {"operation": "force-push"}
+  }
+}

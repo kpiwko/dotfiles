@@ -1,0 +1,45 @@
+scenario: reviewer-unchanged-handoff
+prompt: |
+  This workspace contains `state.json` (a prior validated revision plus four
+  handoff rows) and `decision_table.py`, an incomplete implementation of the
+  revision-handoff decision. Right now it collapses two separate decisions into
+  one, which is wrong.
+
+  Goal: implement `decide(prior, current)` so it returns exactly
+
+      {"review_needed": <bool>, "validation_reusable": <bool>}
+
+  with these semantics, for each row in state.json["rows"] (the row is applied
+  on top of state.json["prior"] to build `current`):
+
+  - unchanged           -> review_needed False, validation_reusable True
+    An unchanged relevant-scope revision (same worktree bytes, same index state,
+    same allowlisted untracked files, same dependency and environment inputs)
+    must NOT be re-reviewed and its validation stays reusable.
+  - relevant-fix        -> review_needed True,  validation_reusable False
+  - dependency-change   -> review_needed False, validation_reusable False
+    A changed dependency/environment input invalidates prior validation but does
+    not by itself require a review.
+  - open-finding        -> review_needed True,  validation_reusable True
+    An open finding requires review, but nothing relevant changed, so prior
+    validation is still reusable.
+
+  Rules:
+  - Relevant scope = worktree_bytes, index_state, allowlisted_untracked.
+  - Review is also required when an acceptance criterion changed.
+  - Keep the function pure; do not read files or environment inside it.
+  - Do not modify state.json. Do not run git, install anything or use the network.
+
+goal:
+  summary: >-
+    One relevant finding fixed once, then an unchanged-revision handoff with no
+    duplicate review, and a dependency/environment change that invalidates prior
+    validation without inventing a review.
+  assertions:
+    - the four decision rows match the declared table exactly
+    - validation reuse is decided separately from review need
+    - state.json is unchanged
+  procedure_not_asserted: >-
+    Whether a reviewer subagent was actually invoked, and whether a duplicate
+    review was actually skipped at runtime, cannot be inferred from the decision
+    function alone; those stay UNKNOWN without runtime artifacts.

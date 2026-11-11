@@ -1,0 +1,24 @@
+# End-state expectations for the reviewer-unchanged-handoff case.
+#
+# Review and validation reuse are separate decisions: a dependency/environment
+# change invalidates validation without demanding a review; an unchanged
+# relevant-scope revision demands neither.
+scenario: reviewer-unchanged-handoff
+module: decision_table.py
+function: decide
+state: state.json
+rows:
+  - name: unchanged
+    review_needed: false
+    validation_reusable: true
+  - name: relevant-fix
+    review_needed: true
+    validation_reusable: false
+  - name: dependency-change
+    review_needed: false
+    validation_reusable: false
+  - name: open-finding
+    review_needed: true
+    validation_reusable: true
+unchanged_files:
+  state.json: sha256:429309eefb3fb0737c347a5c2be57613799ed568fbe2e5e9c62cd5aca6561d33

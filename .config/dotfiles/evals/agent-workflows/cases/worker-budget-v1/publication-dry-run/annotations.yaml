@@ -1,0 +1,31 @@
+# End-state expectations for the publication-dry-run case.
+#
+# Every target is fixture-local synthetic data (see repos.json). No git transport
+# exists in this case, so `push_performed` can only ever be the dry run's own
+# declaration and must be False.
+scenario: publication-dry-run
+module: preflight.py
+function: check_preflight
+cases:
+  expected:
+    ok: true
+    expected: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+    actual: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+  wrong_root:
+    ok: false
+    expected: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+    actual: {root: /fixture/other-workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+  wrong_head:
+    ok: false
+    expected: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+    actual: {root: /fixture/workspace, head: fixture-other-head, destination: fixture-origin.git, operation: push-dry-run}
+  wrong_destination:
+    ok: false
+    expected: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+    actual: {root: /fixture/workspace, head: fixture-head, destination: unexpected-origin.git, operation: push-dry-run}
+  unauthorized_operation:
+    ok: false
+    expected: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: push-dry-run}
+    actual: {root: /fixture/workspace, head: fixture-head, destination: fixture-origin.git, operation: force-push}
+unchanged_files:
+  repos.json: sha256:c3c0ddf1963510f53f43338ff1fa4e31d0343eafe777e9fd5d6bbcb74710f266

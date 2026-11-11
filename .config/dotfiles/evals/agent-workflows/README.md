@@ -1,5 +1,27 @@
 # agent-workflows — relocated Git-pilot evaluation project (dotfiles)
 
+## Start here — neutral agent-definition evaluation (offline)
+
+The current milestone in this project is a two-arm **agent-definition**
+comparison over four fixed cases (`small-edit`, `failing-test-debug`,
+`reviewer-unchanged-handoff`, `publication-dry-run`). Each case is scored
+outcome-only as `pass`/`fail`/`unscorable` by a deterministic end-state judge;
+procedure coverage is `not_measured`. Preparing arms and comparing saved runs are
+offline file operations: no model is invoked, no efficacy is claimed, no
+candidate has been selected and no live evaluation has been approved or run. The
+all-illusionist snapshot is configuration fidelity, not runtime isolation or
+enforcement. Operator guide:
+[`AGENT_DEFINITION_EVAL.md`](AGENT_DEFINITION_EVAL.md).
+
+Everything below this section is preserved earlier research and history: the
+relocated Git-pilot project and the worker-budget policy/observer/SSE work with
+its receipts and caveats. It is **deferred historical material**, not a
+prerequisite or acceptance gate for the neutral workflow; its untracked modules
+are not required by `prepare`, `compare` or the neutral tests. The budget-heavy
+`runner-compatibility.md` note is preserved as-is, not extended here.
+
+---
+
 Relocated 2026-11-03 (P0.2) from
 `/Users/kpiwko/devel/adlc/experiments/02-git-operations/git-pilot-v1/`
 (portable closure only; see `MIGRATION` notes below and
