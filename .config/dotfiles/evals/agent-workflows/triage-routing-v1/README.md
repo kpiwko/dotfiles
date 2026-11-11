@@ -127,6 +127,11 @@ Each `scoring_fields` entry in `cases.json` is tagged `kind`:
     text.
   - `answer_content` and `delegation_content` — literal content checks (the
     supplied rule; the required execution root and resolved path).
+  - `forbidden_text` — the per-case `expectation.forbidden_text` assertion list:
+    wording the actor must not emit in user-visible text. Judged manually from
+    the recorded visible output, in substance rather than by exact string match,
+    and never from private reasoning. Only cases that carry the list are scored
+    on it; absence of the list is not an assertion.
 
 Subjective detours that cannot be observed (for example "refusing because the
 task has two steps", or "inventing a migration order") are not scored and have
@@ -135,6 +140,9 @@ been removed rather than guessed at.
 **Missing observations are unscorable.** If the required event stream or the
 user-visible text channel is absent or cannot distinguish denied from absent,
 that case is **unscorable** — never zero-count, never `pass` on outcome alone.
+The same holds per text field: when the recording has no user-visible text
+channel, the `forbidden_text` assertion list (like every other `text` field)
+is unscorable rather than satisfied by default.
 Distinguish the two absences: if the observable is missing *because the actor did
 something else* (delegated instead of asking, edited instead of answering), that
 is a **fail**; if the recording lacks the channel entirely, it is

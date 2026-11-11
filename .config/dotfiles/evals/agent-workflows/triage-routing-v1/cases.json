@@ -64,6 +64,10 @@
       "kind": "text",
       "source": "manual assertion: required path/root strings present in the recorded delegation prompt"
     },
+    "forbidden_text": {
+      "kind": "text",
+      "source": "manual assertion on user-visible text emitted inside the window: the case fails if a wording listed in its expectation.forbidden_text appears in substance; private reasoning is never evidence; a case with no user-visible text channel is unscorable for this field"
+    },
     "final_outcome": {
       "kind": "reporting_only",
       "source": "recorded for reporting; never used to infer routing"
@@ -165,6 +169,8 @@
           "/synthetic/acme-cli/pyproject.toml",
           "/synthetic/acme-cli/src/acme/cli.py",
           "/synthetic/acme-cli/src/acme/commands/export.py",
+          "/synthetic/acme-cli/tests/test_export.py",
+          "/synthetic/acme-cli-wip/pyproject.toml",
           "/synthetic/acme-cli-wip/src/acme/cli.py"
         ],
         "required_delegation_content": {
