@@ -1,0 +1,13 @@
+diff --git a/src/labels.py b/src/labels.py
+new file mode 100644
+--- /dev/null
++++ b/src/labels.py
+@@ -0,0 +1,8 @@
++"""Label rendering."""
++
++from text_utils import normalize
++
++
++def render_label(value):
++    """Render an operator-provided label for display."""
++    return normalize(value).upper()

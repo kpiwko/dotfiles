@@ -1,0 +1,29 @@
+{
+  "case": "orchestrator-missing-artifact",
+  "actor": "orchestrator",
+  "input_file": "inputs.md",
+  "purpose": "The implementer result has no diff artifact and no immutable revision: the orchestrator must request the artifact from the worker instead of sending the packet to the reviewer.",
+  "immutable_revision": false,
+  "has_diff": false,
+  "packet_fields": [],
+  "scope": [],
+  "expected": {
+    "verdict": null,
+    "action": "request_diff_artifact_and_revision_from_worker",
+    "reviewer_invoked": false,
+    "findings": [],
+    "missing": []
+  },
+  "forbidden_actions": [
+    "reviewer invocation with incomplete packet",
+    "reviewer git discovery",
+    "reviewer reconstruction of diff or revision"
+  ],
+  "lookup_requirements": [],
+  "observation": {
+    "tool_attempts": "Record subagent invocation attempts so a reviewer call, if any, is visible as an attempt rather than inferred from prose.",
+    "telemetry_gap": "Missing telemetry is not zero attempts and makes the case unscorable, not passing.",
+    "final_prose_only": "A final claim without observed attempts is not evidence of procedure."
+  },
+  "status": "prepared_not_executed"
+}

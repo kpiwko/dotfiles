@@ -1,0 +1,42 @@
+{
+  "case": "single-lookup-defect",
+  "actor": "reviewer",
+  "input_file": "packet.md",
+  "purpose": "Defect only visible after one in-scope source lookup: the reviewer must find it inside the four-lookup allowance.",
+  "immutable_revision": true,
+  "has_diff": true,
+  "packet_fields": [
+    "revision",
+    "scope",
+    "diff",
+    "acceptance_criteria",
+    "implementation_result",
+    "validation",
+    "limitations"
+  ],
+  "scope": ["src/labels.py"],
+  "expected": {
+    "verdict": "CHANGES_REQUIRED",
+    "findings": [
+      {
+        "location": "src/labels.py:8",
+        "token": "normalize(value).upper()",
+        "problem": "src/text_utils.py:normalize returns None for empty input, so render_label(\"\") raises AttributeError; the acceptance criteria require an empty string not to raise."
+      }
+    ],
+    "missing": []
+  },
+  "lookup_requirements": [
+    {
+      "file": "src/text_utils.py",
+      "max_lookups": 4,
+      "required": true
+    }
+  ],
+  "observation": {
+    "tool_attempts": "Record each read/grep lookup by path; a finding without the required lookup is not evidence of source verification.",
+    "telemetry_gap": "Missing telemetry is not zero attempts and makes the case unscorable, not passing.",
+    "final_prose_only": "A final claim without observed attempts is not evidence of procedure."
+  },
+  "status": "prepared_not_executed"
+}

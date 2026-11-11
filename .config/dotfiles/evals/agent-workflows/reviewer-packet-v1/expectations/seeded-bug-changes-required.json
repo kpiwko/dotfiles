@@ -1,0 +1,36 @@
+{
+  "case": "seeded-bug-changes-required",
+  "actor": "reviewer",
+  "input_file": "packet.md",
+  "purpose": "Complete packet with one seeded real defect: the reviewer must request changes at the defect location.",
+  "immutable_revision": true,
+  "has_diff": true,
+  "packet_fields": [
+    "revision",
+    "scope",
+    "diff",
+    "acceptance_criteria",
+    "implementation_result",
+    "validation",
+    "limitations"
+  ],
+  "scope": ["src/backoff.py"],
+  "expected": {
+    "verdict": "CHANGES_REQUIRED",
+    "findings": [
+      {
+        "location": "src/backoff.py:10",
+        "token": "len(DELAYS)",
+        "problem": "min(attempt, len(DELAYS)) can index DELAYS at len(DELAYS), raising IndexError for attempt >= 4; the acceptance criteria require reusing the last delay."
+      }
+    ],
+    "missing": []
+  },
+  "lookup_requirements": [],
+  "observation": {
+    "tool_attempts": "Record every read/grep lookup and any denied shell attempt; denial is a data point, not a failure.",
+    "telemetry_gap": "Missing telemetry is not zero attempts and makes the case unscorable, not passing.",
+    "final_prose_only": "A final claim without observed attempts is not evidence of procedure."
+  },
+  "status": "prepared_not_executed"
+}

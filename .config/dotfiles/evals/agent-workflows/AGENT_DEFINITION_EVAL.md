@@ -253,6 +253,22 @@ blocker to claiming that integration acceptance. The legacy worker-budget suite
 must run at the project root above; running it from `$HOME` hits cwd-relative
 staging failures.
 
+### Reviewer packet suite (offline, prepared fixtures)
+
+[`reviewer-packet-v1/`](reviewer-packet-v1/README.md) covers the packet-first,
+shell-free reviewer contract from `681b80c7`: offline definition-contract checks
+(including mutation tests against the reviewer and orchestrator definitions) and
+seven prepared behavioral fixtures. Fixtures are `prepared_not_executed`; there
+is no live run and no saved-result scorer in this suite.
+
+```bash
+/Users/kpiwko/devel/adlc/experiments/02-git-operations/git-pilot-v1/.venv/bin/python \
+  -m unittest discover \
+  -s /Users/kpiwko/.config/dotfiles/evals/agent-workflows/tests \
+  -t /Users/kpiwko/.config/dotfiles/evals/agent-workflows/tests \
+  -p 'test_reviewer_packet_contract.py'
+```
+
 ## Not claimed / deferred
 
 - No live evaluation, candidate efficacy, production adoption or publication
