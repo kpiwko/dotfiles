@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Upstream agent-sandbox core release, pinned and vendored unmodified.
+#
+# Source: https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.10/sandbox.yaml
+# sha256: ea8de87e7d71cf3df40bb71a71f3c4d095e7ae88dc43fe5f4050a717abd46066
+#
+# `sandbox.yaml` is the core release: the Sandbox CRD and the
+# agent-sandbox-controller in the agent-sandbox-system namespace. The optional
+# `sandbox-with-extensions.yaml` bundle is deliberately not installed.
+#
+# No `namespace:` transformer is set here: the vendored manifest already names
+# agent-sandbox-system for its namespaced resources and also contains
+# cluster-scoped resources (CRD, ClusterRole, ClusterRoleBinding) that must not
+# be rewritten into the ai-dev application namespace.
+resources:
+  - sandbox.yaml

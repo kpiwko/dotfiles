@@ -19,6 +19,7 @@ def make_executable(path: Path, body: str) -> None:
 def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str, str], Path]:
     k8s = tmp_path / "k8s"
     k8s.mkdir()
+    (k8s / "agent-sandbox").mkdir()
     stubs = tmp_path / "stubs"
     stubs.mkdir()
     roles = tmp_path / "roles"
@@ -54,6 +55,7 @@ def devcluster_env(tmp_path: Path, clean_env: dict[str, str]) -> tuple[dict[str,
         '  case "$*" in *.status.active*) [ "${KUBECTL_JOB_STATUS:-}" = active ] && printf 1;; *.status.succeeded*) [ "${KUBECTL_JOB_STATUS:-}" = succeeded ] && printf 1;; *.status.failed*) [ "${KUBECTL_JOB_STATUS:-}" = failed ] && printf 1;; esac\n'
         '  exit 0\n'
         'fi\n'
+        'if [ "$1" = get ] && [ "$2" = pods ]; then case " $* " in *" -l "*) :;; *) printf "%s-pod 1/1 Running\\n" "$4";; esac; fi\n'
         'if [ "$1" = logs ]; then printf "%s\\n" "${KUBECTL_JOB_LOG:-}"; fi\n'
         'if [ "$1" = create ]; then echo "kind: Secret"; fi\n'
         'if [ "$1" = apply ] && [ "$2" = -f ]; then cat; fi\n',
@@ -90,6 +92,12 @@ def kubectl_commands(env: dict[str, str]) -> list[str]:
 
 def command_index(commands: list[str], needle: str) -> int:
     return next(index for index, command in enumerate(commands) if needle in command)
+
+
+def exact_command_index(commands: list[str], command: str) -> int:
+    # Prefix lookups are ambiguous because `apply -k <k8s>` is a prefix of
+    # `apply -k <k8s>/agent-sandbox`; match the whole invocation instead.
+    return commands.index(command)
 
 
 def test_usage_without_command(devcluster_env: tuple[dict[str, str], Path]) -> None:
@@ -177,7 +185,7 @@ def test_up_sequences_safe_lifecycle_and_secrets_after_runtime(
 
     namespace = command_index(commands, "create namespace ai-dev")
     workspace_secret = command_index(commands, "create secret generic workspace-mcp-secrets")
-    safe_base = command_index(commands, f"apply -k {env['K8S_DIR']}")
+    safe_base = exact_command_index(commands, f"apply -k {env['K8S_DIR']}")
     writer_check = command_index(commands, "wait --for=delete pod -n ai-dev -l app=mlflow")
     migration_apply = command_index(commands, f"apply -k {env['K8S_DIR']}/migration")
     migration_complete = command_index(commands, "wait --for=condition=complete job/mlflow-db-migrate")
@@ -196,6 +204,46 @@ def test_up_sequences_safe_lifecycle_and_secrets_after_runtime(
     assert "MLFLOW_EXPERIMENT_ID=42" in commands[agentgateway_secret]
     assert "enmaas-secret" not in result.stdout + result.stderr
     assert str(Path(env["GOOGLE_APPLICATION_CREDENTIALS"])) not in result.stdout + result.stderr
+
+
+def test_up_applies_pinned_agent_sandbox_before_the_application_stages(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "up", env=env | ai_factory_inputs())
+    assert result.returncode == 0, result.stderr
+    commands = kubectl_commands(env)
+
+    add_on_apply = exact_command_index(commands, f"apply -k {env['K8S_DIR']}/agent-sandbox")
+    crd_established = command_index(commands, "crd/sandboxes.agents.x-k8s.io")
+    controller_ready = exact_command_index(
+        commands,
+        "rollout status deployment/agent-sandbox-controller -n agent-sandbox-system --timeout=180s",
+    )
+    safe_base = exact_command_index(commands, f"apply -k {env['K8S_DIR']}")
+    migration_apply = command_index(commands, f"apply -k {env['K8S_DIR']}/migration")
+
+    assert add_on_apply < crd_established < controller_ready
+    assert controller_ready < safe_base < migration_apply
+    # The add-on is applied, never deleted, so reruns stay idempotent.
+    assert not any("delete -k" in command for command in commands)
+
+
+def test_agent_sandbox_readiness_failure_blocks_the_application_stages(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(
+        SCRIPT,
+        "up",
+        env=env | ai_factory_inputs() | {"KUBECTL_FAIL_WAIT_JOB": "crd/sandboxes.agents.x-k8s.io"},
+    )
+    assert result.returncode != 0
+    assert "Sandbox CRD did not become Established" in result.stderr
+    commands = kubectl_commands(env)
+    assert not any(command == f"apply -k {env['K8S_DIR']}" for command in commands)
+    assert not any(f"apply -k {env['K8S_DIR']}/migration" in command for command in commands)
+    assert not any(f"apply -k {env['K8S_DIR']}/runtime" in command for command in commands)
 
 
 def test_migration_failure_stops_runtime_and_gateway(
@@ -327,6 +375,29 @@ def test_agentgateway_key_is_created_from_the_required_input(
     assert result.returncode == 0, result.stderr
     secret = next(command for command in kubectl_commands(env) if "agentgateway-secrets" in command)
     assert "AGENTGATEWAY_API_KEY=token" in secret
+
+
+def test_status_reports_ai_dev_and_agent_sandbox_pods(
+    devcluster_env: tuple[dict[str, str], Path],
+) -> None:
+    env, _ = devcluster_env
+    result = run_script(SCRIPT, "status", env=env)
+    assert result.returncode == 0, result.stderr
+
+    commands = kubectl_commands(env)
+    ai_dev = exact_command_index(commands, "get pods -n ai-dev")
+    sandbox_system = exact_command_index(commands, "get pods -n agent-sandbox-system")
+    assert ai_dev < sandbox_system
+
+    ai_dev_heading = "=== Pods (ai-dev namespace) ==="
+    sandbox_heading = "=== Pods (agent-sandbox-system namespace) ==="
+    assert ai_dev_heading in result.stdout
+    assert sandbox_heading in result.stdout
+
+    before_sandbox, after_sandbox = result.stdout.split(sandbox_heading)
+    assert "ai-dev-pod" in before_sandbox.split(ai_dev_heading)[1]
+    # The controller namespace is reported even when no Sandbox workload exists.
+    assert "agent-sandbox-system-pod" in after_sandbox
 
 
 def test_up_uses_only_cluster_native_lifecycle_operations() -> None:

@@ -8,6 +8,7 @@ K8S_DIR="${K8S_DIR:-$HOME/.config/k8s}"
 CLUSTER_NAME="devcluster"
 LIMA_CONFIG="${LIMA_CONFIG:-$HOME/.config/lima/devcluster.yaml}"
 KUSTOMIZE_DIR="$K8S_DIR"
+AGENT_SANDBOX_DIR="$K8S_DIR/agent-sandbox"
 DEVCLUSTER_KUBECONFIG="${DEVCLUSTER_KUBECONFIG:-$HOME/.kube/opencode-devcluster}"
 
 usage() {
@@ -109,6 +110,24 @@ ensure_cluster_running() {
   fi
 }
 
+apply_agent_sandbox() {
+  if [ ! -d "$AGENT_SANDBOX_DIR" ]; then
+    echo "devcluster: error: agent-sandbox manifests not found at $AGENT_SANDBOX_DIR" >&2
+    exit 1
+  fi
+
+  echo "Applying pinned agent-sandbox controller..."
+  $KUBECTL_BIN apply -k "$AGENT_SANDBOX_DIR"
+  if ! $KUBECTL_BIN wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s; then
+    echo "devcluster: error: Sandbox CRD did not become Established" >&2
+    exit 1
+  fi
+  if ! $KUBECTL_BIN rollout status deployment/agent-sandbox-controller -n agent-sandbox-system --timeout=180s; then
+    echo "devcluster: error: agent-sandbox controller did not become available" >&2
+    exit 1
+  fi
+}
+
 cmd_up() {
   ensure_cluster_running
 
@@ -150,6 +169,8 @@ cmd_up() {
     echo "devcluster: error: kustomize dir not found at $KUSTOMIZE_DIR" >&2
     exit 1
   fi
+
+  apply_agent_sandbox
 
   echo "Applying migration-safe base..."
   $KUBECTL_BIN apply -k "$KUSTOMIZE_DIR"
@@ -289,6 +310,9 @@ cmd_status() {
   echo ""
   echo "=== Pods (ai-dev namespace) ==="
   $KUBECTL_BIN get pods -n ai-dev
+  echo ""
+  echo "=== Pods (agent-sandbox-system namespace) ==="
+  $KUBECTL_BIN get pods -n agent-sandbox-system
 }
 
 cmd_logs() {

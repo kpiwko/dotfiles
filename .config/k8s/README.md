@@ -18,7 +18,9 @@ declare a storage class.
 
 `devcluster up` is the supported v3.17.0 lifecycle. It starts the Lima
 instance if it is stopped (blocking until the instance's k3s service is
-active), then applies the safe base, confirms that both writers have terminated, runs
+active), then applies the pinned `agent-sandbox` add-on stage (see
+[Agent Sandbox (pinned v1.0.10)](#agent-sandbox-pinned-v1010)), then the safe
+base, confirms that both writers have terminated, runs
 the exclusive `mlflow-db-migrate` Job, waits for it to complete and be cleaned
 up, applies `~/.config/k8s/runtime`, and waits for MLflow and OTel readiness.
 If the instance does not exist or fails to start, `devcluster up` stops before
@@ -93,6 +95,55 @@ The AgentGateway model catalog prices built-in public provider/model pairs. Add
 an Enmaas override only after its billing rate and the emitted
 provider/model-label pair are verified. Do not substitute an upstream public
 price for an Enmaas bill.
+
+## Agent Sandbox (pinned v1.0.10)
+
+`~/.config/k8s/agent-sandbox/` is a separate Kustomize stage that installs the
+upstream [agent-sandbox](https://agent-sandbox.sigs.k8s.io) **core** release,
+pinned to `v1.0.10`. It is cluster infrastructure rather than an `ai-dev`
+workload: the release ships the `Sandbox` CRD (`sandboxes.agents.x-k8s.io`), a
+controller `Deployment`, and cluster-scoped RBAC in its own
+`agent-sandbox-system` namespace. That is why it is neither part of `base/`
+(the maintenance-safe `ai-dev` application state) nor `runtime/`, and why its
+Kustomization deliberately sets no `namespace:` transformer — the vendored
+manifest already names `agent-sandbox-system`, and the CRD, ClusterRole, and
+ClusterRoleBinding must stay cluster-scoped.
+
+`devcluster up` applies this stage after `ai-dev` namespace and MCP secret
+provisioning and before the migration-safe base. An apply failure, a `Sandbox`
+CRD that never reaches `Established`, or a controller that never rolls out
+aborts `devcluster up` before any MLflow writer is stopped, so the add-on
+cannot open the migration window on its own.
+
+Provenance and reproducibility:
+
+- Vendored file `~/.config/k8s/agent-sandbox/sandbox.yaml` is byte-identical to
+  `https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.10/sandbox.yaml`
+  (sha256 `ea8de87e7d71cf3df40bb71a71f3c4d095e7ae88dc43fe5f4050a717abd46066`,
+  recorded in the stage Kustomization and asserted by the test suite).
+- Controller image: `registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10`.
+- Only the core release is installed. The optional
+  `sandbox-with-extensions.yaml` bundle (`SandboxTemplate`, `SandboxClaim`,
+  `SandboxWarmPool`) is intentionally not part of this stage; adding it is a
+  separate decision with its own pin.
+- Upstream requires Kubernetes 1.25 or later with CRD CEL validation rules
+  enabled, and recommends 1.29 or later; the devcluster k3s node satisfies this.
+
+The stage is equivalent to applying the pinned release manifest directly:
+
+```bash
+devcluster-kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.10/sandbox.yaml
+```
+
+Verify the installation:
+
+```bash
+devcluster-kubectl get crd sandboxes.agents.x-k8s.io
+devcluster-kubectl get deploy agent-sandbox-controller -n agent-sandbox-system
+```
+
+Do not delete `crd/sandboxes.agents.x-k8s.io` to "reset" the add-on: deleting a
+CRD cascade-deletes every `Sandbox` object in every namespace.
 
 ## NotebookLM MCP Authentication Guide
 

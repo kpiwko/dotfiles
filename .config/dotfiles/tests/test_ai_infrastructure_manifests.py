@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -14,6 +15,7 @@ from conftest import ROOT
 K8S_DIR = ROOT / ".config" / "k8s"
 BASE = K8S_DIR / "base"
 RUNTIME = K8S_DIR / "runtime"
+AGENT_SANDBOX = K8S_DIR / "agent-sandbox"
 
 
 def render(path: Path) -> str:
@@ -38,6 +40,52 @@ def has_deployment_replicas(resources: str, name: str, replicas: int) -> bool:
             re.DOTALL,
         )
     )
+
+
+def test_agent_sandbox_add_on_is_vendored_with_the_pinned_release() -> None:
+    resources = render(AGENT_SANDBOX)
+    manifest_digest = hashlib.sha256((AGENT_SANDBOX / "sandbox.yaml").read_bytes()).hexdigest()
+    kustomization = (AGENT_SANDBOX / "kustomization.yaml").read_text()
+
+    # The pinned upstream core release is vendored and the digest records what
+    # was vendored; the kustomization must not restate or override the image.
+    assert "releases/download/v1.0.10/sandbox.yaml" in kustomization
+    assert manifest_digest in kustomization
+    assert "registry.k8s.io" not in kustomization
+    assert "image:" not in kustomization
+
+    assert "name: sandboxes.agents.x-k8s.io" in resources
+    assert "image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.10" in resources
+    assert "name: agent-sandbox-controller" in resources
+    assert "namespace: agent-sandbox-system" in resources
+    # The controller owns its own namespace and cluster-scoped resources, so no
+    # namespace transformer may pull it into the application namespace.
+    assert "\nnamespace:" not in kustomization
+    assert "namespace: ai-dev" not in resources
+
+
+def test_application_stages_do_not_install_the_agent_sandbox_add_on() -> None:
+    for resources in (render(K8S_DIR), render(RUNTIME)):
+        assert "agent-sandbox-system" not in resources
+        assert "sandboxes.agents.x-k8s.io" not in resources
+
+
+def test_operator_docs_pin_the_agent_sandbox_add_on() -> None:
+    k8s_readme = (K8S_DIR / "README.md").read_text()
+    cluster_readme = (ROOT / ".config" / "dotfiles" / "README.md").read_text()
+    kustomization = (AGENT_SANDBOX / "kustomization.yaml").read_text()
+    digest = hashlib.sha256((AGENT_SANDBOX / "sandbox.yaml").read_bytes()).hexdigest()
+
+    assert "## Agent Sandbox (pinned v1.0.10)" in k8s_readme
+    assert "releases/download/v1.0.10/sandbox.yaml" in k8s_readme
+    assert "agent-sandbox-system" in k8s_readme
+    assert "sandbox-with-extensions.yaml" in k8s_readme
+    assert "devcluster-kubectl get crd sandboxes.agents.x-k8s.io" in k8s_readme
+    assert "pinned `v1.0.10`" in cluster_readme
+    assert "Agent Sandbox" in cluster_readme
+    # Documentation, stage, and vendored bytes record the same artifact.
+    assert digest in k8s_readme
+    assert digest in kustomization
 
 
 def test_safe_base_includes_agentgateway_but_leaves_writers_stopped() -> None:

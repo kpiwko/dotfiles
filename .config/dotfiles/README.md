@@ -221,6 +221,9 @@ The cluster includes:
 - **MLflow** - GenAI tracking and artifact server for OpenCode traces
 - **AgentGateway** - the sole OpenAI-compatible inference endpoint
 - **MCP Servers** - Model Context Protocol (NotebookLM, Workspace)
+- **Agent Sandbox** - pinned `v1.0.10` core `Sandbox` CRD and controller in its
+  own `agent-sandbox-system` namespace, applied by `devcluster up` before the
+  `ai-dev` application stages.
 
 ## Secret Management & Google Workspace OAuth
 
