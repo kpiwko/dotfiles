@@ -76,9 +76,25 @@ def test_only_otel_plugin_configured_with_experiment_header() -> None:
     assert plugins[0]["package"] == "@devtheops/opencode-plugin-otel"
     assert plugins[0]["options"]["otlpHeaders"] == "x-mlflow-experiment-id=23"
     assert plugins[0]["options"]["endpoint"] == "{env:OPENCODE_OTLP_ENDPOINT}"
+    assert plugins[0]["options"]["protocol"] == "http/protobuf"
+    assert plugins[0]["options"]["disabledMetrics"] == [
+        "cost.usage",
+        "session.cost.total",
+    ]
+
+
+def test_only_illusionist_model_is_exposed() -> None:
+    model = _config()["providers"]["agentgateway"]["models"]["illusionist"]
+    assert model["modelID"] == "illusionist"
+    assert model["capabilities"]["tools"] is True
+    assert model["capabilities"]["input"] == ["text"]
+    assert model["capabilities"]["output"] == ["text"]
+    assert model["limit"] == {"context": 350000, "output": 64000}
 
 
 def test_no_mcp_or_extra_plugins() -> None:
     cfg = _config()
     assert "mcp" not in cfg
     assert "instructions" not in cfg
+    for key in ("agent", "agents", "command", "commands"):
+        assert key not in cfg
