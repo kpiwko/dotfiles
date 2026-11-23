@@ -45,7 +45,13 @@ GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-$GATEWAY_ENDPOINT_DEFAULT}"
 
 # Digest-pinned: a moving tag would silently swap the binary path the policy
 # matches on, which turns every request into a denial.
-IMAGE="ghcr.io/anomalyco/opencode@sha256:be38ebc82f8f0858dc703e76e582c1d32bbdf8534ebfd7d3b4aef55585433965"
+#
+# Built by .github/workflows/opencode-sandbox-image.yml from image/Containerfile
+# (OpenShell community base + OpenCode 2.3.0). The published `anomalyco/opencode`
+# image ships OpenCode 1.x, which drops the V2 `providers` block and cannot
+# resolve a model. To move to a new build, take the digest printed in the
+# workflow's job summary.
+IMAGE="ghcr.io/kpiwko/opencode-sandbox@sha256:23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6"
 # Must equal network_policies.*.binaries[].path in sandbox-policy.yaml.
 OPENCODE_BINARY="/usr/local/bin/opencode"
 

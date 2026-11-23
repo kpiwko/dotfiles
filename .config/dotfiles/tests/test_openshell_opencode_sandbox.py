@@ -118,7 +118,7 @@ SENTINEL_KEY = "sk-agentgateway-sentinel-2f9c1d7b4a"
 
 IMAGE = (
     "ghcr.io/kpiwko/opencode-sandbox@sha256:"
-    "2367d202fc4aaa08d1a7db32b6b4b1a012638b70d443bf7011cbe1154d6c3f39"
+    "23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6"
 )
 
 
@@ -432,16 +432,15 @@ def test_readme_documents_reference_only_key_handling() -> None:
 def test_readme_documents_no_silent_image_fallback() -> None:
     fallback = _section(_stage_readme(), "Image fallback (manual, not automatic)")
 
-    # The wrapper fails closed on anything unexpected; the NVIDIA community
-    # base image is a deliberate, unverified manual fallback, never automatic.
+    # The wrapper fails closed on anything unexpected; replacing the image is a
+    # deliberate, manual edit, never automatic.
     assert "no automatic fallback" in fallback.lower()
     assert "fails closed" in fallback
     assert "NVIDIA" in fallback
-    assert "unverified" in fallback
-    # The fallback step has to name the config file it carries over unchanged,
-    # not rely on the layout table at the top of the document.
+    assert "Image/Containerfile" in fallback or "image/Containerfile" in fallback
+    # The step has to name the files an operator actually edits, not rely on the
+    # layout table at the top of the document.
     assert "opencode.json" in fallback
-    assert "create-sandbox.sh" in fallback
     assert "sandbox-policy.yaml" in fallback
 
 
@@ -504,7 +503,7 @@ def test_readme_lists_what_the_stage_does_not_include() -> None:
         assert item in excluded
 
 
-def test_readme_documents_lifecycle_and_unverified_assumptions() -> None:
+def test_readme_documents_lifecycle_and_evidence_status() -> None:
     readme = _stage_readme()
 
     for command in (
@@ -516,30 +515,29 @@ def test_readme_documents_lifecycle_and_unverified_assumptions() -> None:
     ):
         assert command in readme
 
-    # Real CLI behaviour is not proven here; the docs must say so rather than
-    # present the flag spellings as verified fact.
-    unverified = _section(readme, "Verified and unverified")
-    assert "0.1.8" in unverified
-    assert "sleep infinity" in unverified
-    assert "/usr/local/bin/opencode" in unverified
-    assert "Duplicate-name" in unverified
+    # A live run happened, so the doc may assert CLI behaviour — but only the
+    # parts it exercised, and the untested duplicate-name path must stay honest.
+    section = _section(readme, "Verified and unverified")
+    assert "Verified in a live run" in section
+    assert "sleep infinity" in section
+    assert "/usr/local/bin/opencode" in section
+    assert "Still unverified" in section
+    assert "Duplicate-name" in section
 
 
-def test_readme_treats_otlp_endpoint_shape_and_state_path_as_expected_only() -> None:
+def test_readme_records_that_telemetry_and_state_path_were_observed() -> None:
     readme = _stage_readme()
 
-    unverified = _section(readme, "Verified and unverified")
-    # The base URL versus full `/v1/traces` URL question is third-party plugin
-    # behaviour, so it belongs in the unverified list rather than as fact.
-    assert "OTLP endpoint shape" in unverified
-    assert "/v1/traces" in unverified
-    assert "OPENCODE_OTLP_ENDPOINT" in unverified
-    # `HOME=/sandbox` implies this XDG path; it has not been observed.
-    assert "/sandbox/.local/share/opencode" in unverified
+    section = _section(readme, "Verified and unverified")
+    # Both were listed as assumptions before the live run; the trace that landed
+    # in experiment 23 and the observed state directory settle them.
+    assert "OTLP endpoint shape" in section
+    assert "/v1/traces" in section
+    assert "/sandbox/.local/share/opencode" in section
 
     telemetry = _section(readme, "Telemetry")
-    assert "assumption" in telemetry
-    assert "unverified" in telemetry
+    assert "confirmed" in telemetry
+    assert "unverified assumption" not in telemetry
 
 
 def _gateway_flags(calls: list[list[str]]) -> list[list[str]]:

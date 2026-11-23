@@ -157,12 +157,12 @@ The wrapper never reconfigures a sandbox it did not create in the same run.
 `endpoint: {env:OPENCODE_OTLP_ENDPOINT}`, headers
 `x-mlflow-experiment-id=23`, trace propagation for the `agentgateway` provider,
 and the cost metrics disabled. The variable carries the collector base URL
-(`http://otel-collector.ai-dev.svc.cluster.local:4318`). That the plugin appends
-`/v1/traces` to it is an unverified assumption about third-party plugin
-behaviour: if the exporter posts to some other path, every trace is denied while
-inference keeps working. Confirm the path actually requested on the first run
-(see Troubleshooting) and, if it differs, allow exactly that path rather than
-widening the endpoint.
+(`http://otel-collector.ai-dev.svc.cluster.local:4318`). A live run confirmed the
+plugin appends `/v1/traces` itself: the trace for the prompt that was executed
+arrived in experiment 23, which is only possible if the collector accepted the
+post at the path the policy allows. If a future plugin release changes that path,
+telemetry is denied while inference keeps working — check the policy against the
+path actually requested rather than widening the endpoint.
 
 The plugin entry is a **directory**, `/usr/local/share/opencode/plugins/opencode-plugin-otel`,
 not an npm package name. Naming the package makes OpenCode run `npm install` at
@@ -192,36 +192,42 @@ runtime image still contains no Node toolchain.
 Verified offline, with a stand-in CLI injected through `OPENSHELL_BIN`: the
 wrapper's ordering, refuse-on-missing-input behaviour, digest pin, `--env` and
 `--env-from` handling, config upload, and binary-path check
-(`tests/test_openshell_opencode_sandbox.py`). No cluster was contacted.
+(`tests/test_openshell_opencode_sandbox.py`).
 
-Unverified until a real run, and treated as unverified in this document:
+Verified in a live run on 2026-11-23 against the devcluster gateway (sandbox
+`opencode-dev`, image pinned in `create-sandbox.sh`):
 
-- **CLI 0.1.8 flag spellings.** `sandbox create --from --name --cpu --memory
-  --detach --restart-policy --policy --env --env-from`,
-  `sandbox upload … --no-git-ignore`, and `sandbox exec -n` are written from the
-  documented shape of the 0.1.8 CLI, not from an executed invocation.
-- **The `-- sleep infinity` argv shape.** That everything after `--` becomes the
-  sandbox's main process, passed as a command plus argument rather than one
-  shell string, is not proven here.
-- **The image's `opencode` binary location.** `/usr/local/bin/opencode` is
-  asserted by the wrapper, which fails loudly on a mismatch; the image itself has
-  not been inspected.
-- **Duplicate-name create behaviour.** Unverified, hence the `sandbox get`
-  pre-check.
-- **`--gateway-endpoint` as a pre-subcommand global flag.** That the CLI accepts
-  it before `sandbox` (the wrapper's placement, chosen so a single spelling works
-  for all four calls) is written from the documented shape of 0.1.8, not from an
-  executed invocation.
-- **OTLP endpoint shape.** `OPENCODE_OTLP_ENDPOINT` is set to the bare collector
-  base URL and the policy allows `POST /v1/traces`, assuming the OTEL plugin
-  appends that path itself. Whether it appends `/v1/traces`, or instead expects
-  the full `/v1/traces` URL in the variable, is unverified third-party behaviour:
-  confirm which path is actually posted on the first run.
-- **OpenCode state location.** `/sandbox/.local/share/opencode` follows from
-  `HOME=/sandbox` and OpenCode's documented XDG layout; it has not been observed
-  in a running sandbox.
-- **Landlock support at sandbox startup.** The policy requires it; only a real
-  start proves it. Absence is a startup failure, never a downgrade.
+- **CLI 0.1.8 surface.** `sandbox create --from --name --cpu --memory --detach
+  --restart-policy --policy --env --env-from -- sleep infinity`,
+  `sandbox upload … --no-git-ignore`, `sandbox exec -n`, and
+  `--gateway-endpoint` before the subcommand all worked as written.
+- **Main process.** `-- sleep infinity` became the sandbox's main process and it
+  stayed `Ready`. This is also why the image clears the base `ENTRYPOINT`: with
+  `/bin/bash` inherited, bash read `sleep` as a script path and the process died.
+- **Binary location.** `/usr/local/bin/opencode` was observed in the sandbox and
+  the wrapper's check passed.
+- **Landlock at startup.** Sandbox start succeeded with
+  `landlock.compatibility: hard_requirement`, so the ABI and every listed path
+  are satisfied by this image.
+- **Inference.** `opencode run "reply with the word ready"` answered through
+  `agentgateway/illusionist`.
+- **OTLP endpoint shape.** A trace for that exact prompt (`request_preview`,
+  `os.type=linux`) landed in MLflow experiment 23 with `state=OK`, so the plugin
+  does post to `POST /v1/traces` when the variable is the bare collector base
+  URL.
+- **OpenCode state location.** `/sandbox/.local/share/opencode` exists, with
+  `log/`, `opencode.db`, and the plugin's own warnings.
+- **Deny-by-default.** A request from the sandbox to `registry.npmjs.org` fails
+  at connect, and the OTEL plugin only loads because it is baked into the image.
+
+Still unverified:
+
+- **Duplicate-name create behaviour.** The CLI's own response to an existing
+  name has not been exercised; the wrapper's `sandbox get` pre-check is what
+  refuses the case.
+- **Trace linkage between OpenCode and AgentGateway spans.** Both services report
+  traces with the same prompt, but under different trace ids, so view them as
+  two traces rather than one propagated tree.
 
 ## Image fallback (manual, not automatic)
 
@@ -230,14 +236,14 @@ There is no automatic fallback. If the pinned image is unusable — no shell, no
 wrapper fails closed and prints what it observed. Do not widen the policy to make
 a mismatched image work, and do not switch to `best_effort`.
 
-The fallback considered in the design is the NVIDIA community sandbox base image.
-Using it is a deliberate edit: change the digest in `create-sandbox.sh`, then
-change `binaries[].path` in `sandbox-policy.yaml` to the path the new image
-actually provides, re-run the wrapper, and re-check the telemetry and inference
-paths. `opencode.json` is carried over unchanged: a replacement image that ships
-an incompatible OpenCode release shows up there first — expect to adjust the
-config schema, not the policy. That combination is unverified; treat it as a new
-image with a new policy, not as a supported mode of this stage.
+The image is built from the NVIDIA community sandbox base by
+`image/Containerfile`, so that base is no longer a separate fallback: it is the
+image's own foundation, with OpenCode and the OTEL plugin added on top. If a base
+bump breaks something, change the digest in `image/Containerfile`, rebuild, and
+re-pin the resulting digest. Keep `binaries[].path` in `sandbox-policy.yaml` equal
+to the path the new image actually provides; `opencode.json` normally carries over
+unchanged, and an incompatible OpenCode release shows up there first — expect to
+adjust the config schema, not the policy.
 
 ## Troubleshooting
 
@@ -254,13 +260,15 @@ openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17
 `/usr/local/bin/opencode` and with `binaries[].path`. Fix the policy path or the
 image; do not add hosts to compensate.
 
-**Inference works, but no traces appear in MLflow experiment 23.** Check that
-`POST /v1/traces` is still allowed on the collector endpoint, then confirm the
-path the plugin actually requests. `OPENCODE_OTLP_ENDPOINT` is the bare collector
-base URL, which assumes the plugin appends `/v1/traces`; whether it does, or
-whether it wants the full `/v1/traces` URL in the variable instead, is unverified.
-A policy that omits the path the exporter really uses loses telemetry silently
-while inference keeps working, which is the hardest failure to notice.
+**Inference works, but no traces appear in MLflow experiment 23.** First check
+`opencode.log` for `failed to load plugin`: if the plugin was configured by npm
+package name it cannot be installed under the deny-by-default policy, and the
+failure is only a `WARN`. Then check that `POST /v1/traces` is still allowed on
+the collector endpoint. A live run confirmed the plugin posts to `/v1/traces`
+with `OPENCODE_OTLP_ENDPOINT` set to the bare collector base URL, so a wrong path
+here means the policy was edited, not that the variable shape is wrong. A policy
+that omits the path the exporter really uses loses telemetry silently while
+inference keeps working, which is the hardest failure to notice.
 
 **The sandbox reports suspended.** Its main process exited. `sleep infinity` is
 supposed to outlive the run, and `--restart-policy never` deliberately leaves the
@@ -304,7 +312,7 @@ resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
-| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:2367d202fc4aaa08d1a7db32b6b4b1a012638b70d443bf7011cbe1154d6c3f39` |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6` |
 | Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
 | OpenCode | `2.3.0`, matching the host, installed at `/usr/local/bin/opencode` |
 | User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
