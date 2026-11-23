@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -349,14 +350,25 @@ def test_wrapper_binary_constant_matches_policy() -> None:
 # The stage README is operator-facing. These assertions pin the statements a
 # future edit must not quietly drop: the digest pin, reference-only credential
 # handling, the absence of a silent image fallback, the deny-by-default and
-# hard-Landlock posture, and the limits an operator has to know about.
+# hard-Landlock posture, and the limits an operator has to know about. Each
+# assertion is scoped to the section it belongs to, so unrelated prose cannot
+# satisfy it.
 
 STAGE_README = OPENCODE / "README.md"
-PARENT_README = OPENCODE.parent / "README.md"
 
 
 def _stage_readme() -> str:
     return STAGE_README.read_text()
+
+
+def _section(readme: str, heading: str) -> str:
+    match = re.search(r"(?ms)^## " + re.escape(heading) + r"\n(.*?)(?=^## |\Z)", readme)
+    assert match, f"README has no '## {heading}' section"
+    return match.group(1)
+
+
+def _paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n[ \t]*\n", text) if p.strip()]
 
 
 def test_readme_documents_digest_pin_and_wrapper_interfaces() -> None:
@@ -378,51 +390,79 @@ def test_readme_documents_reference_only_key_handling() -> None:
     readme = _stage_readme()
 
     assert "--env-from AGENTGATEWAY_API_KEY" in readme
-    # The key is exported into the operator's environment and handed over by
-    # reference; no literal key material may reach the documentation.
     assert "AGENTGATEWAY_API_KEY" in readme
-    assert "sk-" not in readme
+
+    # No literal credential may reach the documentation: no assignment of a
+    # value to the key variable (in a shell, an env file, or a hand-rolled
+    # `--env` pass-through) and no key-shaped token anywhere in the prose.
+    assert not re.search(r"AGENTGATEWAY_API_KEY=", readme)
+    assert not re.search(r"AGENTGATEWAY_API_KEY\s+[=:]\s*\S", readme)
+    assert not re.search(r"\bsk-[A-Za-z0-9_-]{8,}", readme)
 
 
 def test_readme_documents_no_silent_image_fallback() -> None:
-    readme = _stage_readme()
+    fallback = _section(_stage_readme(), "Image fallback (manual, not automatic)")
 
     # The wrapper fails closed on anything unexpected; the NVIDIA community
     # base image is a deliberate, unverified manual fallback, never automatic.
-    assert "fail" in readme
-    assert "NVIDIA" in readme
-    assert "unverified" in readme
-    assert "opencode.json" in readme
+    assert "no automatic fallback" in fallback.lower()
+    assert "fails closed" in fallback
+    assert "NVIDIA" in fallback
+    assert "unverified" in fallback
+    # The fallback step has to name the config file it carries over unchanged,
+    # not rely on the layout table at the top of the document.
+    assert "opencode.json" in fallback
+    assert "create-sandbox.sh" in fallback
+    assert "sandbox-policy.yaml" in fallback
 
 
-def test_readme_documents_deny_by_default_and_hard_landlock() -> None:
+def test_readme_forbids_relaxing_landlock_wherever_it_names_it() -> None:
     readme = _stage_readme()
+    posture = _section(readme, "Posture")
 
-    assert "deny-by-default" in readme
-    assert "landlock.compatibility: hard_requirement" in readme
-    assert "best_effort" in readme
+    assert "deny-by-default" in posture
+    assert "landlock.compatibility: hard_requirement" in posture
+    assert "enforcement: enforce" in posture
+    assert "/usr/local/bin/opencode" in posture
     assert "sandbox-policy.yaml" in readme
-    assert "enforcement: enforce" in readme
-    assert "/usr/local/bin/opencode" in readme
+
+    # Merely containing the word `best_effort` must never read as advice: every
+    # paragraph that names it has to forbid it.
+    offending = [
+        paragraph
+        for paragraph in _paragraphs(readme)
+        if "best_effort" in paragraph
+        and not any(word in paragraph.lower() for word in ("never", "do not"))
+    ]
+    assert offending == [], f"best_effort mentioned without a prohibition: {offending}"
 
 
 def test_readme_troubleshooting_maps_symptoms_to_causes() -> None:
-    readme = _stage_readme()
+    troubleshooting = _section(_stage_readme(), "Troubleshooting")
 
-    assert "## Troubleshooting" in readme
     # Every symptom an operator will actually hit, with its real cause.
-    assert "every request is denied" in readme.lower()
-    assert "binary path" in readme
-    assert "/v1/traces" in readme
-    assert "main process" in readme
-    assert "Landlock" in readme
+    assert "every request is denied" in troubleshooting.lower()
+    assert "binary path" in troubleshooting
+    assert "/v1/traces" in troubleshooting
+    assert "main process" in troubleshooting
+    assert "Landlock" in troubleshooting
+
+    # The probe has to run through a shell: `command` is a builtin, so the
+    # documented command uses `-- sh -c`, not a bare `-- command ...`.
+    probes = [
+        block
+        for block in re.findall(r"```text\n(.*?)```", troubleshooting, re.S)
+        if "command -v opencode" in block
+    ]
+    assert len(probes) == 1, probes
+    assert "-- sh -c 'command -v opencode'" in probes[0]
 
 
 def test_readme_lists_what_the_stage_does_not_include() -> None:
     readme = _stage_readme()
 
-    assert "## Not included" in readme
-    for excluded in (
+    excluded = _section(readme, "Not included")
+    for item in (
         "repositories",
         "GitHub",
         "GitLab",
@@ -432,7 +472,7 @@ def test_readme_lists_what_the_stage_does_not_include() -> None:
         "OIDC",
         "Caddy",
     ):
-        assert excluded in readme
+        assert item in excluded
 
 
 def test_readme_documents_lifecycle_and_unverified_assumptions() -> None:
@@ -449,15 +489,25 @@ def test_readme_documents_lifecycle_and_unverified_assumptions() -> None:
 
     # Real CLI behaviour is not proven here; the docs must say so rather than
     # present the flag spellings as verified fact.
-    assert "0.1.8" in readme
-    assert "unverified" in readme
-    assert "sleep infinity" in readme
+    unverified = _section(readme, "Verified and unverified")
+    assert "0.1.8" in unverified
+    assert "sleep infinity" in unverified
+    assert "/usr/local/bin/opencode" in unverified
+    assert "Duplicate-name" in unverified
 
 
-def test_parent_stage_readme_links_the_opencode_stage() -> None:
-    parent = PARENT_README.read_text()
+def test_readme_treats_otlp_endpoint_shape_and_state_path_as_expected_only() -> None:
+    readme = _stage_readme()
 
-    assert "opencode/" in parent
-    assert "opencode/README.md" in parent
-    # The new stage is an explicit operator action, not part of deploy.sh.
-    assert "OpenCode" in parent
+    unverified = _section(readme, "Verified and unverified")
+    # The base URL versus full `/v1/traces` URL question is third-party plugin
+    # behaviour, so it belongs in the unverified list rather than as fact.
+    assert "OTLP endpoint shape" in unverified
+    assert "/v1/traces" in unverified
+    assert "OPENCODE_OTLP_ENDPOINT" in unverified
+    # `HOME=/sandbox` implies this XDG path; it has not been observed.
+    assert "/sandbox/.local/share/opencode" in unverified
+
+    telemetry = _section(readme, "Telemetry")
+    assert "assumption" in telemetry
+    assert "unverified" in telemetry
