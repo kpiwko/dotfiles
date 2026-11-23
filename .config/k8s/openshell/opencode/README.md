@@ -283,3 +283,39 @@ This stage deliberately excludes, and its config contains none of:
 
 Live validation of the acceptance checks is a separate operator step; this
 directory ships configuration and procedure only.
+
+## Workload image
+
+The sandbox runs `ghcr.io/kpiwko/opencode-sandbox`, built from
+`image/Containerfile`. It exists because the published
+`ghcr.io/anomalyco/opencode` image ships OpenCode 1.x, which discards V2
+configuration (`providers`) with a compatibility warning and then fails to
+resolve any model — verified in a live sandbox.
+
+| Property | Value |
+| --- | --- |
+| Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
+| OpenCode | `2.3.0`, matching the host, installed at `/usr/local/bin/opencode` |
+| User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
+| Platforms | `linux/amd64`, `linux/arm64` |
+
+Publishing happens in CI: `.github/workflows/opencode-sandbox-image.yml` builds
+both architectures and pushes `ghcr.io/kpiwko/opencode-sandbox` with the
+workflow's `GITHUB_TOKEN` (`packages: write`). That is deliberate — a developer's
+`gh` login for repository work carries no `write:packages` scope, so a local
+`podman push` is denied. Trigger it with `workflow_dispatch`, or by changing
+anything under `image/` on `main`.
+
+The run prints the manifest digest in its job summary. Pin that digest in
+`create-sandbox.sh` (`SANDBOX_IMAGE`); a floating tag would change the workload
+under a policy that pins the binary path.
+
+To reproduce a build locally (for inspection, not publishing):
+
+```sh
+~/.config/k8s/openshell/opencode/image/build.sh   # needs `podman login ghcr.io` to push
+```
+
+`build.sh` runs the binary's `--version` check only for the host architecture;
+Bun aborts under QEMU, which is also why CI builds with `VERIFY_BINARY=0`. The
+per-architecture tarball SHA-256 is verified in every build either way.

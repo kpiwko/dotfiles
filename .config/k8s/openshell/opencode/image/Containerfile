@@ -1,0 +1,62 @@
+# OpenCode sandbox image, built on the OpenShell community sandbox base.
+#
+# Why a custom image: the published `ghcr.io/anomalyco/opencode` image ships
+# OpenCode 1.x, which silently drops V2 configuration (`providers`) and cannot
+# run the OpenCode 2 configuration this stage uses. This image installs the same
+# OpenCode version as the host (pinned below) on a base that is already built for
+# OpenShell: non-root `sandbox` user, writable /sandbox, bash entrypoint.
+#
+# The binary is downloaded straight from the release tarball rather than through
+# the official installer: the installer executes the binary to verify it, and Bun
+# aborts under QEMU emulation, so a cross-built image could never be produced that
+# way. Downloading is also what lets us pin the tarball checksum per architecture.
+
+FROM ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e
+
+ARG TARGETARCH
+ARG OPENCODE_VERSION=2.3.0
+ARG OPENCODE_SHA256_AMD64=408f854b5fac7857a3b4df4e783d3a8b70f5cc8c7c3187aac09c5be0576c14ae
+ARG OPENCODE_SHA256_ARM64=be30066353bb592c43919b31072ff4099e069636c31a16806b088737e0287cea
+
+# Bun (and therefore the OpenCode binary) aborts when executed under QEMU
+# emulation, so the build-time version check can only run on a native platform.
+# The default is off: CI cross-builds under QEMU. `build.sh` turns it on for the
+# architecture it is running on. The tarball checksum below is the real integrity
+# check and applies to every architecture.
+ARG VERIFY_BINARY=0
+
+USER root
+
+# curl/tar fetch and unpack the release; keep the apt lists out of the image.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tar gzip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN set -eu; \
+    case "${TARGETARCH:-$(uname -m)}" in \
+        amd64|x86_64) target=linux-x64; sum="$OPENCODE_SHA256_AMD64" ;; \
+        arm64|aarch64) target=linux-arm64; sum="$OPENCODE_SHA256_ARM64" ;; \
+        *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    tarball="/tmp/cli-${target}-${OPENCODE_VERSION}.tgz"; \
+    curl -fsSL "https://registry.npmjs.org/@opencode/cli-${target}/-/cli-${target}-${OPENCODE_VERSION}.tgz" -o "$tarball"; \
+    echo "${sum}  ${tarball}" | sha256sum -c -; \
+    tar -xzf "$tarball" -C /tmp package/bin/opencode; \
+    install -m 0755 /tmp/package/bin/opencode /usr/local/bin/opencode; \
+    rm -rf /tmp/package "$tarball"; \
+    if [ "$VERIFY_BINARY" = "1" ]; then \
+        installed="$(/usr/local/bin/opencode --version)"; \
+        case "$installed" in \
+            *"${OPENCODE_VERSION}"*) : ;; \
+            *) echo "unexpected opencode version: $installed" >&2; exit 1 ;; \
+        esac; \
+    fi
+
+USER sandbox
+WORKDIR /sandbox
+
+# The base image's ENTRYPOINT is `/bin/bash`, so a plain command would be read as
+# a bash script path (`bash sleep infinity` -> "sleep: No such file"). OpenShell
+# passes the sandbox's main process as ordinary arguments, so clear the entrypoint
+# and let the command run directly.
+ENTRYPOINT []

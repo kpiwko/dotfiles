@@ -692,3 +692,101 @@ def test_create_sandbox_rejects_endpoint_value_starting_with_a_dash(
     assert proc.returncode == 2
     assert calls == []
     assert "usage:" in proc.stderr
+
+
+# The workload image is built here because the published OpenCode image ships
+# OpenCode 1.x, which silently discards V2 configuration. These tests pin the
+# build inputs that make the image usable under the sandbox policy.
+IMAGE_DIR = OPENCODE / "image"
+
+
+def test_image_is_built_on_the_pinned_openshell_sandbox_base() -> None:
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    assert (
+        "ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:"
+        "aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e"
+        in containerfile
+    )
+    # A floating tag would silently change the base under the pinned policy.
+    assert "FROM ghcr.io/nvidia/openshell-community/sandboxes/base:" not in containerfile
+
+
+def test_image_installs_opencode_v2_at_the_policy_path() -> None:
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    # The V1 installer rejects 2.x outright; using it would build a broken image.
+    assert "registry.npmjs.org/@opencode/cli-" in containerfile
+    assert "ARG OPENCODE_VERSION=2.3.0" in containerfile
+    assert "install -m 0755" in containerfile
+    assert "/usr/local/bin/opencode" in containerfile
+
+
+def test_image_runs_as_the_sandbox_user() -> None:
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    assert "USER sandbox" in containerfile
+    assert "WORKDIR /sandbox" in containerfile
+
+
+def test_build_script_publishes_both_architectures() -> None:
+    build = (IMAGE_DIR / "build.sh").read_text()
+
+    assert "linux/amd64,linux/arm64" in build
+    assert "podman manifest create" in build
+    assert "podman manifest push --all" in build
+    assert "ghcr.io/kpiwko/opencode-sandbox" in build
+
+
+def test_image_pins_a_checksum_per_architecture() -> None:
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    assert "ARG OPENCODE_SHA256_AMD64=" in containerfile
+    assert "ARG OPENCODE_SHA256_ARM64=" in containerfile
+    # The checksum, not a version string printed by a freshly downloaded binary, is
+    # what guarantees the pulled artifact is the expected one.
+    assert "sha256sum -c -" in containerfile
+    assert "linux-x64" in containerfile and "linux-arm64" in containerfile
+
+
+def test_image_clears_the_base_entrypoint() -> None:
+    # The base image's ENTRYPOINT is /bin/bash, which turns the wrapper's
+    # `-- sleep infinity` into `bash sleep infinity`: bash reads "sleep" as a
+    # script path and the sandbox's main process dies immediately.
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    assert "\nENTRYPOINT []\n" in containerfile
+
+
+def test_image_binary_check_is_opt_in() -> None:
+    # CI cross-builds under QEMU, where Bun aborts when executed. The check must
+    # therefore be off by default and switched on only for a native build.
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+    build = (IMAGE_DIR / "build.sh").read_text()
+
+    assert "ARG VERIFY_BINARY=0" in containerfile
+    assert '--build-arg "VERIFY_BINARY=$verify"' in build
+
+
+WORKFLOW = ROOT / ".github" / "workflows" / "opencode-sandbox-image.yml"
+
+
+def test_ci_publishes_the_image_with_package_write_access() -> None:
+    # A developer's gh token has no write:packages, so the registry push has to
+    # happen where GITHUB_TOKEN carries that scope.
+    workflow = WORKFLOW.read_text()
+
+    assert "packages: write" in workflow
+    assert "secrets.GITHUB_TOKEN" in workflow
+    assert "docker/login-action" in workflow
+    assert "push: true" in workflow
+
+
+def test_ci_builds_both_architectures_for_the_pinned_image_name() -> None:
+    workflow = WORKFLOW.read_text()
+
+    assert "platforms: linux/amd64,linux/arm64" in workflow
+    assert "ghcr.io/${{ github.repository_owner }}/opencode-sandbox" in workflow
+    assert "VERIFY_BINARY=0" in workflow
+    # The operator needs the digest, because create-sandbox.sh pins one.
+    assert "steps.build.outputs.digest" in workflow
