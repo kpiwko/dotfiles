@@ -31,7 +31,8 @@ OPENSHELL_BIN="${OPENSHELL_BIN:-openshell}"
 # and the sandbox would be created in the wrong place. The default is the verified
 # loopback NodePort of the Kubernetes gateway (internal-mTLS registration already
 # in place); override per run with --gateway-endpoint or OPENSHELL_GATEWAY_ENDPOINT.
-GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}"
+GATEWAY_ENDPOINT_DEFAULT="https://127.0.0.1:17910"
+GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-$GATEWAY_ENDPOINT_DEFAULT}"
 
 # Digest-pinned: a moving tag would silently swap the binary path the policy
 # matches on, which turns every request into a denial.
@@ -52,8 +53,10 @@ usage() {
 usage: create-sandbox.sh [--name NAME] [--gateway-endpoint URL]
 
   --name NAME             sandbox name (default: $NAME_DEFAULT)
-  --gateway-endpoint URL  OpenShell gateway to operate on
-                          (default: ${GATEWAY_ENDPOINT})
+  --gateway-endpoint URL  OpenShell gateway to operate on (default:
+                          $GATEWAY_ENDPOINT_DEFAULT). Override for the whole
+                          shell with OPENSHELL_GATEWAY_ENDPOINT=<url>; the flag
+                          wins over that variable.
 EOF
 }
 
@@ -70,7 +73,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --gateway-endpoint)
-            [[ $# -ge 2 && -n "$2" ]] || { usage; exit 2; }
+            [[ $# -ge 2 && -n "$2" && "$2" != -* ]] || { usage; exit 2; }
             GATEWAY_ENDPOINT="$2"
             shift 2
             ;;
@@ -108,7 +111,7 @@ fi
 # probe is read as "absent", so an unreachable cluster surfaces as the create
 # error itself rather than as a guessed parse of the probe's output.
 if "$OPENSHELL_BIN" --gateway-endpoint "$GATEWAY_ENDPOINT" sandbox get "$NAME" >/dev/null 2>&1; then
-    die "sandbox '$NAME' already exists; use --name to create another, or delete it first: $OPENSHELL_BIN sandbox delete $NAME"
+    die "sandbox '$NAME' already exists; use --name to create another, or delete it first: $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox delete $NAME"
 fi
 
 echo "create-sandbox: creating '$NAME' on $GATEWAY_ENDPOINT from $IMAGE"
@@ -141,7 +144,7 @@ fi
 observed=$(printf '%s' "$observed" | tr -d '[:space:]')
 
 if [[ "$observed" != "$OPENCODE_BINARY" ]]; then
-    die "OpenCode binary in '$NAME' resolves to '$observed', but sandbox-policy.yaml pins '$OPENCODE_BINARY'. Every request would be denied. Fix the policy path or the image, then: $OPENSHELL_BIN sandbox delete $NAME"
+    die "OpenCode binary in '$NAME' resolves to '$observed', but sandbox-policy.yaml pins '$OPENCODE_BINARY'. Every request would be denied. Fix the policy path or the image, then: $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox delete $NAME"
 fi
 
 echo "create-sandbox: '$NAME' is ready (opencode at $OPENCODE_BINARY)"

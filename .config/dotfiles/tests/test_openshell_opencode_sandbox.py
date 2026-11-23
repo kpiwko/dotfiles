@@ -137,7 +137,7 @@ def _fake_openshell(
         "    printf 'END\\n'\n"
         f"}} >> '{record}'\n"
         "# Skip global flags (recorded above in full) to find the subcommand.\n"
-        "while [[ $# -gt 0 && \"$1\" == --gateway-endpoint ]]; do shift 2; done\n"
+        "while [[ $# -ge 2 && \"$1\" == --gateway-endpoint ]]; do shift 2; done\n"
         "case \"${1:-} ${2:-}\" in\n"
         "    'sandbox get')\n"
         f"        exit {get_exit}\n"
@@ -602,3 +602,72 @@ def test_create_sandbox_help_documents_gateway_endpoint(
     assert calls == []
     assert GATEWAY_FLAG in proc.stderr
     assert GATEWAY_DEFAULT in proc.stderr
+
+
+def test_create_sandbox_existing_name_error_names_the_effective_gateway(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    # The cleanup hint must carry the endpoint this run used, or an operator
+    # would delete the same-named sandbox on the host gateway.
+    endpoint = "https://10.42.7.9:19999"
+    fake = _fake_openshell(tmp_path, get_exit=0)
+    proc, calls = _run(
+        WRAPPER,
+        tmp_path,
+        clean_env,
+        args=[GATEWAY_FLAG, endpoint],
+        fake=fake,
+    )
+
+    assert proc.returncode != 0
+    assert f"{GATEWAY_FLAG} {endpoint} sandbox delete opencode-dev" in proc.stderr
+    assert calls == [[GATEWAY_FLAG, endpoint, "sandbox", "get", "opencode-dev"]]
+
+
+def test_create_sandbox_binary_mismatch_error_names_the_effective_gateway(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    endpoint = "https://10.42.7.9:19999"
+    fake = _fake_openshell(tmp_path, opencode_path="/usr/bin/opencode")
+    proc, _ = _run(
+        WRAPPER,
+        tmp_path,
+        clean_env,
+        args=[GATEWAY_FLAG, endpoint],
+        fake=fake,
+    )
+
+    assert proc.returncode != 0
+    assert "/usr/bin/opencode" in proc.stderr
+    assert f"{GATEWAY_FLAG} {endpoint} sandbox delete opencode-dev" in proc.stderr
+
+
+def test_create_sandbox_help_shows_the_literal_default_not_the_env_value(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    # The help text documents the shipped default; printing the operator's
+    # environment value there would present a local override as the default.
+    env_endpoint = "https://env-should-not-be-the-default.example:1"
+    proc, calls = _run(
+        WRAPPER, tmp_path, clean_env, args=["--help"], endpoint=env_endpoint
+    )
+
+    assert proc.returncode == 0
+    assert calls == []
+    assert GATEWAY_DEFAULT in proc.stderr
+    assert env_endpoint not in proc.stdout + proc.stderr
+    assert "OPENSHELL_GATEWAY_ENDPOINT" in proc.stderr
+
+
+def test_create_sandbox_rejects_endpoint_value_starting_with_a_dash(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    # A dashed value is another flag, never an endpoint; fail on usage instead of
+    # handing the CLI something meaningless.
+    proc, calls = _run(
+        WRAPPER, tmp_path, clean_env, args=[GATEWAY_FLAG, "--not-an-endpoint"]
+    )
+
+    assert proc.returncode == 2
+    assert calls == []
+    assert "usage:" in proc.stderr

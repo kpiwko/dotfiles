@@ -118,14 +118,20 @@ The default name is `opencode-dev`; use `--name` for a second sandbox:
 ## Everyday use
 
 ```text
-openshell sandbox exec -n opencode-dev -- opencode
-openshell sandbox exec -n opencode-dev -- opencode run "reply with the word ready"
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox exec -n opencode-dev -- opencode
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox exec -n opencode-dev -- opencode run "reply with the word ready"
 
-openshell sandbox stop opencode-dev     # suspend; identity and workspace are kept
-openshell sandbox start opencode-dev
+# suspend; identity and workspace are kept
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox stop opencode-dev
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox start opencode-dev
 
-openshell sandbox delete opencode-dev   # reset; the next create starts clean
+# reset; the next create starts clean
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox delete opencode-dev
 ```
+
+Every command there names the gateway for the same reason the wrapper does: an
+endpoint left implicit is resolved from the CLI's *current* registration, which on
+this machine is the host gateway, not the Kubernetes one.
 
 The sandbox's HOME is `/sandbox`, so OpenCode state and session data are expected
 under `/sandbox/.local/share/opencode`. That XDG path is expected, not observed:
@@ -135,9 +141,14 @@ response, are live acceptance checks of this stage and remain unverified until
 they are actually observed.
 
 Because the wrapper refuses an existing name, changing `opencode.json` means
-`sandbox delete` followed by a fresh `create-sandbox.sh`; the upload step then
-ships the edited file. The wrapper never reconfigures a sandbox it did not
-create in the same run.
+deleting the sandbox on that same gateway, then re-creating it:
+
+```text
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox delete opencode-dev
+```
+
+The upload step in the fresh `create-sandbox.sh` run then ships the edited file.
+The wrapper never reconfigures a sandbox it did not create in the same run.
 
 ## Telemetry
 
@@ -225,7 +236,7 @@ egress on the executable, so a different path denies everything while the sandbo
 looks healthy:
 
 ```text
-openshell sandbox exec -n opencode-dev -- sh -c 'command -v opencode'
+openshell --gateway-endpoint "${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}" sandbox exec -n opencode-dev -- sh -c 'command -v opencode'
 ```
 
 `command` is a shell builtin, so it only works through a shell; a bare
