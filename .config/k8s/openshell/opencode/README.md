@@ -152,8 +152,9 @@ The wrapper never reconfigures a sandbox it did not create in the same run.
 
 ## Telemetry
 
-`opencode.json` configures exactly one plugin, `@devtheops/opencode-plugin-otel`,
-with `protocol: http/protobuf`, `endpoint: {env:OPENCODE_OTLP_ENDPOINT}`, headers
+`opencode.json` configures exactly one plugin, `@devtheops/opencode-plugin-otel`
+(version `2.0.1`), with `protocol: http/protobuf`,
+`endpoint: {env:OPENCODE_OTLP_ENDPOINT}`, headers
 `x-mlflow-experiment-id=23`, trace propagation for the `agentgateway` provider,
 and the cost metrics disabled. The variable carries the collector base URL
 (`http://otel-collector.ai-dev.svc.cluster.local:4318`). That the plugin appends
@@ -162,6 +163,15 @@ behaviour: if the exporter posts to some other path, every trace is denied while
 inference keeps working. Confirm the path actually requested on the first run
 (see Troubleshooting) and, if it differs, allow exactly that path rather than
 widening the endpoint.
+
+The plugin entry is a **directory**, `/usr/local/share/opencode/plugins/opencode-plugin-otel`,
+not an npm package name. Naming the package makes OpenCode run `npm install` at
+startup; the policy denies `registry.npmjs.org`, so the plugin fails to load with
+only a `WARN` in `opencode.log` and telemetry silently disappears. The image
+installs the pinned plugin in a build stage, dependencies included, so loading it
+needs no network. `/usr` is `read_only` in the policy, which is what lets the
+sandbox read it. The `node:22-slim` build stage is used for the install only; the
+runtime image still contains no Node toolchain.
 
 ## Editing the policy
 
@@ -294,6 +304,7 @@ resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:2367d202fc4aaa08d1a7db32b6b4b1a012638b70d443bf7011cbe1154d6c3f39` |
 | Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
 | OpenCode | `2.3.0`, matching the host, installed at `/usr/local/bin/opencode` |
 | User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |

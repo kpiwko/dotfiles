@@ -75,7 +75,10 @@ def test_provider_reads_endpoint_and_key_from_env() -> None:
 def test_only_otel_plugin_configured_with_experiment_header() -> None:
     plugins = _config()["plugins"]
     assert len(plugins) == 1
-    assert plugins[0]["package"] == "@devtheops/opencode-plugin-otel"
+    # A local directory under read-only /usr, not an npm package name: naming the
+    # package makes OpenCode run `npm install` at startup, which the deny-by-default
+    # policy blocks, and the trace loss is silent (only a WARN in opencode.log).
+    assert plugins[0]["package"] == "/usr/local/share/opencode/plugins/opencode-plugin-otel"
     assert plugins[0]["options"]["otlpHeaders"] == "x-mlflow-experiment-id=23"
     assert plugins[0]["options"]["endpoint"] == "{env:OPENCODE_OTLP_ENDPOINT}"
     assert plugins[0]["options"]["protocol"] == "http/protobuf"
@@ -114,8 +117,8 @@ WRAPPER = OPENCODE / "create-sandbox.sh"
 SENTINEL_KEY = "sk-agentgateway-sentinel-2f9c1d7b4a"
 
 IMAGE = (
-    "ghcr.io/anomalyco/opencode@sha256:"
-    "be38ebc82f8f0858dc703e76e582c1d32bbdf8534ebfd7d3b4aef55585433965"
+    "ghcr.io/kpiwko/opencode-sandbox@sha256:"
+    "2367d202fc4aaa08d1a7db32b6b4b1a012638b70d443bf7011cbe1154d6c3f39"
 )
 
 
@@ -265,7 +268,7 @@ def test_create_sandbox_dispatches_pinned_create_argv(
     # Digest pin, not a tag: a retagged image would move the binary out from
     # under the policy's pinned path.
     repository, _, digest = create[3].rpartition("@sha256:")
-    assert repository == "ghcr.io/anomalyco/opencode"
+    assert repository == "ghcr.io/kpiwko/opencode-sandbox"
     assert len(digest) == 64
     assert set(digest) <= set("0123456789abcdef")
     assert create[4:6] == ["--name", "opencode-dev"]
@@ -402,7 +405,7 @@ def test_readme_documents_digest_pin_and_wrapper_interfaces() -> None:
 
     assert IMAGE in readme
     repository, _, digest = IMAGE.rpartition("@sha256:")
-    assert repository == "ghcr.io/anomalyco/opencode"
+    assert repository == "ghcr.io/kpiwko/opencode-sandbox"
     assert digest in readme
 
     # Wrapper interfaces an operator needs to reproduce the invocation.
@@ -790,3 +793,26 @@ def test_ci_builds_both_architectures_for_the_pinned_image_name() -> None:
     assert "VERIFY_BINARY=0" in workflow
     # The operator needs the digest, because create-sandbox.sh pins one.
     assert "steps.build.outputs.digest" in workflow
+
+
+def test_image_bakes_the_pinned_otel_plugin_into_read_only_usr() -> None:
+    containerfile = (IMAGE_DIR / "Containerfile").read_text()
+
+    # The plugin is fetched at build time only, at a pinned version, so the
+    # runtime needs no npm access.
+    assert "FROM node:22-slim AS otel-plugin" in containerfile
+    assert "ARG OTEL_PLUGIN_VERSION=2.0.1" in containerfile
+    assert (
+        "COPY --from=otel-plugin /out/otel "
+        "/usr/local/share/opencode/plugins/opencode-plugin-otel" in containerfile
+    )
+
+
+def test_baked_plugin_path_is_covered_by_the_filesystem_policy() -> None:
+    # Landlock hard_requirement + a fixed path list: a plugin under /opt or /root
+    # would be invisible to the sandbox. /usr is read_only in sandbox-policy.yaml.
+    package = _config()["plugins"][0]["package"]
+    policy = _policy()["filesystem_policy"]
+
+    assert any(package.startswith(prefix + "/") for prefix in policy["read_only"])
+    assert not any(package.startswith(prefix + "/") for prefix in policy["read_write"])

@@ -11,6 +11,22 @@
 # aborts under QEMU emulation, so a cross-built image could never be produced that
 # way. Downloading is also what lets us pin the tarball checksum per architecture.
 
+# The OTEL plugin is baked in rather than installed at runtime. The sandbox policy
+# is deny-by-default and does not permit registry.npmjs.org, so a `plugins` entry
+# naming an npm package fails with NpmInstallFailedError and telemetry silently
+# vanishes. A build stage gives a pinned, dependency-complete copy that a plain
+# directory entry in opencode.json loads without any network access.
+FROM node:22-slim AS otel-plugin
+ARG OTEL_PLUGIN_VERSION=2.0.1
+WORKDIR /plugin
+RUN set -eu; \
+    npm pack "@devtheops/opencode-plugin-otel@${OTEL_PLUGIN_VERSION}" >/dev/null; \
+    mkdir -p /out/otel; \
+    tar -xzf /plugin/devtheops-opencode-plugin-otel-*.tgz -C /out/otel --strip-components=1; \
+    cd /out/otel; \
+    npm install --omit=dev --no-audit --no-fund --ignore-scripts; \
+    test -f /out/otel/package.json
+
 FROM ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e
 
 ARG TARGETARCH
@@ -54,6 +70,11 @@ RUN set -eu; \
 
 USER sandbox
 WORKDIR /sandbox
+
+# Read-only under /usr, which the filesystem policy already allows. opencode.json
+# points its `plugins` entry at this directory; a directory entry is loaded in
+# place, unlike a package name, which triggers an npm install.
+COPY --from=otel-plugin /out/otel /usr/local/share/opencode/plugins/opencode-plugin-otel
 
 # The base image's ENTRYPOINT is `/bin/bash`, so a plain command would be read as
 # a bash script path (`bash sleep infinity` -> "sleep: No such file"). OpenShell
