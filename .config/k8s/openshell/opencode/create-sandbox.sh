@@ -17,7 +17,7 @@
 # create, upload the OpenCode config (every run, so edits are never stale),
 # verify the OpenCode binary sits at the path the policy pins.
 #
-# Usage: create-sandbox.sh [--name NAME]
+# Usage: create-sandbox.sh [--name NAME] [--gateway-endpoint URL]
 set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -25,6 +25,13 @@ POLICY="$SCRIPT_DIR/sandbox-policy.yaml"
 CONFIG="$SCRIPT_DIR/opencode.json"
 
 OPENSHELL_BIN="${OPENSHELL_BIN:-openshell}"
+
+# The gateway is named explicitly on every call. Without it the CLI uses whatever
+# registration is current for the operator — on this machine the *host* gateway —
+# and the sandbox would be created in the wrong place. The default is the verified
+# loopback NodePort of the Kubernetes gateway (internal-mTLS registration already
+# in place); override per run with --gateway-endpoint or OPENSHELL_GATEWAY_ENDPOINT.
+GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-https://127.0.0.1:17910}"
 
 # Digest-pinned: a moving tag would silently swap the binary path the policy
 # matches on, which turns every request into a denial.
@@ -37,10 +44,17 @@ REMOTE_CONFIG="$SANDBOX_HOME/.config/opencode/opencode.json"
 BASE_URL="http://agentgateway.ai-dev.svc.cluster.local:4000/v1"
 OTLP_ENDPOINT="http://otel-collector.ai-dev.svc.cluster.local:4318"
 
-NAME="opencode-dev"
+NAME_DEFAULT="opencode-dev"
+NAME="$NAME_DEFAULT"
 
 usage() {
-    echo "usage: create-sandbox.sh [--name NAME]" >&2
+    cat >&2 <<EOF
+usage: create-sandbox.sh [--name NAME] [--gateway-endpoint URL]
+
+  --name NAME             sandbox name (default: $NAME_DEFAULT)
+  --gateway-endpoint URL  OpenShell gateway to operate on
+                          (default: ${GATEWAY_ENDPOINT})
+EOF
 }
 
 die() {
@@ -53,6 +67,11 @@ while [[ $# -gt 0 ]]; do
         --name)
             [[ $# -ge 2 && -n "$2" ]] || { usage; exit 2; }
             NAME="$2"
+            shift 2
+            ;;
+        --gateway-endpoint)
+            [[ $# -ge 2 && -n "$2" ]] || { usage; exit 2; }
+            GATEWAY_ENDPOINT="$2"
             shift 2
             ;;
         -h|--help)
@@ -88,13 +107,13 @@ fi
 # check would then silently target a sandbox this run did not configure. A failed
 # probe is read as "absent", so an unreachable cluster surfaces as the create
 # error itself rather than as a guessed parse of the probe's output.
-if "$OPENSHELL_BIN" sandbox get "$NAME" >/dev/null 2>&1; then
+if "$OPENSHELL_BIN" --gateway-endpoint "$GATEWAY_ENDPOINT" sandbox get "$NAME" >/dev/null 2>&1; then
     die "sandbox '$NAME' already exists; use --name to create another, or delete it first: $OPENSHELL_BIN sandbox delete $NAME"
 fi
 
-echo "create-sandbox: creating '$NAME' from $IMAGE"
+echo "create-sandbox: creating '$NAME' on $GATEWAY_ENDPOINT from $IMAGE"
 
-"$OPENSHELL_BIN" sandbox create \
+"$OPENSHELL_BIN" --gateway-endpoint "$GATEWAY_ENDPOINT" sandbox create \
     --from "$IMAGE" \
     --name "$NAME" \
     --cpu 1 \
@@ -111,12 +130,12 @@ echo "create-sandbox: creating '$NAME' from $IMAGE"
 # Uploaded on every run: an edited opencode.json must reach the sandbox on the
 # next invocation rather than lingering as a stale copy from the first one.
 echo "create-sandbox: uploading $CONFIG"
-"$OPENSHELL_BIN" sandbox upload "$NAME" "$CONFIG" "$REMOTE_CONFIG" --no-git-ignore
+"$OPENSHELL_BIN" --gateway-endpoint "$GATEWAY_ENDPOINT" sandbox upload "$NAME" "$CONFIG" "$REMOTE_CONFIG" --no-git-ignore
 
 # The policy matches egress on the binary path. If the image puts OpenCode
 # somewhere else, every request is denied and the sandbox merely looks broken;
 # fail here instead, naming the path that was actually found.
-if ! observed=$("$OPENSHELL_BIN" sandbox exec -n "$NAME" -- sh -c 'command -v opencode'); then
+if ! observed=$("$OPENSHELL_BIN" --gateway-endpoint "$GATEWAY_ENDPOINT" sandbox exec -n "$NAME" -- sh -c 'command -v opencode'); then
     die "could not resolve the OpenCode binary inside '$NAME'; expected $OPENCODE_BINARY"
 fi
 observed=$(printf '%s' "$observed" | tr -d '[:space:]')
@@ -127,7 +146,9 @@ fi
 
 echo "create-sandbox: '$NAME' is ready (opencode at $OPENCODE_BINARY)"
 echo
-echo "  exec:   $OPENSHELL_BIN sandbox exec -n $NAME -- opencode"
-echo "  stop:   $OPENSHELL_BIN sandbox stop $NAME"
-echo "  start:  $OPENSHELL_BIN sandbox start $NAME"
-echo "  delete: $OPENSHELL_BIN sandbox delete $NAME"
+# The follow-ups carry the same endpoint, or they would reach a different gateway
+# than the one this sandbox was created on.
+echo "  exec:   $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox exec -n $NAME -- opencode"
+echo "  stop:   $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox stop $NAME"
+echo "  start:  $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox start $NAME"
+echo "  delete: $OPENSHELL_BIN --gateway-endpoint $GATEWAY_ENDPOINT sandbox delete $NAME"

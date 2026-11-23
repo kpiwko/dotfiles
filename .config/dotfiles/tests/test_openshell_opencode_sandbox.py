@@ -136,6 +136,8 @@ def _fake_openshell(
         "    for arg in \"$@\"; do printf 'ARG %s\\n' \"$arg\"; done\n"
         "    printf 'END\\n'\n"
         f"}} >> '{record}'\n"
+        "# Skip global flags (recorded above in full) to find the subcommand.\n"
+        "while [[ $# -gt 0 && \"$1\" == --gateway-endpoint ]]; do shift 2; done\n"
         "case \"${1:-} ${2:-}\" in\n"
         "    'sandbox get')\n"
         f"        exit {get_exit}\n"
@@ -167,10 +169,22 @@ def _calls(record: Path) -> list[list[str]]:
     return calls
 
 
+GATEWAY_FLAG = "--gateway-endpoint"
+GATEWAY_DEFAULT = "https://127.0.0.1:17910"
+
+
+def _strip_global_flags(call: list[str]) -> list[str]:
+    rest = call
+    while rest and rest[0] == GATEWAY_FLAG:
+        rest = rest[2:]
+    return rest
+
+
 def _call_starting(calls: list[list[str]], *prefix: str) -> list[str]:
     for call in calls:
-        if call[: len(prefix)] == list(prefix):
-            return call
+        rest = _strip_global_flags(call)
+        if rest[: len(prefix)] == list(prefix):
+            return rest
     raise AssertionError(f"no openshell call starting with {prefix!r}; got {calls!r}")
 
 
@@ -182,10 +196,14 @@ def _run(
     key: str | None = SENTINEL_KEY,
     args: list[str] | None = None,
     fake: Path | None = None,
+    endpoint: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     fake = fake or _fake_openshell(tmp_path)
     env = env.copy()
     env["OPENSHELL_BIN"] = str(fake)
+    env.pop("OPENSHELL_GATEWAY_ENDPOINT", None)
+    if endpoint is not None:
+        env["OPENSHELL_GATEWAY_ENDPOINT"] = endpoint
     if key is not None:
         env["AGENTGATEWAY_API_KEY"] = key
     proc = run_script(wrapper, *(args or []), env=env)
@@ -226,7 +244,7 @@ def test_create_sandbox_refuses_existing_name(
 
     assert proc.returncode != 0
     assert "opencode-dev" in proc.stderr
-    assert calls == [["sandbox", "get", "opencode-dev"]]
+    assert calls == [[GATEWAY_FLAG, GATEWAY_DEFAULT, "sandbox", "get", "opencode-dev"]]
 
 
 def test_create_sandbox_dispatches_pinned_create_argv(
@@ -272,7 +290,7 @@ def test_create_sandbox_honours_name_flag(
     proc, calls = _run(WRAPPER, tmp_path, clean_env, args=["--name", "opencode-scratch"])
     assert proc.returncode == 0, proc.stderr
 
-    assert ["sandbox", "get", "opencode-scratch"] in calls
+    assert [GATEWAY_FLAG, GATEWAY_DEFAULT, "sandbox", "get", "opencode-scratch"] in calls
     create = _call_starting(calls, "sandbox", "create")
     assert create[create.index("--name") + 1] == "opencode-scratch"
     upload = _call_starting(calls, "sandbox", "upload")
@@ -308,14 +326,15 @@ def test_create_sandbox_uploads_config_after_create_every_run(
     second, calls = _run(WRAPPER, tmp_path, clean_env, fake=fake)
     assert second.returncode == 0, second.stderr
 
-    kinds = [call[:2] for call in calls]
+    kinds = [_strip_global_flags(call)[:2] for call in calls]
     assert kinds == [
         ["sandbox", "get"],
         ["sandbox", "create"],
         ["sandbox", "upload"],
         ["sandbox", "exec"],
     ]
-    upload = calls[2]
+    upload = _strip_global_flags(calls[2])
+    assert upload[2] == "opencode-dev"
     assert upload[3] == str(OPENCODE / "opencode.json")
     assert upload[4] == "/sandbox/.config/opencode/opencode.json"
     assert upload[5] == "--no-git-ignore"
@@ -511,3 +530,75 @@ def test_readme_treats_otlp_endpoint_shape_and_state_path_as_expected_only() -> 
     telemetry = _section(readme, "Telemetry")
     assert "assumption" in telemetry
     assert "unverified" in telemetry
+
+
+def _gateway_flags(calls: list[list[str]]) -> list[list[str]]:
+    return [
+        call[:2] for call in calls if len(call) >= 2 and call[0] == GATEWAY_FLAG
+    ]
+
+
+def test_create_sandbox_names_the_kubernetes_gateway_on_every_call(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    # Without an explicit endpoint the CLI would use whatever registration is
+    # current for the operator — on this machine the host gateway — and the
+    # sandbox would land in the wrong place.
+    proc, calls = _run(WRAPPER, tmp_path, clean_env)
+    assert proc.returncode == 0, proc.stderr
+
+    assert [_strip_global_flags(call)[:2] for call in calls] == [
+        ["sandbox", "get"],
+        ["sandbox", "create"],
+        ["sandbox", "upload"],
+        ["sandbox", "exec"],
+    ]
+    assert _gateway_flags(calls) == [[GATEWAY_FLAG, GATEWAY_DEFAULT]] * 4
+    # The printed follow-ups must reach the same gateway as the create did.
+    follow_ups = [
+        line
+        for line in proc.stdout.splitlines()
+        if line.strip().startswith(("exec:", "stop:", "start:", "delete:"))
+    ]
+    assert len(follow_ups) == 4
+    for line in follow_ups:
+        assert f"{GATEWAY_FLAG} {GATEWAY_DEFAULT}" in line
+
+
+def test_create_sandbox_gateway_endpoint_flag_overrides_every_call(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    flag_endpoint = "https://10.42.7.9:19999"
+    proc, calls = _run(
+        WRAPPER,
+        tmp_path,
+        clean_env,
+        args=[GATEWAY_FLAG, flag_endpoint],
+        endpoint="https://env-should-lose.example:1",
+    )
+    assert proc.returncode == 0, proc.stderr
+
+    assert _gateway_flags(calls) == [[GATEWAY_FLAG, flag_endpoint]] * 4
+    recorded = " ".join(arg for call in calls for arg in call)
+    assert "env-should-lose.example" not in recorded, "flag must win over the env default"
+
+
+def test_create_sandbox_gateway_endpoint_env_override(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    env_endpoint = "https://10.42.7.9:18888"
+    proc, calls = _run(WRAPPER, tmp_path, clean_env, endpoint=env_endpoint)
+    assert proc.returncode == 0, proc.stderr
+
+    assert _gateway_flags(calls) == [[GATEWAY_FLAG, env_endpoint]] * 4
+
+
+def test_create_sandbox_help_documents_gateway_endpoint(
+    tmp_path: Path, clean_env: dict[str, str]
+) -> None:
+    proc, calls = _run(WRAPPER, tmp_path, clean_env, args=["--help"])
+
+    assert proc.returncode == 0
+    assert calls == []
+    assert GATEWAY_FLAG in proc.stderr
+    assert GATEWAY_DEFAULT in proc.stderr

@@ -46,8 +46,9 @@ AgentGateway key, and only by reference (see below).
 ## Prerequisites
 
 1. The gateway and its API are reachable — the gateway stage README in this
-   directory (currently uncommitted) documents that deployment. The host
-   registration used here is whatever `openshell` resolves as current.
+   directory (currently uncommitted) documents that deployment. The wrapper names
+   the gateway endpoint on every call; it never relies on whichever registration
+   the CLI happens to have current (see below).
 2. An OpenShell CLI, 0.1.8. `create-sandbox.sh` looks for `openshell` on `PATH`;
    set `OPENSHELL_BIN=/path/to/openshell` to use another binary.
 3. `AGENTGATEWAY_API_KEY` in the environment, exported once:
@@ -55,6 +56,17 @@ AgentGateway key, and only by reference (see below).
    ```text
    set -a; . ~/.config/k8s/.env; set +a
    ```
+
+Every `openshell` invocation the wrapper makes — the `sandbox get` existence
+probe, `sandbox create`, `sandbox upload`, and the `sandbox exec` binary check —
+carries `--gateway-endpoint`, defaulting to `https://127.0.0.1:17910`: the
+verified loopback NodePort of the Kubernetes gateway, using the internal-mTLS
+registration already in place. The flag is not optional in spirit: left to
+itself, `openshell` operates on whatever gateway is *current* for the operator —
+on this machine the host gateway on `https://localhost:17670` — which would
+create the sandbox in the wrong place. Override per run with `--gateway-endpoint
+URL`, or for the whole shell with `OPENSHELL_GATEWAY_ENDPOINT=<url>`; the flag
+wins over the variable.
 
 ## Create
 
@@ -68,7 +80,7 @@ The default name is `opencode-dev`; use `--name` for a second sandbox:
 ~/.config/k8s/openshell/opencode/create-sandbox.sh --name opencode-scratch
 ```
 
-`create-sandbox.sh [--name NAME]` does the following, in order:
+`create-sandbox.sh [--name NAME] [--gateway-endpoint URL]` does the following, in order:
 
 1. **Preconditions, before any cluster contact.** The policy and config files
    exist next to the script, `AGENTGATEWAY_API_KEY` is non-empty, and the CLI was
@@ -175,6 +187,10 @@ Unverified until a real run, and treated as unverified in this document:
   not been inspected.
 - **Duplicate-name create behaviour.** Unverified, hence the `sandbox get`
   pre-check.
+- **`--gateway-endpoint` as a pre-subcommand global flag.** That the CLI accepts
+  it before `sandbox` (the wrapper's placement, chosen so a single spelling works
+  for all four calls) is written from the documented shape of 0.1.8, not from an
+  executed invocation.
 - **OTLP endpoint shape.** `OPENCODE_OTLP_ENDPOINT` is set to the bare collector
   base URL and the policy allows `POST /v1/traces`, assuming the OTEL plugin
   appends that path itself. Whether it appends `/v1/traces`, or instead expects
