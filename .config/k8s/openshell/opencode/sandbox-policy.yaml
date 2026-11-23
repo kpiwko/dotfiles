@@ -1,0 +1,72 @@
+# OpenShell sandbox policy for the disposable OpenCode stage.
+#
+# Deny by default: traffic is only permitted from the OpenCode binary to the two
+# internal endpoints named below, and only for the listed method/path pairs.
+# There are no wildcard hosts, no blanket private CIDRs, and no extra egress. A
+# denied request is evidence this policy works, not a defect to widen away.
+#
+# `landlock.compatibility: hard_requirement` makes every path below a startup
+# requirement: a missing path or an unavailable Landlock ABI aborts sandbox
+# startup instead of silently degrading isolation. Remove a path deliberately if
+# an image genuinely lacks it; never relax Landlock to make a run succeed.
+version: 1
+
+# Documented baseline filesystem policy. `include_workdir: true` adds the
+# driver-resolved workspace to `read_write`; `/sandbox` is HOME for this stage.
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /usr
+    - /lib
+    - /proc
+    - /dev/urandom
+    - /app
+    - /etc
+    - /var/log
+  read_write:
+    - /sandbox
+    - /tmp
+    - /dev/null
+
+landlock:
+  compatibility: hard_requirement
+
+network_policies:
+  # Inference through AgentGateway. Upstream model credentials stay in
+  # AgentGateway; the sandbox only ever holds the AgentGateway key.
+  agentgateway:
+    name: agentgateway-inference
+    endpoints:
+      - host: agentgateway.ai-dev.svc.cluster.local
+        port: 4000
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow:
+              method: POST
+              path: /v1/chat/completions
+          - allow:
+              method: POST
+              path: /v1/responses
+          - allow:
+              method: GET
+              path: /v1/models
+    binaries:
+      - path: /usr/local/bin/opencode
+
+  # OTLP/HTTP traces for MLflow experiment 23. Without `/v1/traces` the agent
+  # still works but telemetry vanishes silently.
+  otel_collector:
+    name: otel-collector-traces
+    endpoints:
+      - host: otel-collector.ai-dev.svc.cluster.local
+        port: 4318
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow:
+              method: POST
+              path: /v1/traces
+    binaries:
+      - path: /usr/local/bin/opencode
