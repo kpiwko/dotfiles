@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -53,3 +54,31 @@ def test_policy_enforces_and_scopes_to_opencode_binary() -> None:
 
 def test_policy_requires_hard_landlock() -> None:
     assert _policy()["landlock"]["compatibility"] == "hard_requirement"
+
+
+def _config() -> dict:
+    return json.loads((OPENCODE / "opencode.json").read_text())
+
+
+def test_default_model_is_illusionist() -> None:
+    assert _config()["model"] == "agentgateway/illusionist"
+
+
+def test_provider_reads_endpoint_and_key_from_env() -> None:
+    settings = _config()["providers"]["agentgateway"]["settings"]
+    assert settings["baseURL"] == "{env:AGENTGATEWAY_BASE_URL}"
+    assert settings["apiKey"] == "{env:AGENTGATEWAY_API_KEY}"
+
+
+def test_only_otel_plugin_configured_with_experiment_header() -> None:
+    plugins = _config()["plugins"]
+    assert len(plugins) == 1
+    assert plugins[0]["package"] == "@devtheops/opencode-plugin-otel"
+    assert plugins[0]["options"]["otlpHeaders"] == "x-mlflow-experiment-id=23"
+    assert plugins[0]["options"]["endpoint"] == "{env:OPENCODE_OTLP_ENDPOINT}"
+
+
+def test_no_mcp_or_extra_plugins() -> None:
+    cfg = _config()
+    assert "mcp" not in cfg
+    assert "instructions" not in cfg
