@@ -137,7 +137,7 @@ def _fake_openshell(
         "    printf 'END\\n'\n"
         f"}} >> '{record}'\n"
         "# Skip global flags (recorded above in full) to find the subcommand.\n"
-        "while [[ $# -ge 2 && \"$1\" == --gateway-endpoint ]]; do shift 2; done\n"
+        "while [[ $# -ge 2 && ( \"$1\" == --gateway-endpoint || \"$1\" == -g ) ]]; do shift 2; done\n"
         "case \"${1:-} ${2:-}\" in\n"
         "    'sandbox get')\n"
         f"        exit {get_exit}\n"
@@ -169,13 +169,20 @@ def _calls(record: Path) -> list[list[str]]:
     return calls
 
 
+GATEWAY_NAME_FLAG = "-g"
+GATEWAY_NAME = "devcluster-k8s"
 GATEWAY_FLAG = "--gateway-endpoint"
 GATEWAY_DEFAULT = "https://127.0.0.1:17910"
+
+# Both flags lead every call: the registration name is where the CLI finds the
+# mTLS material, and the endpoint override points it at the live NodePort. A bare
+# `--gateway-endpoint` fails with "failed to read TLS CA from .../mtls/ca.crt".
+GATEWAY_PREFIX = [GATEWAY_NAME_FLAG, GATEWAY_NAME, GATEWAY_FLAG, GATEWAY_DEFAULT]
 
 
 def _strip_global_flags(call: list[str]) -> list[str]:
     rest = call
-    while rest and rest[0] == GATEWAY_FLAG:
+    while rest and rest[0] in (GATEWAY_FLAG, GATEWAY_NAME_FLAG):
         rest = rest[2:]
     return rest
 
@@ -244,7 +251,7 @@ def test_create_sandbox_refuses_existing_name(
 
     assert proc.returncode != 0
     assert "opencode-dev" in proc.stderr
-    assert calls == [[GATEWAY_FLAG, GATEWAY_DEFAULT, "sandbox", "get", "opencode-dev"]]
+    assert calls == [GATEWAY_PREFIX + ["sandbox", "get", "opencode-dev"]]
 
 
 def test_create_sandbox_dispatches_pinned_create_argv(
@@ -290,7 +297,7 @@ def test_create_sandbox_honours_name_flag(
     proc, calls = _run(WRAPPER, tmp_path, clean_env, args=["--name", "opencode-scratch"])
     assert proc.returncode == 0, proc.stderr
 
-    assert [GATEWAY_FLAG, GATEWAY_DEFAULT, "sandbox", "get", "opencode-scratch"] in calls
+    assert GATEWAY_PREFIX + ["sandbox", "get", "opencode-scratch"] in calls
     create = _call_starting(calls, "sandbox", "create")
     assert create[create.index("--name") + 1] == "opencode-scratch"
     upload = _call_starting(calls, "sandbox", "upload")
@@ -534,16 +541,19 @@ def test_readme_treats_otlp_endpoint_shape_and_state_path_as_expected_only() -> 
 
 def _gateway_flags(calls: list[list[str]]) -> list[list[str]]:
     return [
-        call[:2] for call in calls if len(call) >= 2 and call[0] == GATEWAY_FLAG
+        call[:4]
+        for call in calls
+        if len(call) >= 4 and call[0] == GATEWAY_NAME_FLAG and call[2] == GATEWAY_FLAG
     ]
 
 
 def test_create_sandbox_names_the_kubernetes_gateway_on_every_call(
     tmp_path: Path, clean_env: dict[str, str]
 ) -> None:
-    # Without an explicit endpoint the CLI would use whatever registration is
+    # Without an explicit gateway the CLI would use whatever registration is
     # current for the operator — on this machine the host gateway — and the
-    # sandbox would land in the wrong place.
+    # sandbox would land in the wrong place. The registration name carries the
+    # mTLS material; the endpoint points it at the live Kubernetes NodePort.
     proc, calls = _run(WRAPPER, tmp_path, clean_env)
     assert proc.returncode == 0, proc.stderr
 
@@ -553,7 +563,7 @@ def test_create_sandbox_names_the_kubernetes_gateway_on_every_call(
         ["sandbox", "upload"],
         ["sandbox", "exec"],
     ]
-    assert _gateway_flags(calls) == [[GATEWAY_FLAG, GATEWAY_DEFAULT]] * 4
+    assert _gateway_flags(calls) == [GATEWAY_PREFIX] * 4
     # The printed follow-ups must reach the same gateway as the create did.
     follow_ups = [
         line
@@ -562,7 +572,7 @@ def test_create_sandbox_names_the_kubernetes_gateway_on_every_call(
     ]
     assert len(follow_ups) == 4
     for line in follow_ups:
-        assert f"{GATEWAY_FLAG} {GATEWAY_DEFAULT}" in line
+        assert f"{GATEWAY_NAME_FLAG} {GATEWAY_NAME} {GATEWAY_FLAG} {GATEWAY_DEFAULT}" in line
 
 
 def test_create_sandbox_gateway_endpoint_flag_overrides_every_call(
@@ -578,7 +588,9 @@ def test_create_sandbox_gateway_endpoint_flag_overrides_every_call(
     )
     assert proc.returncode == 0, proc.stderr
 
-    assert _gateway_flags(calls) == [[GATEWAY_FLAG, flag_endpoint]] * 4
+    assert _gateway_flags(calls) == [
+        [GATEWAY_NAME_FLAG, GATEWAY_NAME, GATEWAY_FLAG, flag_endpoint]
+    ] * 4
     recorded = " ".join(arg for call in calls for arg in call)
     assert "env-should-lose.example" not in recorded, "flag must win over the env default"
 
@@ -590,7 +602,9 @@ def test_create_sandbox_gateway_endpoint_env_override(
     proc, calls = _run(WRAPPER, tmp_path, clean_env, endpoint=env_endpoint)
     assert proc.returncode == 0, proc.stderr
 
-    assert _gateway_flags(calls) == [[GATEWAY_FLAG, env_endpoint]] * 4
+    assert _gateway_flags(calls) == [
+        [GATEWAY_NAME_FLAG, GATEWAY_NAME, GATEWAY_FLAG, env_endpoint]
+    ] * 4
 
 
 def test_create_sandbox_help_documents_gateway_endpoint(
@@ -602,6 +616,11 @@ def test_create_sandbox_help_documents_gateway_endpoint(
     assert calls == []
     assert GATEWAY_FLAG in proc.stderr
     assert GATEWAY_DEFAULT in proc.stderr
+    # The registration supplying the mTLS material is part of the interface the
+    # operator has to know, not an implementation detail.
+    assert GATEWAY_NAME_FLAG in proc.stderr
+    assert GATEWAY_NAME in proc.stderr
+    assert "OPENSHELL_GATEWAY_NAME" in proc.stderr
 
 
 def test_create_sandbox_existing_name_error_names_the_effective_gateway(
@@ -621,7 +640,9 @@ def test_create_sandbox_existing_name_error_names_the_effective_gateway(
 
     assert proc.returncode != 0
     assert f"{GATEWAY_FLAG} {endpoint} sandbox delete opencode-dev" in proc.stderr
-    assert calls == [[GATEWAY_FLAG, endpoint, "sandbox", "get", "opencode-dev"]]
+    assert calls == [
+        [GATEWAY_NAME_FLAG, GATEWAY_NAME, GATEWAY_FLAG, endpoint, "sandbox", "get", "opencode-dev"]
+    ]
 
 
 def test_create_sandbox_binary_mismatch_error_names_the_effective_gateway(
