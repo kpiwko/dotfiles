@@ -319,7 +319,7 @@ and then fails to resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
-| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:b154a7f30a3eb849e8a9669bd4e8c44cc8ced72c29dbe451977168046475fba7` |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:1f13a548cd5e4d8e467a1328607efdfccd20cc31155356a70340cab96988edd6` |
 | Base | Red Hat UBI9 (`registry.access.redhat.com/ubi9/ubi`), pinned by digest |
 | OpenCode | `2.4.1`, installed at `/usr/local/bin/opencode` |
 | OTEL plugin | `2.1.0`, baked in at `/usr/local/share/opencode/plugins/opencode-plugin-otel` |

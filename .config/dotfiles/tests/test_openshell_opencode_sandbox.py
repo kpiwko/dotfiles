@@ -118,7 +118,7 @@ SENTINEL_KEY = "sk-agentgateway-sentinel-2f9c1d7b4a"
 
 IMAGE = (
     "ghcr.io/kpiwko/opencode-sandbox@sha256:"
-    "b154a7f30a3eb849e8a9669bd4e8c44cc8ced72c29dbe451977168046475fba7"
+    "1f13a548cd5e4d8e467a1328607efdfccd20cc31155356a70340cab96988edd6"
 )
 
 
