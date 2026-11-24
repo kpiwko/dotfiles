@@ -319,12 +319,17 @@ and then fails to resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
-| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:0ff24493e13b83cd156a7a045796358d5304d907ff74d8f7ee780ab610d9ed9a` |
-| Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:b154a7f30a3eb849e8a9669bd4e8c44cc8ced72c29dbe451977168046475fba7` |
+| Base | Red Hat UBI9 (`registry.access.redhat.com/ubi9/ubi`), pinned by digest |
 | OpenCode | `2.4.1`, installed at `/usr/local/bin/opencode` |
 | OTEL plugin | `2.1.0`, baked in at `/usr/local/share/opencode/plugins/opencode-plugin-otel` |
-| User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
+| Workdir | `/sandbox`; the image declares `USER sandbox` (uid 998) for native runs |
 | Platforms | `linux/amd64`, `linux/arm64` |
+
+One surprise worth knowing when debugging: OpenShell does **not** run the image as
+its declared user. In a live sandbox `id -u` is `10001`, not `998`, and OpenCode
+still writes under `/sandbox`, so the runtime provides that home rather than the
+image's ownership. Do not build a fix on the image's uid.
 
 This stage consumes the image by digest and must not build it: publishing needs
 `packages: write`, which the image repo's CI `GITHUB_TOKEN` has and a developer
