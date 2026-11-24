@@ -51,7 +51,7 @@ GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-$GATEWAY_ENDPOINT_DEFAULT}"
 # image ships OpenCode 1.x, which drops the V2 `providers` block and cannot
 # resolve a model. To move to a new build, take the digest printed in the
 # workflow's job summary.
-IMAGE="ghcr.io/kpiwko/opencode-sandbox@sha256:23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6"
+IMAGE="ghcr.io/kpiwko/opencode-sandbox@sha256:fd336ffe461ffc5e339ae4b2c0ab849809500e78f621273e23fbc3da627e73b5"
 # Must equal network_policies.*.binaries[].path in sandbox-policy.yaml.
 OPENCODE_BINARY="/usr/local/bin/opencode"
 

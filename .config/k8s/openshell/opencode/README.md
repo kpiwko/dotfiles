@@ -170,8 +170,9 @@ startup; the policy denies `registry.npmjs.org`, so the plugin fails to load wit
 only a `WARN` in `opencode.log` and telemetry silently disappears. The image
 installs the pinned plugin in a build stage, dependencies included, so loading it
 needs no network. `/usr` is `read_only` in the policy, which is what lets the
-sandbox read it. The `node:24-slim` build stage is used for the install only; the
-runtime image still contains no Node toolchain.
+sandbox read it. The `node:24-slim` stage only exists to run `npm install`; the
+runtime's own `node` binary comes from the OpenShell base image and is unrelated
+to it.
 
 ## Editing the policy
 
@@ -225,9 +226,13 @@ Still unverified:
 - **Duplicate-name create behaviour.** The CLI's own response to an existing
   name has not been exercised; the wrapper's `sandbox get` pre-check is what
   refuses the case.
-- **Trace linkage between OpenCode and AgentGateway spans.** Both services report
-  traces with the same prompt, but under different trace ids, so view them as
-  two traces rather than one propagated tree.
+- **Trace linkage between OpenCode and AgentGateway spans.** One run still
+  becomes two traces. The gateway is not the cause: a direct request carrying
+  `traceparent: 00-<trace-id>-<span-id>-01` is stored under exactly that trace
+  id, so it continues sampled client traces. The plugin option
+  `tracePropagationProviders: ["agentgateway"]` is set here and in the host
+  config, and the host splits the same way, so the missing injection sits in the
+  plugin or in what OpenCode hands it — not in this stage's configuration.
 
 ## Image fallback (manual, not automatic)
 
@@ -312,7 +317,7 @@ resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
-| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6` |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:fd336ffe461ffc5e339ae4b2c0ab849809500e78f621273e23fbc3da627e73b5` |
 | Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
 | OpenCode | `2.4.1`, installed at `/usr/local/bin/opencode` |
 | User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
@@ -326,8 +331,8 @@ workflow's `GITHUB_TOKEN` (`packages: write`). That is deliberate — a develope
 anything under `image/` on `main`.
 
 The run prints the manifest digest in its job summary. Pin that digest in
-`create-sandbox.sh` (`SANDBOX_IMAGE`); a floating tag would change the workload
-under a policy that pins the binary path.
+`create-sandbox.sh` (`IMAGE`); a floating tag would change the workload under a
+policy that pins the binary path.
 
 To reproduce a build locally (for inspection, not publishing):
 
