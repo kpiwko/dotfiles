@@ -16,8 +16,8 @@
 # naming an npm package fails with NpmInstallFailedError and telemetry silently
 # vanishes. A build stage gives a pinned, dependency-complete copy that a plain
 # directory entry in opencode.json loads without any network access.
-FROM node:22-slim AS otel-plugin
-ARG OTEL_PLUGIN_VERSION=2.0.1
+FROM node:24-slim AS otel-plugin
+ARG OTEL_PLUGIN_VERSION=2.1.0
 WORKDIR /plugin
 RUN set -eu; \
     npm pack "@devtheops/opencode-plugin-otel@${OTEL_PLUGIN_VERSION}" >/dev/null; \
@@ -30,9 +30,9 @@ RUN set -eu; \
 FROM ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e
 
 ARG TARGETARCH
-ARG OPENCODE_VERSION=2.3.0
-ARG OPENCODE_SHA256_AMD64=408f854b5fac7857a3b4df4e783d3a8b70f5cc8c7c3187aac09c5be0576c14ae
-ARG OPENCODE_SHA256_ARM64=be30066353bb592c43919b31072ff4099e069636c31a16806b088737e0287cea
+ARG OPENCODE_VERSION=2.4.1
+ARG OPENCODE_SHA256_AMD64=9dbef68f231a311b56441c73c7bec01f6d87ebe44523ad14a7ba4716ff5c2031
+ARG OPENCODE_SHA256_ARM64=9eb4567ff0fab90b6dac106f786652a0ec15d65e25ffbcbb106e5ed1cee4f4e2
 
 # Bun (and therefore the OpenCode binary) aborts when executed under QEMU
 # emulation, so the build-time version check can only run on a native platform.

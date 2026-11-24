@@ -153,7 +153,7 @@ The wrapper never reconfigures a sandbox it did not create in the same run.
 ## Telemetry
 
 `opencode.json` configures exactly one plugin, `@devtheops/opencode-plugin-otel`
-(version `2.0.1`), with `protocol: http/protobuf`,
+(version `2.1.0`), with `protocol: http/protobuf`,
 `endpoint: {env:OPENCODE_OTLP_ENDPOINT}`, headers
 `x-mlflow-experiment-id=23`, trace propagation for the `agentgateway` provider,
 and the cost metrics disabled. The variable carries the collector base URL
@@ -170,7 +170,7 @@ startup; the policy denies `registry.npmjs.org`, so the plugin fails to load wit
 only a `WARN` in `opencode.log` and telemetry silently disappears. The image
 installs the pinned plugin in a build stage, dependencies included, so loading it
 needs no network. `/usr` is `read_only` in the policy, which is what lets the
-sandbox read it. The `node:22-slim` build stage is used for the install only; the
+sandbox read it. The `node:24-slim` build stage is used for the install only; the
 runtime image still contains no Node toolchain.
 
 ## Editing the policy
@@ -314,7 +314,7 @@ resolve any model — verified in a live sandbox.
 | --- | --- |
 | Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:23510ec603a56bc2e6e7d7a78c1db27bcb1fe8a3e503f78d9b7b21f48e402ae6` |
 | Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
-| OpenCode | `2.3.0`, matching the host, installed at `/usr/local/bin/opencode` |
+| OpenCode | `2.4.1`, installed at `/usr/local/bin/opencode` |
 | User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
 | Platforms | `linux/amd64`, `linux/arm64` |
 

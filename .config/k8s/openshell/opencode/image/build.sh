@@ -11,8 +11,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE="${IMAGE:-ghcr.io/kpiwko/opencode-sandbox}"
-TAG="${TAG:-2.3.0}"
-OPENCODE_VERSION="${OPENCODE_VERSION:-2.3.0}"
+TAG="${TAG:-2.4.1}"
+OPENCODE_VERSION="${OPENCODE_VERSION:-2.4.1}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 
 command -v podman >/dev/null 2>&1 || { echo "build: podman not found" >&2; exit 1; }

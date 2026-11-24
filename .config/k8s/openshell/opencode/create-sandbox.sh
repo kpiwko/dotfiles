@@ -47,7 +47,7 @@ GATEWAY_ENDPOINT="${OPENSHELL_GATEWAY_ENDPOINT:-$GATEWAY_ENDPOINT_DEFAULT}"
 # matches on, which turns every request into a denial.
 #
 # Built by .github/workflows/opencode-sandbox-image.yml from image/Containerfile
-# (OpenShell community base + OpenCode 2.3.0). The published `anomalyco/opencode`
+# (OpenShell community base + OpenCode 2.4.1). The published `anomalyco/opencode`
 # image ships OpenCode 1.x, which drops the V2 `providers` block and cannot
 # resolve a model. To move to a new build, take the digest printed in the
 # workflow's job summary.

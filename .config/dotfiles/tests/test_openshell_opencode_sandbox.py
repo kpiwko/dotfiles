@@ -718,7 +718,7 @@ def test_image_installs_opencode_v2_at_the_policy_path() -> None:
 
     # The V1 installer rejects 2.x outright; using it would build a broken image.
     assert "registry.npmjs.org/@opencode/cli-" in containerfile
-    assert "ARG OPENCODE_VERSION=2.3.0" in containerfile
+    assert "ARG OPENCODE_VERSION=2.4.1" in containerfile
     assert "install -m 0755" in containerfile
     assert "/usr/local/bin/opencode" in containerfile
 
@@ -798,8 +798,8 @@ def test_image_bakes_the_pinned_otel_plugin_into_read_only_usr() -> None:
 
     # The plugin is fetched at build time only, at a pinned version, so the
     # runtime needs no npm access.
-    assert "FROM node:22-slim AS otel-plugin" in containerfile
-    assert "ARG OTEL_PLUGIN_VERSION=2.0.1" in containerfile
+    assert "FROM node:24-slim AS otel-plugin" in containerfile
+    assert "ARG OTEL_PLUGIN_VERSION=2.1.0" in containerfile
     assert (
         "COPY --from=otel-plugin /out/otel "
         "/usr/local/share/opencode/plugins/opencode-plugin-otel" in containerfile
