@@ -118,7 +118,7 @@ SENTINEL_KEY = "sk-agentgateway-sentinel-2f9c1d7b4a"
 
 IMAGE = (
     "ghcr.io/kpiwko/opencode-sandbox@sha256:"
-    "fd336ffe461ffc5e339ae4b2c0ab849809500e78f621273e23fbc3da627e73b5"
+    "0ff24493e13b83cd156a7a045796358d5304d907ff74d8f7ee780ab610d9ed9a"
 )
 
 
@@ -437,7 +437,7 @@ def test_readme_documents_no_silent_image_fallback() -> None:
     assert "no automatic fallback" in fallback.lower()
     assert "fails closed" in fallback
     assert "NVIDIA" in fallback
-    assert "Image/Containerfile" in fallback or "image/Containerfile" in fallback
+    assert "opencode-sandbox" in fallback
     # The step has to name the files an operator actually edits, not rely on the
     # layout table at the top of the document.
     assert "opencode.json" in fallback
@@ -695,116 +695,19 @@ def test_create_sandbox_rejects_endpoint_value_starting_with_a_dash(
     assert "usage:" in proc.stderr
 
 
-# The workload image is built here because the published OpenCode image ships
-# OpenCode 1.x, which silently discards V2 configuration. These tests pin the
-# build inputs that make the image usable under the sandbox policy.
-IMAGE_DIR = OPENCODE / "image"
+# The workload image lives in its own repository (kpiwko/opencode-sandbox): it has
+# its own release cadence, and publishing it needs `packages: write`, which this
+# repository's CI has no reason to hold. What stays here is the consumer contract:
+# the digest pin and the paths the policy and config depend on.
 
+def test_image_digest_is_pinned_and_lives_in_the_image_repository() -> None:
+    wrapper = WRAPPER.read_text()
 
-def test_image_is_built_on_the_pinned_openshell_sandbox_base() -> None:
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    assert (
-        "ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:"
-        "aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e"
-        in containerfile
-    )
-    # A floating tag would silently change the base under the pinned policy.
-    assert "FROM ghcr.io/nvidia/openshell-community/sandboxes/base:" not in containerfile
-
-
-def test_image_installs_opencode_v2_at_the_policy_path() -> None:
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    # The V1 installer rejects 2.x outright; using it would build a broken image.
-    assert "registry.npmjs.org/@opencode/cli-" in containerfile
-    assert "ARG OPENCODE_VERSION=2.4.1" in containerfile
-    assert "install -m 0755" in containerfile
-    assert "/usr/local/bin/opencode" in containerfile
-
-
-def test_image_runs_as_the_sandbox_user() -> None:
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    assert "USER sandbox" in containerfile
-    assert "WORKDIR /sandbox" in containerfile
-
-
-def test_build_script_publishes_both_architectures() -> None:
-    build = (IMAGE_DIR / "build.sh").read_text()
-
-    assert "linux/amd64,linux/arm64" in build
-    assert "podman manifest create" in build
-    assert "podman manifest push --all" in build
-    assert "ghcr.io/kpiwko/opencode-sandbox" in build
-
-
-def test_image_pins_a_checksum_per_architecture() -> None:
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    assert "ARG OPENCODE_SHA256_AMD64=" in containerfile
-    assert "ARG OPENCODE_SHA256_ARM64=" in containerfile
-    # The checksum, not a version string printed by a freshly downloaded binary, is
-    # what guarantees the pulled artifact is the expected one.
-    assert "sha256sum -c -" in containerfile
-    assert "linux-x64" in containerfile and "linux-arm64" in containerfile
-
-
-def test_image_clears_the_base_entrypoint() -> None:
-    # The base image's ENTRYPOINT is /bin/bash, which turns the wrapper's
-    # `-- sleep infinity` into `bash sleep infinity`: bash reads "sleep" as a
-    # script path and the sandbox's main process dies immediately.
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    assert "\nENTRYPOINT []\n" in containerfile
-
-
-def test_image_binary_check_is_opt_in() -> None:
-    # CI cross-builds under QEMU, where Bun aborts when executed. The check must
-    # therefore be off by default and switched on only for a native build.
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-    build = (IMAGE_DIR / "build.sh").read_text()
-
-    assert "ARG VERIFY_BINARY=0" in containerfile
-    assert '--build-arg "VERIFY_BINARY=$verify"' in build
-
-
-WORKFLOW = ROOT / ".github" / "workflows" / "opencode-sandbox-image.yml"
-
-
-def test_ci_publishes_the_image_with_package_write_access() -> None:
-    # A developer's gh token has no write:packages, so the registry push has to
-    # happen where GITHUB_TOKEN carries that scope.
-    workflow = WORKFLOW.read_text()
-
-    assert "packages: write" in workflow
-    assert "secrets.GITHUB_TOKEN" in workflow
-    assert "docker/login-action" in workflow
-    assert "push: true" in workflow
-
-
-def test_ci_builds_both_architectures_for_the_pinned_image_name() -> None:
-    workflow = WORKFLOW.read_text()
-
-    assert "platforms: linux/amd64,linux/arm64" in workflow
-    assert "ghcr.io/${{ github.repository_owner }}/opencode-sandbox" in workflow
-    assert "VERIFY_BINARY=0" in workflow
-    # The operator needs the digest, because create-sandbox.sh pins one.
-    assert "steps.build.outputs.digest" in workflow
-
-
-def test_image_bakes_the_pinned_otel_plugin_into_read_only_usr() -> None:
-    containerfile = (IMAGE_DIR / "Containerfile").read_text()
-
-    # The plugin is fetched at build time only, at a pinned version, so the
-    # runtime needs no npm access.
-    assert "FROM node:24-slim AS otel-plugin" in containerfile
-    assert "ARG OTEL_PLUGIN_VERSION=2.1.0" in containerfile
-    assert (
-        "COPY --from=otel-plugin /out/otel "
-        "/usr/local/share/opencode/plugins/opencode-plugin-otel" in containerfile
-    )
-
+    repository, _, digest = IMAGE.rpartition("@sha256:")
+    assert repository == "ghcr.io/kpiwko/opencode-sandbox"
+    assert len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+    # A tag would move the workload under a policy that pins the binary path.
+    assert f'IMAGE="{IMAGE}"' in wrapper
 
 def test_baked_plugin_path_is_covered_by_the_filesystem_policy() -> None:
     # Landlock hard_requirement + a fixed path list: a plugin under /opt or /root

@@ -241,12 +241,13 @@ There is no automatic fallback. If the pinned image is unusable — no shell, no
 wrapper fails closed and prints what it observed. Do not widen the policy to make
 a mismatched image work, and do not switch to `best_effort`.
 
-The image is built from the NVIDIA community sandbox base by
-`image/Containerfile`, so that base is no longer a separate fallback: it is the
-image's own foundation, with OpenCode and the OTEL plugin added on top. If a base
-bump breaks something, change the digest in `image/Containerfile`, rebuild, and
-re-pin the resulting digest. Keep `binaries[].path` in `sandbox-policy.yaml` equal
-to the path the new image actually provides; `opencode.json` normally carries over
+The image's own repository builds from the NVIDIA community sandbox base, so that
+base is not a separate fallback: it is the image's foundation, with OpenCode and
+the OTEL plugin added on top. If a base bump breaks something, change the digest
+in that repo's `Containerfile`
+(https://github.com/kpiwko/opencode-sandbox), let CI rebuild, and re-pin the
+resulting digest here. Keep `binaries[].path` in `sandbox-policy.yaml` equal to
+the path the new image actually provides; `opencode.json` normally carries over
 unchanged, and an incompatible OpenCode release shows up there first — expect to
 adjust the config schema, not the policy.
 
@@ -309,37 +310,34 @@ directory ships configuration and procedure only.
 
 ## Workload image
 
-The sandbox runs `ghcr.io/kpiwko/opencode-sandbox`, built from
-`image/Containerfile`. It exists because the published
-`ghcr.io/anomalyco/opencode` image ships OpenCode 1.x, which discards V2
-configuration (`providers`) with a compatibility warning and then fails to
-resolve any model — verified in a live sandbox.
+The sandbox runs `ghcr.io/kpiwko/opencode-sandbox`, built in a separate
+repository: https://github.com/kpiwko/opencode-sandbox. That repo owns the
+`Containerfile`, the multi-arch build, the CI publish step, and the path contract.
+It exists because the published `ghcr.io/anomalyco/opencode` image ships OpenCode
+1.x, which discards V2 configuration (`providers`) with a compatibility warning
+and then fails to resolve any model — verified in a live sandbox.
 
 | Property | Value |
 | --- | --- |
-| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:fd336ffe461ffc5e339ae4b2c0ab849809500e78f621273e23fbc3da627e73b5` |
+| Image | `ghcr.io/kpiwko/opencode-sandbox@sha256:0ff24493e13b83cd156a7a045796358d5304d907ff74d8f7ee780ab610d9ed9a` |
 | Base | `ghcr.io/nvidia/openshell-community/sandboxes/base` pinned by digest |
 | OpenCode | `2.4.1`, installed at `/usr/local/bin/opencode` |
+| OTEL plugin | `2.1.0`, baked in at `/usr/local/share/opencode/plugins/opencode-plugin-otel` |
 | User / workdir | `sandbox` / `/sandbox` (OpenShell runs it unprivileged) |
 | Platforms | `linux/amd64`, `linux/arm64` |
 
-Publishing happens in CI: `.github/workflows/opencode-sandbox-image.yml` builds
-both architectures and pushes `ghcr.io/kpiwko/opencode-sandbox` with the
-workflow's `GITHUB_TOKEN` (`packages: write`). That is deliberate — a developer's
-`gh` login for repository work carries no `write:packages` scope, so a local
-`podman push` is denied. Trigger it with `workflow_dispatch`, or by changing
-anything under `image/` on `main`.
+This stage consumes the image by digest and must not build it: publishing needs
+`packages: write`, which the image repo's CI `GITHUB_TOKEN` has and a developer
+`gh` login does not. When that repo publishes a new manifest, copy the digest
+from its run summary into `create-sandbox.sh` (`IMAGE`); a floating tag would
+change the workload under a policy that pins the binary path.
 
-The run prints the manifest digest in its job summary. Pin that digest in
-`create-sandbox.sh` (`IMAGE`); a floating tag would change the workload under a
-policy that pins the binary path.
+Three of its paths are a contract with this stage — changing them there is a
+breaking change here:
 
-To reproduce a build locally (for inspection, not publishing):
-
-```sh
-~/.config/k8s/openshell/opencode/image/build.sh   # needs `podman login ghcr.io` to push
-```
-
-`build.sh` runs the binary's `--version` check only for the host architecture;
-Bun aborts under QEMU, which is also why CI builds with `VERIFY_BINARY=0`. The
-per-architecture tarball SHA-256 is verified in every build either way.
+- `/usr/local/bin/opencode` must equal `binaries[].path` in `sandbox-policy.yaml`.
+- `/usr/local/share/opencode/plugins/opencode-plugin-otel` must equal the
+  `plugins[].package` directory in `opencode.json`, and must stay under `/usr`,
+  which the filesystem policy allows as read-only.
+- The image must clear the base image's bash `ENTRYPOINT`, or the wrapper's
+  `-- sleep infinity` is read as a script path.
