@@ -890,8 +890,8 @@ def test_orchestrator_keys_reviews_to_scope_and_revision() -> None:
     review for unchanged content after status/push or irrelevant docs."""
     section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
     for phrase in (
-        "relevant scope and immutable content revision",
-        "Do not re-review unchanged content after a status or push update",
+        "exact scope and immutable content revision",
+        "Do not request a second review of unchanged relevant content",
         "irrelevant documentation",
     ):
         assert phrase in section, phrase
@@ -913,7 +913,7 @@ def test_orchestrator_distinguishes_handoff_tiers() -> None:
     envelope for publication."""
     section = norm(markdown_section(ORCHESTRATOR, "Review keying"))
     for phrase in (
-        "lightweight scope and validation result",
+        "finished on the implementer's validation result alone",
         "substantive-change envelope",
         "full publication envelope",
     ):
